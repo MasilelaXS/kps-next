@@ -1,7 +1,0 @@
-#!/bin/bash
-
-# ============================================================================
-# KPS API Testing Suite - Phase 4.2: PCO Sync & Offline Data
-# ============================================================================
-# Tests 6-7 sync endpoints for mobile offline support
-# Target: 25-30 tests covering full sync, increment# Test 2.4: Verify report sub-modules structure (MariaDB 10.4: Returns empty arrays)

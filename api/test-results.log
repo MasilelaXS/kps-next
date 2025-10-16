@@ -1,8 +1,0 @@
-
-[0;34m========================================[0m
-[0;34mSETUP: Authentication[0m
-[0;34m========================================[0m
-
-[1;33mTEST 0.1:[0m Admin Login
-[0;31m✗ FAIL:[0m Admin authentication failed
-[0;31m  Response:[0m 
