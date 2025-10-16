@@ -116,6 +116,8 @@
    - Company name, address, contact information
    - Multiple contacts with roles (Primary, Billing, Site Manager, etc.)
    - Service preferences
+   - Total Bait Stations: Inside [   ] Outside [   ]
+   - Total Insect Monitors: Light (Fly Traps) [   ] Box Monitors [   ]
 4. Save client (initially unassigned)
 
 #### Assigning PCO to Client
@@ -151,11 +153,16 @@
 
 #### Viewing All Reports
 1. Navigate to Reports section
-2. Use advanced search/filter options:
+2. Filter reports into 3 main groups:
+   - **Draft** (just submitted by PCO) - *show by default*
+   - **Approved** (reviewed and approved reports)
+   - **Emailed** (reports sent to clients)
+   - **Archived** (completed reports not for client distribution)
+3. Use advanced search/filter options:
    - Client name, PCO name
    - Date range, report type
-   - Status (Draft, Pending, Approved, Declined, Archived)
-3. View paginated results (25 per page)
+   - Status within each group
+4. View paginated results (25 per page)
 
 #### Report Status Management
 ```
@@ -213,7 +220,12 @@ Draft → Pending → Approved/Declined/Archived
 #### Starting a New Report
 1. Select client from schedule
 2. System checks for previous reports and pre-loads data in background
-3. Begin report creation workflow
+3. System loads expected station count (from client profile)
+4. Begin report creation workflow
+
+**New Station Addition**: PCO can add new stations beyond the expected count (e.g., if client has 15 stations, PCO can add station #16 as a new station)
+
+**Missing Station Warning**: If PCO submits report with fewer stations than expected, app shows warning but allows submission if PCO chooses to proceed
 
 ### Report Creation Workflow
 
@@ -245,6 +257,7 @@ Draft → Pending → Approved/Declined/Archived
 ```
 Location: [Inside/Outside]
 Available Stations: [List with edit/delete options]
+Missing Station Warning: If expected stations not inspected, show warning before submission
 
 Add New Station:
 ┌─────────────────────────────────┐
@@ -258,17 +271,23 @@ Add New Station:
 │   ☐ Tracks ☐ Other: [____]     │
 │                                 │
 │ Bait Status:                    │
-│ ○ Clean (default)               │
-│ ○ Eaten ○ Wet                  │
+│ ○ Clean (default - no poison)   │
+│ ○ Eaten ○ Wet ○ Old            │
 │                                 │
 │ Station Condition:              │
 │ ○ Good ○ Needs Repair          │
 │ ○ Damaged ○ Missing            │
+│ ↳ If Needs Repair/Damaged/      │
+│   Missing: Action Taken:        │
+│   ○ Repaired ○ Replaced        │
 │                                 │
-│ Rodent Box Replaced: [Yes/No]   │
+│ Warning Sign Condition:         │
+│ ○ Good ○ Replaced              │
+│ ○ Repaired ○ Remounted         │
 │                                 │
 │ Chemicals Used: [+ Add]         │
 │ [Chemical Name] [Qty] [Batch#]  │
+│ (Batch# linked to this report) │
 │                                 │
 │ Station Remarks: [_______]      │
 ├─────────────────────────────────┤
@@ -300,10 +319,26 @@ Add New Station:
 │ [Chemical] [Qty] [Unit] [Batch] │
 ├─────────────────────────────────┤
 │ Insect Monitors: [+ Add]        │
-│ Monitor Type: [Box/Fly Trap]    │
+│ Monitor Type: [Box/Light (Fly Trap)] │
+│                                 │
+│ Monitor Condition:              │
+│ ○ Good ○ Replaced              │
+│ ○ Repaired ○ Other: [____]     │
+│                                 │
+│ Light Monitor (Fly Trap) Only:  │
+│ Light Condition:                │
+│ ○ Good ○ Faulty               │
+│ ↳ If Faulty:                   │
+│   ○ Starter ○ Tube ○ Cable    │
+│   ○ Electricity ○ Other: [___] │
 │ Glue Board Replaced: [Yes/No]   │
 │ Tubes Replaced: [Yes/No]        │
-│ (Only for Fly Trap)            │
+│ (only if Fly Trap)               │
+│                                 │
+│ Warning Sign Condition:         │
+│ ○ Good ○ Replaced              │
+│ ○ Repaired ○ Remounted         │
+│                                 │
 │ Monitor Serviced: [Yes/No]      │
 ├─────────────────────────────────┤
 │ General Remarks: [_______]      │
@@ -556,12 +591,15 @@ Each entity requires separate search endpoints for flexible querying:
 - Reports cannot be edited after submission (PCO side)
 - Only admins can edit reports in any status
 - Next service date creates notification for admin
+- **Recommendations**: Only admins can add recommendations to reports
+- **PCO Input**: PCOs can only provide remarks/notes, not recommendations
 
 ### Data Integrity Rules
 - All foreign key relationships maintained
 - Audit trails for all critical operations
 - Soft deletes preserve historical data
 - Chemical usage tracking for compliance
+- **Batch Number Linking**: Each chemical batch number is linked to the specific report where it was used, ensuring historical accuracy when old reports are printed
 
 ---
 

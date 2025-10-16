@@ -1,0 +1,138 @@
+
+[0;34m========================================[0m
+[0;34mPhase 0: Authentication & Setup[0m
+[0;34m========================================[0m
+
+[1;33mTEST 0.1: Admin Login[0m
+[0;32m✓ Admin logged in successfully[0m
+[1;33mTEST 0.2: Create Fresh PCO User[0m
+[0;32m✓ PCO user created (ID: 17, Number: 35761)[0m
+[1;33mTEST 0.3: PCO Login[0m
+[0;32m✓ PCO logged in successfully (ID: 17)[0m
+[1;33mTEST 0.4: Get Test Client[0m
+[0;32m✓ Test client found (ID: 1)[0m
+[1;33mTEST 0.5: Unassign Any Existing PCO from Test Client[0m
+[0;32m✓ Unassigned existing PCOs (IDs: 20)[0m
+[1;33mTEST 0.6: Assign New PCO to Client[0m
+[0;32m✓ PCO assigned to test client[0m
+
+[0;34m========================================[0m
+[0;34mPhase 1: Dashboard Summary Endpoint[0m
+[0;34m========================================[0m
+
+[1;33mTEST 1.1: Get Dashboard Summary (No Reports Yet)[0m
+[0;31m✗ Dashboard summary failed[0m
+Response: {"success":false,"message":"Failed to fetch dashboard summary","error":"performance.reports_per_week_avg.toFixed is not a function"}
+[1;33mTEST 1.2: Verify Performance Metrics Structure[0m
+[0;31m✗ Performance metrics incomplete[0m
+[1;33mTEST 1.3: Dashboard Without Authentication[0m
+[0;32m✓ Unauthorized access correctly denied[0m
+
+[0;34m========================================[0m
+[0;34mPhase 2: Create Test Reports for Dashboard Data[0m
+[0;34m========================================[0m
+
+[1;33mTEST 2.1: Create Draft Report[0m
+[0;32m✓ Draft report created (ID: 8)[0m
+[1;33mTEST 2.2: Submit Report[0m
+[0;31m✗ Report submission failed[0m
+Response: {"success":false,"message":"Report is incomplete and cannot be submitted","missing_requirements":["PCO signature","Client signature","Client signature name","At least one bait station (report type requires bait inspection data)","At least one fumigation area (report type requires fumigation data)","At least one target pest (report type requires fumigation data)"]}
+[1;33mTEST 2.3: Verify Dashboard Shows Pending Report[0m
+./test-pco-dashboard.sh: line 310: [: null: integer expression expected
+[0;31m✗ Pending report not reflected in dashboard[0m
+
+[0;34m========================================[0m
+[0;34mPhase 3: Upcoming Assignments Endpoint[0m
+[0;34m========================================[0m
+
+[1;33mTEST 3.1: Get Upcoming Assignments (Default 7 Days)[0m
+[0;31m✗ Upcoming assignments failed[0m
+Response: {"success":false,"message":"Failed to fetch upcoming assignments","error":"Unknown column 'service_date' in 'having clause'"}
+[1;33mTEST 3.2: Verify Assignment Structure[0m
+[0;31m✗ Assignment structure incomplete[0m
+[1;33mTEST 3.3: Custom Days Ahead (14 Days)[0m
+[0;31m✗ 14-day lookahead failed[0m
+[1;33mTEST 3.4: Invalid Days Ahead (Out of Range)[0m
+[0;32m✓ Invalid days_ahead correctly rejected[0m
+
+[0;34m========================================[0m
+[0;34mPhase 4: Recent Reports Endpoint[0m
+[0;34m========================================[0m
+
+[1;33mTEST 4.1: Get Recent Reports (Default Limit)[0m
+[0;32m✓ Recent reports retrieved (Count: 1, Total: 1)[0m
+[1;33mTEST 4.2: Verify Report Structure[0m
+[0;32m✓ Report structure valid (ID: 8, Type: both, Status: draft)[0m
+[1;33mTEST 4.3: Filter by Status (Pending)[0m
+[0;32m✓ Pending filter applied (Count: 0)[0m
+[1;33mTEST 4.4: Custom Limit[0m
+[0;32m✓ Custom limit applied (Count: 1)[0m
+
+[0;34m========================================[0m
+[0;34mPhase 5: Declined Reports Endpoint[0m
+[0;34m========================================[0m
+
+[1;33mTEST 5.1: Get Declined Reports (Should Be Empty)[0m
+[0;31m✗ Declined reports endpoint failed[0m
+[1;33mTEST 5.2: Decline Report by Admin[0m
+[0;31m✗ Report decline failed[0m
+Response: {"success":false,"message":"Report not found or not in pending status"}
+[1;33mTEST 5.3: Verify Declined Report Appears[0m
+./test-pco-dashboard.sh: line 489: [: null: integer expression expected
+[0;31m✗ Declined report not appearing[0m
+[1;33mTEST 5.4: Verify Declined Report Structure[0m
+[0;31m✗ Declined report structure incomplete[0m
+
+[0;34m========================================[0m
+[0;34mPhase 6: Statistics Endpoint[0m
+[0;34m========================================[0m
+
+[1;33mTEST 6.1: Get Statistics (Default 30 Days)[0m
+[0;31m✗ Statistics endpoint failed[0m
+Response: {"success":false,"message":"Failed to fetch dashboard statistics","error":"t.approval_rate.toFixed is not a function"}
+[1;33mTEST 6.2: Verify Report Types Breakdown[0m
+[0;31m✗ Report types incomplete[0m
+[1;33mTEST 6.3: Verify Monthly Trend[0m
+[0;32m✓ Monthly trend data present (Months: 0)[0m
+[1;33mTEST 6.4: Custom Period (7 Days)[0m
+[0;31m✗ Custom period failed[0m
+[1;33mTEST 6.5: Invalid Period (Out of Range)[0m
+[0;32m✓ Invalid period correctly rejected[0m
+
+[0;34m========================================[0m
+[0;34mPhase 7: Dashboard After Report Lifecycle[0m
+[0;34m========================================[0m
+
+[1;33mTEST 7.1: Approve Previously Declined Report[0m
+[0;31m✗ Report resubmission failed[0m
+[1;33mTEST 7.2: Verify Dashboard After Approval[0m
+./test-pco-dashboard.sh: line 624: [: null: integer expression expected
+[0;31m✗ Dashboard not updated after approval[0m
+[1;33mTEST 7.3: Verify Declined Reports Empty After Approval[0m
+[0;31m✗ Declined report still showing after approval[0m
+
+[0;34m========================================[0m
+[0;34mPhase 8: Performance & Edge Cases[0m
+[0;34m========================================[0m
+
+[1;33mTEST 8.1: Dashboard Response Time[0m
+[0;32m✓ Dashboard responds quickly (101ms < 1000ms)[0m
+[1;33mTEST 8.2: Admin Cannot Access PCO Dashboard[0m
+[0;32m✓ Admin correctly denied access to PCO dashboard[0m
+[1;33mTEST 8.3: Invalid Query Parameters Handled[0m
+[0;32m✓ Invalid parameters handled gracefully[0m
+
+[0;34m========================================[0m
+[0;34mPHASE 4.1: PCO DASHBOARD TEST RESULTS[0m
+[0;34m========================================[0m
+
+[0;34mTotal Tests:[0m 35
+[0;32mPassed:[0m 18
+[0;31mFailed:[0m 17
+
+[0;34mPass Rate:[0m 51.4%
+
+[0;31m========================================[0m
+[0;31mSOME TESTS FAILED[0m
+[0;31mPlease review and fix issues[0m
+[0;31m========================================[0m

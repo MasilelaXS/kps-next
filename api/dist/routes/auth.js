@@ -1,0 +1,19 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const authController_1 = require("../controllers/authController");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.post('/login', authController_1.AuthController.login);
+router.post('/logout', auth_1.authenticateToken, authController_1.AuthController.logout);
+router.get('/validate', auth_1.authenticateToken, authController_1.AuthController.validateToken);
+router.get('/profile', auth_1.authenticateToken, authController_1.AuthController.getProfile);
+router.put('/profile', auth_1.authenticateToken, authController_1.AuthController.updateProfile);
+router.post('/change-password', auth_1.authenticateToken, authController_1.AuthController.changePassword);
+router.post('/forgot-password', authController_1.AuthController.forgotPassword);
+router.get('/verify-reset-token', authController_1.AuthController.verifyResetToken);
+router.post('/reset-password', authController_1.AuthController.resetPassword);
+router.get('/lockout-status', authController_1.AuthController.checkLockoutStatus);
+router.post('/unlock-account', auth_1.authenticateToken, authController_1.AuthController.unlockAccount);
+exports.default = router;
+//# sourceMappingURL=auth.js.map

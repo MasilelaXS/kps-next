@@ -1,0 +1,20 @@
+import { Request, Response } from 'express';
+export declare const getPCOReports: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getAdminReports: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getPendingReports: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getReportById: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const createReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const deleteReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const submitReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const approveReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const declineReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const addBaitStation: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateBaitStation: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const deleteBaitStation: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateFumigation: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const addInsectMonitor: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateInsectMonitor: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const deleteInsectMonitor: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getPreFillData: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+//# sourceMappingURL=reportController.d.ts.map

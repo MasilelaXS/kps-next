@@ -1,0 +1,40 @@
+
+> kps-api@1.0.0 dev
+> nodemon src/server.ts
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: ts,json[39m
+[32m[nodemon] starting `ts-node src/server.ts`[39m
+🔧 Environment Configuration:
+   Environment: development
+   Port: 3001
+   Database: localhost:3306/kpspestcontrol_app
+   CORS Origin: http://localhost:3000
+2025-10-16T05:44:20.782Z [32minfo[39m: 🔄 Testing database connection... {
+  "service": "KPS Pest Control API",
+  "version": "v1"
+}
+✅ Database connection successful
+📊 Connected to kpspestcontrol_app at localhost:3306
+2025-10-16T05:44:20.855Z [32minfo[39m: 🚀 Server started successfully {
+  "service": "KPS Pest Control API",
+  "version": "v1",
+  "name": "KPS Pest Control API",
+  "port": 3001,
+  "environment": "development",
+  "url": "http://localhost:3001",
+  "healthCheck": "http://localhost:3001/health",
+  "apiStatus": "http://localhost:3001/api/status"
+}
+
+🎉 KPS API Server is running!
+🔗 URL: http://localhost:3001
+🩺 Health: http://localhost:3001/health
+📊 Status: http://localhost:3001/api/status
+
+🛑 Press Ctrl+C to stop the server
+
+[32m[nodemon] restarting child process[39m
+[32m[nodemon] starting `ts-node src/server.ts`[39m
