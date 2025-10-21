@@ -11,6 +11,9 @@ exports.reportListQuerySchema = joi_1.default.object({
     client_id: joi_1.default.number().integer().optional(),
     pco_id: joi_1.default.number().integer().optional(),
     status: joi_1.default.string().valid('draft', 'pending', 'approved', 'declined', 'archived').optional(),
+    status_group: joi_1.default.string().valid('draft', 'approved', 'emailed', 'archived', 'all').optional(),
+    report_type: joi_1.default.string().valid('bait_inspection', 'fumigation', 'both', 'all').optional(),
+    search: joi_1.default.string().optional(),
     date_from: joi_1.default.date().optional(),
     date_to: joi_1.default.date().optional()
 });

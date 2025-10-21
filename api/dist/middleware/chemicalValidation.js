@@ -41,6 +41,22 @@ const validateChemicalInput = (req, res, next) => {
             'string.max': 'Quantity unit cannot exceed 20 characters',
             'any.required': 'Quantity unit is required'
         }),
+        l_number: joi_1.default.string()
+            .trim()
+            .max(50)
+            .allow(null, '')
+            .optional()
+            .messages({
+            'string.max': 'L number cannot exceed 50 characters'
+        }),
+        batch_number: joi_1.default.string()
+            .trim()
+            .max(100)
+            .allow(null, '')
+            .optional()
+            .messages({
+            'string.max': 'Batch number cannot exceed 100 characters'
+        }),
         usage_type: joi_1.default.string()
             .valid(...USAGE_TYPES)
             .required()
@@ -106,6 +122,22 @@ const validateChemicalUpdate = (req, res, next) => {
             'string.empty': 'Quantity unit cannot be empty',
             'string.min': 'Quantity unit must be at least 1 character',
             'string.max': 'Quantity unit cannot exceed 20 characters'
+        }),
+        l_number: joi_1.default.string()
+            .trim()
+            .max(50)
+            .allow(null, '')
+            .optional()
+            .messages({
+            'string.max': 'L number cannot exceed 50 characters'
+        }),
+        batch_number: joi_1.default.string()
+            .trim()
+            .max(100)
+            .allow(null, '')
+            .optional()
+            .messages({
+            'string.max': 'Batch number cannot exceed 100 characters'
         }),
         usage_type: joi_1.default.string()
             .valid(...USAGE_TYPES)

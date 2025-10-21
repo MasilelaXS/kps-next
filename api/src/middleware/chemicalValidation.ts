@@ -60,6 +60,24 @@ export const validateChemicalInput = (
         'any.required': 'Quantity unit is required'
       }),
 
+    l_number: Joi.string()
+      .trim()
+      .max(50)
+      .allow(null, '')
+      .optional()
+      .messages({
+        'string.max': 'L number cannot exceed 50 characters'
+      }),
+
+    batch_number: Joi.string()
+      .trim()
+      .max(100)
+      .allow(null, '')
+      .optional()
+      .messages({
+        'string.max': 'Batch number cannot exceed 100 characters'
+      }),
+
     usage_type: Joi.string()
       .valid(...USAGE_TYPES)
       .required()
@@ -141,6 +159,24 @@ export const validateChemicalUpdate = (
         'string.empty': 'Quantity unit cannot be empty',
         'string.min': 'Quantity unit must be at least 1 character',
         'string.max': 'Quantity unit cannot exceed 20 characters'
+      }),
+
+    l_number: Joi.string()
+      .trim()
+      .max(50)
+      .allow(null, '')
+      .optional()
+      .messages({
+        'string.max': 'L number cannot exceed 50 characters'
+      }),
+
+    batch_number: Joi.string()
+      .trim()
+      .max(100)
+      .allow(null, '')
+      .optional()
+      .messages({
+        'string.max': 'Batch number cannot exceed 100 characters'
       }),
 
     usage_type: Joi.string()

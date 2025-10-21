@@ -25,6 +25,8 @@ import {
   submitReport,
   approveReport,
   declineReport,
+  archiveReport,
+  adminUpdateReport,
   
   // Bait Station Management
   addBaitStation,
@@ -264,6 +266,19 @@ router.get(
 );
 
 /**
+ * PUT /api/admin/reports/:id
+ * Comprehensive admin update - edit all fields and nested data
+ * Body: { service_date?, next_service_date?, report_type?, status?, recommendations?, admin_notes?, 
+ *         bait_stations?, fumigation_areas?, fumigation_target_pests?, fumigation_chemicals?, insect_monitors? }
+ * Excludes: general_remarks, pco_signature, client_signature
+ */
+router.put(
+  '/admin/reports/:id',
+  authenticateToken,
+  adminUpdateReport
+);
+
+/**
  * POST /api/admin/reports/:id/approve
  * Approve pending report
  * Body: { admin_notes? }
@@ -286,6 +301,17 @@ router.post(
   authenticateToken,
   validateRequest(declineReportSchema),
   declineReport
+);
+
+/**
+ * POST /api/admin/reports/:id/archive
+ * Archive a report
+ * Business Rule: Archived reports are completed but not for client distribution
+ */
+router.post(
+  '/admin/reports/:id/archive',
+  authenticateToken,
+  archiveReport
 );
 
 export default router;

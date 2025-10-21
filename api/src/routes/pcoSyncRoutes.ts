@@ -20,11 +20,14 @@ import {
   syncChemicals,
   syncRecentReports,
   uploadReports,
-  exportData
+  exportData,
+  updateClientCounts
 } from '../controllers/pcoSyncController';
+import { ChemicalController } from '../controllers/chemicalController';
 import {
   uploadReportsSchema,
-  syncQuerySchema
+  syncQuerySchema,
+  updateClientCountsSchema
 } from '../validation/syncValidation';
 
 const router = Router();
@@ -80,5 +83,33 @@ router.post('/pco/sync/upload', authenticateToken, validateRequest(uploadReports
  * - format (string) - Export format (only 'json' supported currently)
  */
 router.get('/pco/data/export', authenticateToken, exportData);
+
+/**
+ * PCO-specific chemical lookup by usage type
+ * GET /api/pco/chemicals/:usage_type
+ */
+router.get('/pco/chemicals/:usage_type', authenticateToken, ChemicalController.getChemicalsForPco);
+
+/**
+ * PATCH /api/pco/clients/:id/update-counts
+ * Update client station/monitor counts from report creation
+ * Body:
+ * - total_bait_stations_inside (optional)
+ * - total_bait_stations_outside (optional)
+ * - total_insect_monitors_light (optional)
+ * - total_insect_monitors_box (optional)
+ */
+router.patch('/pco/clients/:id/update-counts', authenticateToken, validateRequest(updateClientCountsSchema), updateClientCounts);
+
+/**
+ * GET /api/pco/reports/last-for-client/:clientId
+ * Get the last approved report for a client with full station details for pre-filling
+ * Returns complete bait station data to pre-populate form fields
+ */
+router.get('/pco/reports/last-for-client/:clientId', authenticateToken, async (req, res, next) => {
+  // This route is handled inline for simplicity - imports getLastReportForClient from controller
+  const { getLastReportForClient } = require('../controllers/pcoSyncController');
+  return getLastReportForClient(req, res, next);
+});
 
 export default router;

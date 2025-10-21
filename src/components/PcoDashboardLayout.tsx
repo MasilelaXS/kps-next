@@ -1,0 +1,120 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { 
+  LayoutDashboard, 
+  Building2, 
+  FileText, 
+  Calendar, 
+  User,
+  LogOut
+} from 'lucide-react';
+import NotificationBell from './NotificationBell';
+import { requireAuth, logout } from '@/lib/auth';
+
+interface PcoDashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [user, setUser] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    
+    // Check authentication and token expiry
+    const isAuth = requireAuth('pco');
+    if (!isAuth) {
+      // Force redirect immediately, don't wait for requireAuth
+      router.replace('/login');
+      return;
+    }
+
+    const userData = localStorage.getItem('kps_user');
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser(parsedUser);
+
+      // Only allow PCO users
+      if (parsedUser.role !== 'pco') {
+        console.log(`Access denied: User is ${parsedUser.role}, redirecting to correct portal`);
+        if (parsedUser.role === 'admin') {
+          router.push('/admin/dashboard');
+        } else {
+          logout();
+        }
+      }
+    }
+  }, [router]);
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  const pcoNav = [
+    { name: 'Dashboard', href: '/pco/dashboard', icon: LayoutDashboard },
+    { name: 'Schedule', href: '/pco/schedule', icon: Calendar },
+    { name: 'Reports', href: '/pco/reports', icon: FileText },
+    { name: 'Profile', href: '/pco/profile', icon: User },
+  ];
+
+  // Prevent hydration mismatch and ensure user is PCO
+  if (!mounted || !user || user.role !== 'pco') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-16">
+      {/* Mobile Header - Fixed at top */}
+      <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-30">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg"></div>
+          <h1 className="text-lg font-semibold text-gray-900">PCO Portal</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+        </div>
+      </header>
+
+      {/* Main Content with padding for header and bottom nav */}
+      <main className="pt-14 pb-20 px-4">
+        {children}
+      </main>
+
+      {/* Bottom Navigation - Fixed at bottom */}
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-200 z-30">
+        <div className="h-full flex items-center justify-around px-2">
+          {pcoNav.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all ${
+                  isActive
+                    ? 'text-purple-600'
+                    : 'text-gray-500 active:scale-95'
+                }`}
+              >
+                <Icon className={`w-6 h-6 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
+                <span className={`text-xs font-medium ${isActive ? 'font-semibold' : ''}`}>
+                  {item.name}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}

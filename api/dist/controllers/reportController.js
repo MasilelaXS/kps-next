@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
+exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const getPCOReports = async (req, res) => {
@@ -105,13 +105,44 @@ const getAdminReports = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 25;
         const offset = (page - 1) * limit;
+        const statusGroup = req.query.status_group || 'draft';
+        const reportType = req.query.report_type || 'all';
+        const search = req.query.search || '';
         const pcoId = req.query.pco_id ? parseInt(req.query.pco_id) : null;
         const clientId = req.query.client_id ? parseInt(req.query.client_id) : null;
         const status = req.query.status || 'all';
-        const startDate = req.query.start_date;
-        const endDate = req.query.end_date;
-        let whereConditions = ["r.status != 'draft'"];
+        const startDate = req.query.date_from;
+        const endDate = req.query.date_to;
+        let whereConditions = [];
         const queryParams = [];
+        if (statusGroup !== 'all') {
+            switch (statusGroup) {
+                case 'draft':
+                    whereConditions.push('(r.status = ? OR r.status = ?)');
+                    queryParams.push('draft', 'pending');
+                    break;
+                case 'approved':
+                    whereConditions.push('r.status = ?');
+                    queryParams.push('approved');
+                    break;
+                case 'emailed':
+                    whereConditions.push('r.status = ?');
+                    queryParams.push('emailed');
+                    break;
+                case 'archived':
+                    whereConditions.push('r.status = ?');
+                    queryParams.push('archived');
+                    break;
+            }
+        }
+        if (reportType !== 'all') {
+            whereConditions.push('r.report_type = ?');
+            queryParams.push(reportType);
+        }
+        if (search) {
+            whereConditions.push('(c.company_name LIKE ? OR u.name LIKE ?)');
+            queryParams.push(`%${search}%`, `%${search}%`);
+        }
         if (pcoId) {
             whereConditions.push('r.pco_id = ?');
             queryParams.push(pcoId);
@@ -120,7 +151,7 @@ const getAdminReports = async (req, res) => {
             whereConditions.push('r.client_id = ?');
             queryParams.push(clientId);
         }
-        if (status !== 'all') {
+        if (status !== 'all' && statusGroup === 'all') {
             whereConditions.push('r.status = ?');
             queryParams.push(status);
         }
@@ -132,7 +163,7 @@ const getAdminReports = async (req, res) => {
             whereConditions.push('r.service_date <= ?');
             queryParams.push(endDate);
         }
-        const whereClause = whereConditions.join(' AND ');
+        const whereClause = whereConditions.length > 0 ? whereConditions.join(' AND ') : '1=1';
         const countQuery = `
       SELECT COUNT(*) as total
       FROM reports r
@@ -150,6 +181,9 @@ const getAdminReports = async (req, res) => {
         r.service_date,
         r.next_service_date,
         r.status,
+        r.general_remarks,
+        r.recommendations,
+        r.admin_notes,
         r.created_at,
         r.submitted_at,
         r.reviewed_at,
@@ -163,8 +197,7 @@ const getAdminReports = async (req, res) => {
         (SELECT COUNT(*) FROM bait_stations WHERE report_id = r.id) as bait_stations_count,
         (SELECT COUNT(*) FROM fumigation_areas WHERE report_id = r.id) as fumigation_areas_count,
         (SELECT COUNT(*) FROM insect_monitors WHERE report_id = r.id) as insect_monitors_count,
-        DATEDIFF(NOW(), r.submitted_at) as days_pending,
-        r.admin_notes
+        DATEDIFF(NOW(), r.submitted_at) as days_pending
       FROM reports r
       JOIN clients c ON r.client_id = c.id
       JOIN users u ON r.pco_id = u.id
@@ -184,14 +217,16 @@ const getAdminReports = async (req, res) => {
         logger_1.logger.info(`Admin retrieved ${reports.length} reports`);
         return res.json({
             success: true,
-            data: reports,
-            pagination: {
-                page,
-                limit,
-                total_records: totalRecords,
-                total_pages: totalPages,
-                has_next: page < totalPages,
-                has_previous: page > 1
+            data: {
+                reports: reports || [],
+                pagination: {
+                    current_page: page,
+                    total_pages: totalPages,
+                    total_reports: totalRecords,
+                    per_page: limit,
+                    has_next: page < totalPages,
+                    has_prev: page > 1
+                }
             }
         });
     }
@@ -1063,4 +1098,294 @@ const getPreFillData = async (req, res) => {
     }
 };
 exports.getPreFillData = getPreFillData;
+const archiveReport = async (req, res) => {
+    try {
+        const reportId = parseInt(req.params.id);
+        const adminId = req.user.id;
+        const reportCheck = await (0, database_1.executeQuery)(`SELECT id, status FROM reports WHERE id = ?`, [reportId]);
+        if (reportCheck.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Report not found'
+            });
+        }
+        const report = reportCheck[0];
+        if (report.status === 'archived') {
+            return res.status(400).json({
+                success: false,
+                message: 'Report is already archived'
+            });
+        }
+        await (0, database_1.executeQuery)(`UPDATE reports 
+       SET status = 'archived',
+           reviewed_by = ?,
+           reviewed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ?`, [adminId, reportId]);
+        logger_1.logger.info(`Report ${reportId} archived by admin ${adminId}`);
+        return res.json({
+            success: true,
+            message: 'Report archived successfully',
+            data: {
+                report_id: reportId,
+                status: 'archived'
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in archiveReport:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to archive report',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.archiveReport = archiveReport;
+const adminUpdateReport = async (req, res) => {
+    const connection = await database_1.pool.getConnection();
+    try {
+        const reportId = parseInt(req.params.id);
+        const adminId = req.user.id;
+        const updateData = req.body;
+        await connection.beginTransaction();
+        const reportCheck = await (0, database_1.executeQuery)(`SELECT id, status, report_type FROM reports WHERE id = ?`, [reportId]);
+        if (reportCheck.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'Report not found'
+            });
+        }
+        const fields = [];
+        const values = [];
+        const allowedFields = [
+            'service_date',
+            'next_service_date',
+            'report_type',
+            'status',
+            'recommendations',
+            'admin_notes'
+        ];
+        for (const field of allowedFields) {
+            if (updateData[field] !== undefined) {
+                fields.push(`${field} = ?`);
+                values.push(updateData[field] || null);
+            }
+        }
+        if (fields.length > 0) {
+            values.push(reportId);
+            await connection.query(`UPDATE reports SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`, values);
+        }
+        if (updateData.bait_stations !== undefined && Array.isArray(updateData.bait_stations)) {
+            const existingStations = await connection.query('SELECT id FROM bait_stations WHERE report_id = ?', [reportId]);
+            const existingIds = existingStations[0].map((s) => s.id);
+            const incomingIds = updateData.bait_stations
+                .filter((s) => s.id)
+                .map((s) => s.id);
+            const toDelete = existingIds.filter((id) => !incomingIds.includes(id));
+            for (const stationId of toDelete) {
+                await connection.query('DELETE FROM station_chemicals WHERE station_id = ?', [stationId]);
+                await connection.query('DELETE FROM bait_stations WHERE id = ?', [stationId]);
+            }
+            for (const station of updateData.bait_stations) {
+                if (station.id) {
+                    await connection.query(`UPDATE bait_stations SET
+              \`location\` = ?,
+              station_number = ?,
+              is_accessible = ?,
+              inaccessible_reason = ?,
+              activity_detected = ?,
+              activity_droppings = ?,
+              activity_gnawing = ?,
+              activity_tracks = ?,
+              activity_other = ?,
+              activity_other_description = ?,
+              bait_status = ?,
+              station_condition = ?,
+              action_taken = ?,
+              warning_sign_condition = ?,
+              station_remarks = ?
+            WHERE id = ? AND report_id = ?`, [
+                        station.location,
+                        station.station_number,
+                        station.accessible === 'yes' ? 1 : 0,
+                        station.not_accessible_reason || null,
+                        station.activity_detected === 'yes' ? 1 : 0,
+                        station.activity_droppings ? 1 : 0,
+                        station.activity_gnawing ? 1 : 0,
+                        station.activity_tracks ? 1 : 0,
+                        station.activity_other ? 1 : 0,
+                        station.activity_other_description || null,
+                        station.bait_status,
+                        station.station_condition,
+                        station.action_taken === '' ? 'none' : (station.action_taken || 'none'),
+                        station.warning_sign_condition,
+                        station.station_remarks || null,
+                        station.id,
+                        reportId
+                    ]);
+                    if (station.chemicals && Array.isArray(station.chemicals)) {
+                        await connection.query('DELETE FROM station_chemicals WHERE station_id = ?', [station.id]);
+                        for (const chem of station.chemicals) {
+                            if (chem.chemical_id) {
+                                await connection.query(`INSERT INTO station_chemicals (station_id, chemical_id, quantity, batch_number)
+                   VALUES (?, ?, ?, ?)`, [station.id, chem.chemical_id, chem.quantity, chem.batch_number]);
+                            }
+                        }
+                    }
+                }
+                else {
+                    const [result] = await connection.query(`INSERT INTO bait_stations (
+              report_id, \`location\`, station_number, is_accessible, inaccessible_reason,
+              activity_detected, activity_droppings, activity_gnawing, activity_tracks, activity_other, activity_other_description,
+              bait_status, station_condition, action_taken, warning_sign_condition, station_remarks
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                        reportId,
+                        station.location,
+                        station.station_number,
+                        station.accessible === 'yes' ? 1 : 0,
+                        station.not_accessible_reason || null,
+                        station.activity_detected === 'yes' ? 1 : 0,
+                        station.activity_droppings ? 1 : 0,
+                        station.activity_gnawing ? 1 : 0,
+                        station.activity_tracks ? 1 : 0,
+                        station.activity_other ? 1 : 0,
+                        station.activity_other_description || null,
+                        station.bait_status,
+                        station.station_condition,
+                        station.action_taken === '' ? 'none' : (station.action_taken || 'none'),
+                        station.warning_sign_condition,
+                        station.station_remarks || null
+                    ]);
+                    const newStationId = result.insertId;
+                    if (station.chemicals && Array.isArray(station.chemicals)) {
+                        for (const chem of station.chemicals) {
+                            if (chem.chemical_id) {
+                                await connection.query(`INSERT INTO station_chemicals (station_id, chemical_id, quantity, batch_number)
+                   VALUES (?, ?, ?, ?)`, [newStationId, chem.chemical_id, chem.quantity, chem.batch_number]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (updateData.fumigation_areas !== undefined && Array.isArray(updateData.fumigation_areas)) {
+            await connection.query('DELETE FROM fumigation_areas WHERE report_id = ?', [reportId]);
+            for (const area of updateData.fumigation_areas) {
+                if (area.area_name) {
+                    await connection.query('INSERT INTO fumigation_areas (report_id, area_name, is_other, other_description) VALUES (?, ?, ?, ?)', [
+                        reportId,
+                        area.area_name,
+                        area.is_other ? 1 : 0,
+                        area.other_description || null
+                    ]);
+                }
+            }
+        }
+        if (updateData.fumigation_target_pests !== undefined && Array.isArray(updateData.fumigation_target_pests)) {
+            await connection.query('DELETE FROM fumigation_target_pests WHERE report_id = ?', [reportId]);
+            for (const pest of updateData.fumigation_target_pests) {
+                if (pest.pest_name) {
+                    await connection.query('INSERT INTO fumigation_target_pests (report_id, pest_name, is_other, other_description) VALUES (?, ?, ?, ?)', [
+                        reportId,
+                        pest.pest_name,
+                        pest.is_other ? 1 : 0,
+                        pest.other_description || null
+                    ]);
+                }
+            }
+        }
+        if (updateData.fumigation_chemicals !== undefined && Array.isArray(updateData.fumigation_chemicals)) {
+            await connection.query('DELETE FROM fumigation_chemicals WHERE report_id = ?', [reportId]);
+            for (const chem of updateData.fumigation_chemicals) {
+                if (chem.chemical_id) {
+                    await connection.query(`INSERT INTO fumigation_chemicals (report_id, chemical_id, quantity, batch_number)
+             VALUES (?, ?, ?, ?)`, [reportId, chem.chemical_id, chem.quantity, chem.batch_number]);
+                }
+            }
+        }
+        if (updateData.insect_monitors !== undefined && Array.isArray(updateData.insect_monitors)) {
+            const existingMonitors = await connection.query('SELECT id FROM insect_monitors WHERE report_id = ?', [reportId]);
+            const existingIds = existingMonitors[0].map((m) => m.id);
+            const incomingIds = updateData.insect_monitors
+                .filter((m) => m.id)
+                .map((m) => m.id);
+            const toDelete = existingIds.filter((id) => !incomingIds.includes(id));
+            for (const monitorId of toDelete) {
+                await connection.query('DELETE FROM insect_monitors WHERE id = ?', [monitorId]);
+            }
+            for (const monitor of updateData.insect_monitors) {
+                if (monitor.id) {
+                    await connection.query(`UPDATE insect_monitors SET
+              monitor_type = ?,
+              monitor_condition = ?,
+              monitor_condition_other = ?,
+              light_condition = ?,
+              light_faulty_type = ?,
+              light_faulty_other = ?,
+              glue_board_replaced = ?,
+              tubes_replaced = ?,
+              warning_sign_condition = ?,
+              monitor_serviced = ?
+            WHERE id = ? AND report_id = ?`, [
+                        monitor.monitor_type,
+                        monitor.monitor_condition,
+                        monitor.monitor_condition_other || null,
+                        monitor.light_condition || null,
+                        monitor.light_faulty_type || null,
+                        monitor.light_faulty_other || null,
+                        monitor.glue_board_replaced === 'yes' ? 1 : (monitor.glue_board_replaced === 'no' ? 0 : monitor.glue_board_replaced),
+                        monitor.tubes_replaced === 'yes' ? 1 : (monitor.tubes_replaced === 'no' ? 0 : monitor.tubes_replaced),
+                        monitor.warning_sign_condition,
+                        monitor.monitor_serviced === 'yes' ? 1 : (monitor.monitor_serviced === 'no' ? 0 : monitor.monitor_serviced),
+                        monitor.id,
+                        reportId
+                    ]);
+                }
+                else {
+                    await connection.query(`INSERT INTO insect_monitors (
+              report_id, monitor_type, monitor_condition, monitor_condition_other,
+              light_condition, light_faulty_type, light_faulty_other,
+              glue_board_replaced, tubes_replaced, warning_sign_condition, monitor_serviced
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                        reportId,
+                        monitor.monitor_type,
+                        monitor.monitor_condition,
+                        monitor.monitor_condition_other || null,
+                        monitor.light_condition || null,
+                        monitor.light_faulty_type || null,
+                        monitor.light_faulty_other || null,
+                        monitor.glue_board_replaced === 'yes' ? 1 : (monitor.glue_board_replaced === 'no' ? 0 : monitor.glue_board_replaced),
+                        monitor.tubes_replaced === 'yes' ? 1 : (monitor.tubes_replaced === 'no' ? 0 : monitor.tubes_replaced),
+                        monitor.warning_sign_condition,
+                        monitor.monitor_serviced === 'yes' ? 1 : (monitor.monitor_serviced === 'no' ? 0 : monitor.monitor_serviced)
+                    ]);
+                }
+            }
+        }
+        await connection.commit();
+        logger_1.logger.info(`Report ${reportId} comprehensively updated by admin ${adminId}`);
+        return res.json({
+            success: true,
+            message: 'Report updated successfully',
+            data: {
+                report_id: reportId
+            }
+        });
+    }
+    catch (error) {
+        await connection.rollback();
+        logger_1.logger.error('Error in adminUpdateReport:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update report',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+    finally {
+        connection.release();
+    }
+};
+exports.adminUpdateReport = adminUpdateReport;
 //# sourceMappingURL=reportController.js.map

@@ -3,6 +3,38 @@ import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
 
 /**
+ * Helper function to create a notification
+ * Can be called from other controllers without HTTP context
+ * 
+ * @param userId - The ID of the user to notify
+ * @param type - Type of notification: 'assignment', 'report_declined', 'report_submitted', 'system_update'
+ * @param title - Notification title
+ * @param message - Notification message
+ * @returns The created notification ID or null if failed
+ */
+export const createNotification = async (
+  userId: number,
+  type: 'assignment' | 'report_declined' | 'report_submitted' | 'system_update',
+  title: string,
+  message: string
+): Promise<number | null> => {
+  try {
+    const result = await executeQuery(
+      `INSERT INTO notifications (user_id, type, title, message)
+       VALUES (?, ?, ?, ?)`,
+      [userId, type, title, message]
+    );
+    
+    const notificationId = (result as any).insertId;
+    logger.info(`Notification created for user ${userId}: ${title}`);
+    return notificationId;
+  } catch (error) {
+    logger.error('Error creating notification:', error);
+    return null;
+  }
+};
+
+/**
  * Get notifications for the authenticated user
  * Supports filtering by read status and pagination
  */

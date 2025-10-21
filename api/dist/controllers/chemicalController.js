@@ -95,7 +95,9 @@ class ChemicalController {
                 });
                 return;
             }
-            const { name, active_ingredients, usage_type, quantity_unit, safety_information } = req.body;
+            const { name, active_ingredients, usage_type, quantity_unit, l_number, batch_number, safety_information } = req.body;
+            const normalizedLNumber = l_number ? l_number.trim().toUpperCase() : null;
+            const normalizedBatchNumber = batch_number ? batch_number.trim().toUpperCase() : null;
             const existingChemical = await (0, database_1.executeQuerySingle)('SELECT id FROM chemicals WHERE name = ?', [name]);
             if (existingChemical) {
                 res.status(409).json({
@@ -110,15 +112,19 @@ class ChemicalController {
           active_ingredients, 
           usage_type, 
           quantity_unit,
+          l_number,
+          batch_number,
           safety_information,
           status
-        ) VALUES (?, ?, ?, ?, ?, 'active')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
       `;
             const result = await (0, database_1.executeQuery)(insertQuery, [
                 name,
                 active_ingredients,
                 usage_type,
                 quantity_unit,
+                normalizedLNumber,
+                normalizedBatchNumber,
                 safety_information || null
             ]);
             const newChemical = await (0, database_1.executeQuerySingle)('SELECT * FROM chemicals WHERE id = ?', [result.insertId]);
@@ -196,7 +202,13 @@ class ChemicalController {
                 return;
             }
             const { id } = req.params;
-            const { name, active_ingredients, usage_type, quantity_unit, safety_information } = req.body;
+            const { name, active_ingredients, usage_type, quantity_unit, l_number, batch_number, safety_information } = req.body;
+            const normalizedLNumber = l_number !== undefined
+                ? (l_number ? l_number.trim().toUpperCase() : null)
+                : undefined;
+            const normalizedBatchNumber = batch_number !== undefined
+                ? (batch_number ? batch_number.trim().toUpperCase() : null)
+                : undefined;
             const existingChemical = await (0, database_1.executeQuerySingle)('SELECT * FROM chemicals WHERE id = ?', [id]);
             if (!existingChemical) {
                 res.status(404).json({
@@ -222,6 +234,8 @@ class ChemicalController {
           active_ingredients = ?, 
           usage_type = ?, 
           quantity_unit = ?,
+          l_number = ?,
+          batch_number = ?,
           safety_information = ?,
           updated_at = NOW()
         WHERE id = ?
@@ -231,6 +245,8 @@ class ChemicalController {
                 active_ingredients || existingChemical.active_ingredients,
                 usage_type || existingChemical.usage_type,
                 quantity_unit || existingChemical.quantity_unit,
+                normalizedLNumber !== undefined ? normalizedLNumber : existingChemical.l_number,
+                normalizedBatchNumber !== undefined ? normalizedBatchNumber : existingChemical.batch_number,
                 safety_information !== undefined ? safety_information : existingChemical.safety_information,
                 id
             ]);
@@ -423,6 +439,75 @@ class ChemicalController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to search chemicals'
+            });
+        }
+    }
+    static async deleteChemical(req, res) {
+        try {
+            if (req.user?.role !== 'admin') {
+                res.status(403).json({
+                    success: false,
+                    message: 'Admin access required'
+                });
+                return;
+            }
+            const { id } = req.params;
+            const chemical = await (0, database_1.executeQuerySingle)('SELECT * FROM chemicals WHERE id = ? AND deleted_at IS NULL', [id]);
+            if (!chemical) {
+                res.status(404).json({
+                    success: false,
+                    message: 'Chemical not found'
+                });
+                return;
+            }
+            const stationUsage = await (0, database_1.executeQuerySingle)('SELECT COUNT(*) as count FROM station_chemicals WHERE chemical_id = ?', [id]);
+            const fumigationUsage = await (0, database_1.executeQuerySingle)('SELECT COUNT(*) as count FROM fumigation_chemicals WHERE chemical_id = ?', [id]);
+            const totalUsage = (stationUsage?.count || 0) + (fumigationUsage?.count || 0);
+            if (totalUsage > 0) {
+                await (0, database_1.executeQuery)('UPDATE chemicals SET deleted_at = NOW(), status = "inactive", updated_at = NOW() WHERE id = ?', [id]);
+                logger_1.logger.info('Chemical soft deleted (used in reports)', {
+                    chemical_id: id,
+                    chemical_name: chemical.name,
+                    usage_count: totalUsage,
+                    deleted_by: req.user.id
+                });
+                res.json({
+                    success: true,
+                    message: `Chemical "${chemical.name}" has been deactivated`,
+                    data: {
+                        delete_type: 'soft',
+                        reason: 'Chemical is linked to existing reports',
+                        usage_count: totalUsage,
+                        note: 'Chemical data preserved for report history'
+                    }
+                });
+            }
+            else {
+                await (0, database_1.executeQuery)('DELETE FROM chemicals WHERE id = ?', [id]);
+                logger_1.logger.info('Chemical hard deleted (no report associations)', {
+                    chemical_id: id,
+                    chemical_name: chemical.name,
+                    deleted_by: req.user.id
+                });
+                res.json({
+                    success: true,
+                    message: `Chemical "${chemical.name}" has been permanently deleted`,
+                    data: {
+                        delete_type: 'hard',
+                        reason: 'No report associations found'
+                    }
+                });
+            }
+        }
+        catch (error) {
+            logger_1.logger.error('Delete chemical error', {
+                error: error instanceof Error ? error.message : error,
+                chemical_id: req.params.id,
+                admin_id: req.user?.id
+            });
+            res.status(500).json({
+                success: false,
+                message: 'Failed to delete chemical'
             });
         }
     }

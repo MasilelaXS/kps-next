@@ -138,3 +138,39 @@ export const exportQuerySchema = Joi.object({
   format: Joi.string().valid('json').default('json')
     .description('Export format (only json supported currently)')
 });
+
+/**
+ * Schema for updating client station/monitor counts
+ * Used by: updateClientCounts
+ */
+export const updateClientCountsSchema = Joi.object({
+  total_bait_stations_inside: Joi.number().integer().min(0).optional()
+    .messages({
+      'number.base': 'Inside bait stations must be a number',
+      'number.integer': 'Inside bait stations must be a whole number',
+      'number.min': 'Inside bait stations cannot be negative'
+    }),
+  
+  total_bait_stations_outside: Joi.number().integer().min(0).optional()
+    .messages({
+      'number.base': 'Outside bait stations must be a number',
+      'number.integer': 'Outside bait stations must be a whole number',
+      'number.min': 'Outside bait stations cannot be negative'
+    }),
+  
+  total_insect_monitors_light: Joi.number().integer().min(0).optional()
+    .messages({
+      'number.base': 'Light monitors must be a number',
+      'number.integer': 'Light monitors must be a whole number',
+      'number.min': 'Light monitors cannot be negative'
+    }),
+  
+  total_insect_monitors_box: Joi.number().integer().min(0).optional()
+    .messages({
+      'number.base': 'Box monitors must be a number',
+      'number.integer': 'Box monitors must be a whole number',
+      'number.min': 'Box monitors cannot be negative'
+    })
+}).min(1).messages({
+  'object.min': 'At least one count field must be provided'
+});

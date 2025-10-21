@@ -10,6 +10,7 @@ router.post('/admin/chemicals', auth_1.authenticateToken, chemicalValidation_1.v
 router.get('/admin/chemicals/:id', auth_1.authenticateToken, chemicalController_1.ChemicalController.getChemicalById);
 router.put('/admin/chemicals/:id', auth_1.authenticateToken, chemicalValidation_1.validateChemicalUpdate, chemicalController_1.ChemicalController.updateChemical);
 router.put('/admin/chemicals/:id/status', auth_1.authenticateToken, chemicalValidation_1.validateChemicalStatus, chemicalController_1.ChemicalController.updateChemicalStatus);
+router.delete('/admin/chemicals/:id', auth_1.authenticateToken, chemicalController_1.ChemicalController.deleteChemical);
 router.get('/chemicals/type/:usage_type', auth_1.authenticateToken, chemicalController_1.ChemicalController.getChemicalsByType);
 router.get('/chemicals/search', auth_1.authenticateToken, chemicalValidation_1.validateChemicalSearch, chemicalController_1.ChemicalController.searchChemicals);
 exports.default = router;

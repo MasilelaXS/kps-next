@@ -30,8 +30,31 @@ app.use(helmet({
 }));
 
 // CORS configuration
+// Allow multiple origins for development (localhost and network IPs)
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://192.168.1.128:3000',
+  config.security.corsOrigin // Also include env variable
+].filter(Boolean);
+
 app.use(cors({
-  origin: config.security.corsOrigin,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, or same-origin)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // In development, allow any origin on the local network (192.168.x.x)
+      if (config.server.env === 'development' && origin.match(/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

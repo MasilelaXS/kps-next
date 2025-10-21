@@ -10,6 +10,7 @@
 import { Request, Response } from 'express';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
+import { createNotification } from './notificationController';
 
 // Client status type
 type ClientStatus = 'active' | 'inactive' | 'suspended';
@@ -79,7 +80,8 @@ export class ClientController {
         limit = 25,
         status,
         pco_id,
-        search
+        search,
+        unassigned // New parameter to filter by assignment status
       } = req.query;
 
       const pageNum = parseInt(page as string);
@@ -100,6 +102,11 @@ export class ClientController {
       if (pco_id && pco_id !== 'all') {
         whereConditions.push('EXISTS(SELECT 1 FROM client_pco_assignments cpa WHERE cpa.client_id = c.id AND cpa.pco_id = ? AND cpa.status = "active")');
         queryParams.push(pco_id as string);
+      }
+
+      // Filter by assignment status (unassigned only)
+      if (unassigned === 'true') {
+        whereConditions.push('NOT EXISTS(SELECT 1 FROM client_pco_assignments cpa WHERE cpa.client_id = c.id AND cpa.status = "active")');
       }
 
       // Search functionality
@@ -141,9 +148,12 @@ export class ClientController {
           c.created_at,
           c.updated_at,
           -- PCO Assignment info
+          u.id as assigned_pco_id,
           u.name as assigned_pco_name,
           u.pco_number as assigned_pco_number,
           cpa.assigned_at,
+          -- Assignment status flag
+          CASE WHEN cpa.id IS NOT NULL THEN 1 ELSE 0 END as is_assigned,
           -- Service statistics
           (SELECT COUNT(*) FROM reports WHERE client_id = c.id) as total_reports,
           (SELECT MAX(service_date) FROM reports WHERE client_id = c.id) as last_service_date,
@@ -215,9 +225,42 @@ export class ClientController {
         address_line2, 
         city, 
         state, 
-        postal_code, 
+        postal_code,
+        country = 'South Africa',
+        total_bait_stations_inside = 0,
+        total_bait_stations_outside = 0,
+        total_insect_monitors_light = 0,
+        total_insect_monitors_box = 0,
         contacts = [] // Optional contacts array
       } = req.body;
+
+      // Validation
+      if (!company_name || !address_line1 || !city || !state || !postal_code) {
+        res.status(400).json({
+          success: false,
+          message: 'Missing required fields',
+          errors: [
+            { field: 'company_name', message: !company_name ? 'Company name is required' : undefined },
+            { field: 'address_line1', message: !address_line1 ? 'Address is required' : undefined },
+            { field: 'city', message: !city ? 'City is required' : undefined },
+            { field: 'state', message: !state ? 'State is required' : undefined },
+            { field: 'postal_code', message: !postal_code ? 'Postal code is required' : undefined }
+          ].filter(e => e.message)
+        });
+        return;
+      }
+
+      logger.info('Creating client', { 
+        company_name, 
+        city, 
+        equipment: { 
+          bait_inside: total_bait_stations_inside, 
+          bait_outside: total_bait_stations_outside,
+          monitor_light: total_insect_monitors_light,
+          monitor_box: total_insect_monitors_box
+        },
+        contacts: contacts.length 
+      });
 
       // Check for duplicate company name
       const existingClient = await executeQuerySingle(
@@ -241,9 +284,14 @@ export class ClientController {
           address_line2, 
           city, 
           state, 
-          postal_code, 
+          postal_code,
+          country,
+          total_bait_stations_inside,
+          total_bait_stations_outside,
+          total_insect_monitors_light,
+          total_insect_monitors_box,
           status
-        ) VALUES (?, ?, ?, ?, ?, ?, 'active')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
       `;
 
       const result = await executeQuery(insertQuery, [
@@ -252,7 +300,12 @@ export class ClientController {
         address_line2 || null,
         city,
         state,
-        postal_code
+        postal_code,
+        country,
+        total_bait_stations_inside,
+        total_bait_stations_outside,
+        total_insect_monitors_light,
+        total_insect_monitors_box
       ]);
 
       const clientId = (result as any).insertId;
@@ -327,12 +380,15 @@ export class ClientController {
     } catch (error) {
       logger.error('Create client error', { 
         error: error instanceof Error ? error.message : error,
-        admin_id: req.user?.id 
+        stack: error instanceof Error ? error.stack : undefined,
+        admin_id: req.user?.id,
+        body: req.body
       });
       
       res.status(500).json({
         success: false,
-        message: 'Failed to create client'
+        message: 'Failed to create client',
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
@@ -471,7 +527,12 @@ export class ClientController {
         address_line2, 
         city, 
         state, 
-        postal_code 
+        postal_code,
+        country,
+        total_bait_stations_inside,
+        total_bait_stations_outside,
+        total_insect_monitors_light,
+        total_insect_monitors_box
       } = req.body;
 
       // Check if client exists
@@ -513,7 +574,12 @@ export class ClientController {
           address_line2 = ?, 
           city = ?, 
           state = ?, 
-          postal_code = ?, 
+          postal_code = ?,
+          country = ?,
+          total_bait_stations_inside = ?,
+          total_bait_stations_outside = ?,
+          total_insect_monitors_light = ?,
+          total_insect_monitors_box = ?,
           updated_at = NOW()
         WHERE id = ?
       `;
@@ -525,6 +591,11 @@ export class ClientController {
         city || existingClient.city,
         state || existingClient.state,
         postal_code || existingClient.postal_code,
+        country !== undefined ? country : existingClient.country,
+        total_bait_stations_inside !== undefined ? total_bait_stations_inside : existingClient.total_bait_stations_inside,
+        total_bait_stations_outside !== undefined ? total_bait_stations_outside : existingClient.total_bait_stations_outside,
+        total_insect_monitors_light !== undefined ? total_insect_monitors_light : existingClient.total_insect_monitors_light,
+        total_insect_monitors_box !== undefined ? total_insect_monitors_box : existingClient.total_insect_monitors_box,
         id
       ]);
 
@@ -1141,6 +1212,14 @@ export class ClientController {
           status
         ) VALUES (?, ?, ?, NOW(), 'active')
       `, [id, pco_id, req.user.id]);
+
+      // Send notification to PCO
+      await createNotification(
+        pco_id,
+        'assignment',
+        'New Client Assignment',
+        `You've been assigned to ${client.company_name}`
+      );
 
       logger.info('PCO assigned to client', {
         client_id: id,

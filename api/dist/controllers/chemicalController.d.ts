@@ -7,6 +7,7 @@ export declare class ChemicalController {
     static updateChemicalStatus(req: Request, res: Response): Promise<void>;
     static getChemicalsByType(req: Request, res: Response): Promise<void>;
     static searchChemicals(req: Request, res: Response): Promise<void>;
+    static deleteChemical(req: Request, res: Response): Promise<void>;
 }
 export default ChemicalController;
 //# sourceMappingURL=chemicalController.d.ts.map

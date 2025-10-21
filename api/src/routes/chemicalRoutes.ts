@@ -242,6 +242,69 @@ router.put(
 
 /**
  * @swagger
+ * /admin/chemicals/{id}:
+ *   delete:
+ *     tags:
+ *       - Chemicals
+ *     summary: Delete chemical
+ *     description: |
+ *       Intelligently delete a chemical based on usage (Admin only).
+ *       - **Soft Delete**: If chemical is used in any reports (station_chemicals or fumigation_chemicals),
+ *         sets deleted_at timestamp and status to 'inactive'. Preserves data for report history.
+ *       - **Hard Delete**: If chemical has no report associations, permanently removes the record.
+ *       Response includes delete_type ('soft' or 'hard') and reason.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Chemical ID to delete
+ *     responses:
+ *       200:
+ *         description: Chemical deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Chemical "Brodifacoum" has been deactivated
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     delete_type:
+ *                       type: string
+ *                       enum: [soft, hard]
+ *                       description: Type of delete performed
+ *                     reason:
+ *                       type: string
+ *                       description: Reason for delete type
+ *                     usage_count:
+ *                       type: integer
+ *                       description: Number of report associations (soft delete only)
+ *                     note:
+ *                       type: string
+ *                       description: Additional information (soft delete only)
+ *       403:
+ *         description: Admin access required
+ *       404:
+ *         description: Chemical not found or already deleted
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.delete(
+  '/admin/chemicals/:id',
+  authenticateToken,
+  ChemicalController.deleteChemical
+);
+
+/**
+ * @swagger
  * /chemicals/type/{usage_type}:
  *   get:
  *     tags:

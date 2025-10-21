@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import { executeQuery, executeQuerySingle } from '../config/database';
+import { executeQuery, executeQuerySingle, pool } from '../config/database';
 import { logger } from '../config/logger';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { createNotification } from './notificationController';
 
 /**
  * Report Controller - Phase 3.2
@@ -161,15 +162,53 @@ export const getAdminReports = async (req: Request, res: Response) => {
     const offset = (page - 1) * limit;
     
     // Filters
+    const statusGroup = (req.query.status_group as string) || 'draft';
+    const reportType = (req.query.report_type as string) || 'all';
+    const search = (req.query.search as string) || '';
     const pcoId = req.query.pco_id ? parseInt(req.query.pco_id as string) : null;
     const clientId = req.query.client_id ? parseInt(req.query.client_id as string) : null;
     const status = req.query.status as string || 'all';
-    const startDate = req.query.start_date as string;
-    const endDate = req.query.end_date as string;
+    const startDate = req.query.date_from as string;
+    const endDate = req.query.date_to as string;
 
-    // Build WHERE clause - EXCLUDE DRAFTS by default
-    let whereConditions = ["r.status != 'draft'"];
+    // Build WHERE clause
+    let whereConditions: string[] = [];
     const queryParams: any[] = [];
+
+    // Status group filtering (replaces individual status filter)
+    if (statusGroup !== 'all') {
+      switch (statusGroup) {
+        case 'draft':
+          // Draft group includes both draft and pending
+          whereConditions.push('(r.status = ? OR r.status = ?)');
+          queryParams.push('draft', 'pending');
+          break;
+        case 'approved':
+          whereConditions.push('r.status = ?');
+          queryParams.push('approved');
+          break;
+        case 'emailed':
+          whereConditions.push('r.status = ?');
+          queryParams.push('emailed');
+          break;
+        case 'archived':
+          whereConditions.push('r.status = ?');
+          queryParams.push('archived');
+          break;
+      }
+    }
+
+    // Report type filtering
+    if (reportType !== 'all') {
+      whereConditions.push('r.report_type = ?');
+      queryParams.push(reportType);
+    }
+
+    // Search filtering (client name or PCO name)
+    if (search) {
+      whereConditions.push('(c.company_name LIKE ? OR u.name LIKE ?)');
+      queryParams.push(`%${search}%`, `%${search}%`);
+    }
 
     if (pcoId) {
       whereConditions.push('r.pco_id = ?');
@@ -181,7 +220,8 @@ export const getAdminReports = async (req: Request, res: Response) => {
       queryParams.push(clientId);
     }
 
-    if (status !== 'all') {
+    // Only apply status filter if status_group is 'all'
+    if (status !== 'all' && statusGroup === 'all') {
       whereConditions.push('r.status = ?');
       queryParams.push(status);
     }
@@ -196,12 +236,14 @@ export const getAdminReports = async (req: Request, res: Response) => {
       queryParams.push(endDate);
     }
 
-    const whereClause = whereConditions.join(' AND ');
+    const whereClause = whereConditions.length > 0 ? whereConditions.join(' AND ') : '1=1';
 
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
       FROM reports r
+      JOIN clients c ON r.client_id = c.id
+      JOIN users u ON r.pco_id = u.id
       WHERE ${whereClause}
     `;
 
@@ -219,6 +261,9 @@ export const getAdminReports = async (req: Request, res: Response) => {
         r.service_date,
         r.next_service_date,
         r.status,
+        r.general_remarks,
+        r.recommendations,
+        r.admin_notes,
         r.created_at,
         r.submitted_at,
         r.reviewed_at,
@@ -232,8 +277,7 @@ export const getAdminReports = async (req: Request, res: Response) => {
         (SELECT COUNT(*) FROM bait_stations WHERE report_id = r.id) as bait_stations_count,
         (SELECT COUNT(*) FROM fumigation_areas WHERE report_id = r.id) as fumigation_areas_count,
         (SELECT COUNT(*) FROM insect_monitors WHERE report_id = r.id) as insect_monitors_count,
-        DATEDIFF(NOW(), r.submitted_at) as days_pending,
-        r.admin_notes
+        DATEDIFF(NOW(), r.submitted_at) as days_pending
       FROM reports r
       JOIN clients c ON r.client_id = c.id
       JOIN users u ON r.pco_id = u.id
@@ -259,14 +303,16 @@ export const getAdminReports = async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      data: reports,
-      pagination: {
-        page,
-        limit,
-        total_records: totalRecords,
-        total_pages: totalPages,
-        has_next: page < totalPages,
-        has_previous: page > 1
+      data: {
+        reports: reports || [],
+        pagination: {
+          current_page: page,
+          total_pages: totalPages,
+          total_reports: totalRecords,
+          per_page: limit,
+          has_next: page < totalPages,
+          has_prev: page > 1
+        }
       }
     });
 
@@ -673,12 +719,13 @@ export const deleteReport = async (req: Request, res: Response) => {
 
 /**
  * POST /api/pco/reports/:id/submit
- * Submit report for admin review
+ * Submit report (mark as submitted but keep as draft)
  * 
- * CRITICAL Business Rules:
+ * Business Rules:
  * - Validates all required data complete
- * - Changes status: draft → pending
- * - AUTO-UNASSIGNS PCO from client (CRITICAL!)
+ * - Status remains 'draft' (no pending status)
+ * - PCO remains assigned to client
+ * - Records submission timestamp
  * - Sends notification to admin
  */
 export const submitReport = async (req: Request, res: Response) => {
@@ -686,7 +733,7 @@ export const submitReport = async (req: Request, res: Response) => {
     const reportId = parseInt(req.params.id);
     const pcoId = req.user!.id;
 
-    // Verify ownership and draft/declined status (per workflow.md)
+    // Verify ownership and draft/declined status
     // Declined reports can be resubmitted after corrections
     const reportCheck = await executeQuery<RowDataPacket[]>(
       `SELECT r.*, c.company_name
@@ -716,16 +763,15 @@ export const submitReport = async (req: Request, res: Response) => {
       });
     }
 
-    // Manual submission logic (instead of stored procedure) to support declined report resubmission
-    // Update report status to pending
+    // Update report - keep as draft but record submission timestamp
     await executeQuery(
       `UPDATE reports 
-       SET status = 'pending', submitted_at = NOW(), updated_at = NOW()
+       SET status = 'draft', submitted_at = NOW(), updated_at = NOW()
        WHERE id = ?`,
       [reportId]
     );
 
-    // Auto-unassign PCO from client (critical business rule per workflow.md)
+    // Auto-unassign PCO from client (critical business rule)
     // First delete any old inactive assignments to avoid unique constraint issues
     await executeQuery(
       `DELETE FROM client_pco_assignments 
@@ -743,26 +789,32 @@ export const submitReport = async (req: Request, res: Response) => {
 
     // Send notification to admin
     const adminUsers = await executeQuery<RowDataPacket[]>(
-      `SELECT id FROM users WHERE role IN ('admin', 'both') AND status = 'active' LIMIT 1`
+      `SELECT id, name FROM users WHERE role IN ('admin', 'both') AND status = 'active' LIMIT 1`
     );
 
     if (adminUsers.length > 0) {
       const adminId = (adminUsers[0] as any).id;
-      await executeQuery(
-        `INSERT INTO notifications (user_id, type, title, message)
-         VALUES (?, 'report_submitted', 'New Report Submitted', ?)`,
-        [
-          adminId,
-          `${report.company_name}: New report submitted by ${pcoId} for review`
-        ]
+      
+      // Get PCO name
+      const pcoInfo = await executeQuerySingle(
+        'SELECT name FROM users WHERE id = ?',
+        [pcoId]
+      );
+      const pcoName = pcoInfo?.name || 'PCO';
+      
+      await createNotification(
+        adminId,
+        'report_submitted',
+        'New Report Submitted',
+        `${pcoName} submitted report for ${report.company_name}`
       );
     }
 
-    logger.info(`Report ${reportId} submitted by PCO ${pcoId} - PCO auto-unassigned from client`);
+    logger.info(`Report ${reportId} submitted by PCO ${pcoId} - status remains draft`);
 
     return res.json({
       success: true,
-      message: 'Report submitted successfully for admin review'
+      message: 'Report submitted successfully'
     });
 
   } catch (error) {
@@ -790,18 +842,23 @@ export const approveReport = async (req: Request, res: Response) => {
     const adminId = req.user!.id;
     const { admin_notes, recommendations } = req.body;
 
-    // Verify report is pending
+    // Verify report exists and is in draft or pending status (can be approved from either state)
     const reportCheck = await executeQuery<RowDataPacket[]>(
-      `SELECT id FROM reports WHERE id = ? AND status = 'pending'`,
+      `SELECT r.id, r.pco_id, c.company_name 
+       FROM reports r
+       JOIN clients c ON r.client_id = c.id
+       WHERE r.id = ? AND r.status IN ('draft', 'pending')`,
       [reportId]
     );
 
     if (reportCheck.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Report not found or not in pending status'
+        message: 'Report not found or not available for approval'
       });
     }
+
+    const report = reportCheck[0] as any;
 
     // Approve report (admin_notes and recommendations are optional, convert undefined to null)
     await executeQuery(
@@ -812,8 +869,16 @@ export const approveReport = async (req: Request, res: Response) => {
            reviewed_by = ?,
            reviewed_at = NOW(),
            updated_at = NOW()
-       WHERE id = ? AND status = 'pending'`,
+       WHERE id = ? AND status IN ('draft', 'pending')`,
       [admin_notes || null, recommendations || null, adminId, reportId]
+    );
+
+    // Send notification to PCO
+    await createNotification(
+      report.pco_id,
+      'report_submitted',
+      'Report Approved',
+      `Your report for ${report.company_name} has been approved by the admin.${admin_notes ? ` Notes: ${admin_notes}` : ''}`
     );
 
     logger.info(`Report ${reportId} approved by admin ${adminId}`);
@@ -856,27 +921,27 @@ export const declineReport = async (req: Request, res: Response) => {
       });
     }
 
-    // Get report info
+    // Get report info (accept draft or pending status)
     const reportCheck = await executeQuery<RowDataPacket[]>(
       `SELECT r.*, c.company_name, u.name as pco_name
        FROM reports r
        JOIN clients c ON r.client_id = c.id
        JOIN users u ON r.pco_id = u.id
-       WHERE r.id = ? AND r.status = 'pending'`,
+       WHERE r.id = ? AND r.status IN ('draft', 'pending')`,
       [reportId]
     );
 
     if (reportCheck.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Report not found or not in pending status'
+        message: 'Report not found or not available for decline'
       });
     }
 
     const report = reportCheck[0] as any;
 
     // Decline report - set to 'declined' status per workflow.md
-    // Status: pending → declined (PCO can then edit and resubmit)
+    // Status: draft/pending → declined (PCO can then edit and resubmit)
     await executeQuery(
       `UPDATE reports 
        SET status = 'declined',
@@ -884,7 +949,7 @@ export const declineReport = async (req: Request, res: Response) => {
            reviewed_by = ?,
            reviewed_at = NOW(),
            updated_at = NOW()
-       WHERE id = ? AND status = 'pending'`,
+       WHERE id = ? AND status IN ('draft', 'pending')`,
       [admin_notes, adminId, reportId]
     );
 
@@ -899,14 +964,12 @@ export const declineReport = async (req: Request, res: Response) => {
       [report.client_id, report.pco_id]
     );
 
-    // Notify PCO
-    await executeQuery(
-      `INSERT INTO notifications (user_id, type, title, message)
-       VALUES (?, 'report_declined', 'Report Declined - Revision Required', ?)`,
-      [
-        report.pco_id,
-        `Your report for ${report.company_name} has been declined. Admin feedback: ${admin_notes}`
-      ]
+    // Notify PCO using notification helper
+    await createNotification(
+      report.pco_id,
+      'report_declined',
+      'Report Declined - Revision Required',
+      `Your report for ${report.company_name} has been declined. Admin feedback: ${admin_notes}`
     );
 
     logger.info(`Report ${reportId} declined by admin ${adminId} - PCO reassigned to client`);
@@ -1614,5 +1677,444 @@ export const getPreFillData = async (req: Request, res: Response) => {
       message: 'Failed to retrieve pre-fill data',
       error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     });
+  }
+};
+
+/**
+ * POST /api/admin/reports/:id/archive
+ * Archive a report
+ * 
+ * Business Rules:
+ * - Admin only
+ * - Can archive reports in any status except already archived
+ * - Archived reports are completed but not for client distribution
+ */
+export const archiveReport = async (req: Request, res: Response) => {
+  try {
+    const reportId = parseInt(req.params.id);
+    const adminId = req.user!.id;
+
+    // Verify report exists and is not already archived, get PCO and client info
+    const reportCheck = await executeQuery<RowDataPacket[]>(
+      `SELECT r.id, r.status, r.pco_id, c.company_name 
+       FROM reports r
+       JOIN clients c ON r.client_id = c.id
+       WHERE r.id = ?`,
+      [reportId]
+    );
+
+    if (reportCheck.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Report not found'
+      });
+    }
+
+    const report = reportCheck[0] as any;
+
+    if (report.status === 'archived') {
+      return res.status(400).json({
+        success: false,
+        message: 'Report is already archived'
+      });
+    }
+
+    // Archive report
+    await executeQuery(
+      `UPDATE reports 
+       SET status = 'archived',
+           reviewed_by = ?,
+           reviewed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [adminId, reportId]
+    );
+
+    // Notify PCO that their report has been archived
+    await createNotification(
+      report.pco_id,
+      'system_update',
+      'Report Archived',
+      `Your report for ${report.company_name} has been archived by the admin.`
+    );
+
+    logger.info(`Report ${reportId} archived by admin ${adminId}`);
+
+    return res.json({
+      success: true,
+      message: 'Report archived successfully',
+      data: {
+        report_id: reportId,
+        status: 'archived'
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error in archiveReport:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to archive report',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
+ * PUT /api/admin/reports/:id
+ * Admin comprehensive update report
+ * 
+ * Business Rules:
+ * - Admin can edit ANY report regardless of status
+ * - Can update ALL fields EXCEPT: general_remarks, pco_signature, client_signature
+ * - Can add/edit/delete bait stations with chemicals
+ * - Can add/edit/delete fumigation areas, target pests, and chemicals
+ * - Can add/edit/delete insect monitors
+ * - Full CRUD on all nested data
+ */
+export const adminUpdateReport = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    const reportId = parseInt(req.params.id);
+    const adminId = req.user!.id;
+    const updateData = req.body;
+
+    await connection.beginTransaction();
+
+    // Verify report exists
+    const reportCheck = await executeQuery<RowDataPacket[]>(
+      `SELECT id, status, report_type FROM reports WHERE id = ?`,
+      [reportId]
+    );
+
+    if (reportCheck.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Report not found'
+      });
+    }
+
+    // ========================================================================
+    // STEP 1: Update main report fields
+    // ========================================================================
+    const fields = [];
+    const values = [];
+
+    // Admin can update these fields (excluding general_remarks, pco_signature, client_signature)
+    const allowedFields = [
+      'service_date',
+      'next_service_date',
+      'report_type',
+      'status',
+      'recommendations',
+      'admin_notes'
+    ];
+
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(updateData[field] || null);
+      }
+    }
+
+    if (fields.length > 0) {
+      values.push(reportId);
+      await connection.query(
+        `UPDATE reports SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+        values
+      );
+    }
+
+    // ========================================================================
+    // STEP 2: Handle Bait Stations (Full CRUD)
+    // ========================================================================
+    if (updateData.bait_stations !== undefined && Array.isArray(updateData.bait_stations)) {
+      // Get existing station IDs
+      const existingStations = await connection.query<RowDataPacket[]>(
+        'SELECT id FROM bait_stations WHERE report_id = ?',
+        [reportId]
+      );
+      const existingIds = existingStations[0].map((s: any) => s.id);
+      const incomingIds = updateData.bait_stations
+        .filter((s: any) => s.id)
+        .map((s: any) => s.id);
+
+      // Delete removed stations
+      const toDelete = existingIds.filter((id: number) => !incomingIds.includes(id));
+      for (const stationId of toDelete) {
+        // Delete associated chemicals first
+        await connection.query('DELETE FROM station_chemicals WHERE station_id = ?', [stationId]);
+        // Delete station
+        await connection.query('DELETE FROM bait_stations WHERE id = ?', [stationId]);
+      }
+
+      // Update or insert stations
+      for (const station of updateData.bait_stations) {
+        if (station.id) {
+          // Update existing station
+          await connection.query(
+            `UPDATE bait_stations SET
+              \`location\` = ?,
+              station_number = ?,
+              is_accessible = ?,
+              inaccessible_reason = ?,
+              activity_detected = ?,
+              activity_droppings = ?,
+              activity_gnawing = ?,
+              activity_tracks = ?,
+              activity_other = ?,
+              activity_other_description = ?,
+              bait_status = ?,
+              station_condition = ?,
+              action_taken = ?,
+              warning_sign_condition = ?,
+              station_remarks = ?
+            WHERE id = ? AND report_id = ?`,
+            [
+              station.location,
+              station.station_number,
+              station.accessible === 'yes' ? 1 : 0,
+              station.not_accessible_reason || null,
+              station.activity_detected === 'yes' ? 1 : 0,
+              station.activity_droppings ? 1 : 0,
+              station.activity_gnawing ? 1 : 0,
+              station.activity_tracks ? 1 : 0,
+              station.activity_other ? 1 : 0,
+              station.activity_other_description || null,
+              station.bait_status,
+              station.station_condition,
+              station.action_taken === '' ? 'none' : (station.action_taken || 'none'),
+              station.warning_sign_condition,
+              station.station_remarks || null,
+              station.id,
+              reportId
+            ]
+          );
+
+          // Update chemicals for this station
+          if (station.chemicals && Array.isArray(station.chemicals)) {
+            // Delete existing chemicals
+            await connection.query('DELETE FROM station_chemicals WHERE station_id = ?', [station.id]);
+            
+            // Insert new chemicals
+            for (const chem of station.chemicals) {
+              if (chem.chemical_id) {
+                await connection.query(
+                  `INSERT INTO station_chemicals (station_id, chemical_id, quantity, batch_number)
+                   VALUES (?, ?, ?, ?)`,
+                  [station.id, chem.chemical_id, chem.quantity, chem.batch_number]
+                );
+              }
+            }
+          }
+        } else {
+          // Insert new station
+          const [result] = await connection.query<ResultSetHeader>(
+            `INSERT INTO bait_stations (
+              report_id, \`location\`, station_number, is_accessible, inaccessible_reason,
+              activity_detected, activity_droppings, activity_gnawing, activity_tracks, activity_other, activity_other_description,
+              bait_status, station_condition, action_taken, warning_sign_condition, station_remarks
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              reportId,
+              station.location,
+              station.station_number,
+              station.accessible === 'yes' ? 1 : 0,
+              station.not_accessible_reason || null,
+              station.activity_detected === 'yes' ? 1 : 0,
+              station.activity_droppings ? 1 : 0,
+              station.activity_gnawing ? 1 : 0,
+              station.activity_tracks ? 1 : 0,
+              station.activity_other ? 1 : 0,
+              station.activity_other_description || null,
+              station.bait_status,
+              station.station_condition,
+              station.action_taken === '' ? 'none' : (station.action_taken || 'none'),
+              station.warning_sign_condition,
+              station.station_remarks || null
+            ]
+          );
+
+          const newStationId = result.insertId;
+
+          // Insert chemicals for new station
+          if (station.chemicals && Array.isArray(station.chemicals)) {
+            for (const chem of station.chemicals) {
+              if (chem.chemical_id) {
+                await connection.query(
+                  `INSERT INTO station_chemicals (station_id, chemical_id, quantity, batch_number)
+                   VALUES (?, ?, ?, ?)`,
+                  [newStationId, chem.chemical_id, chem.quantity, chem.batch_number]
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // ========================================================================
+    // STEP 3: Handle Fumigation Areas
+    // ========================================================================
+    if (updateData.fumigation_areas !== undefined && Array.isArray(updateData.fumigation_areas)) {
+      // Delete all existing areas and reinsert
+      await connection.query('DELETE FROM fumigation_areas WHERE report_id = ?', [reportId]);
+      
+      for (const area of updateData.fumigation_areas) {
+        if (area.area_name) {
+          await connection.query(
+            'INSERT INTO fumigation_areas (report_id, area_name, is_other, other_description) VALUES (?, ?, ?, ?)',
+            [
+              reportId, 
+              area.area_name,
+              area.is_other ? 1 : 0,
+              area.other_description || null
+            ]
+          );
+        }
+      }
+    }
+
+    // ========================================================================
+    // STEP 4: Handle Fumigation Target Pests
+    // ========================================================================
+    if (updateData.fumigation_target_pests !== undefined && Array.isArray(updateData.fumigation_target_pests)) {
+      // Delete all existing pests and reinsert
+      await connection.query('DELETE FROM fumigation_target_pests WHERE report_id = ?', [reportId]);
+      
+      for (const pest of updateData.fumigation_target_pests) {
+        if (pest.pest_name) {
+          await connection.query(
+            'INSERT INTO fumigation_target_pests (report_id, pest_name, is_other, other_description) VALUES (?, ?, ?, ?)',
+            [
+              reportId, 
+              pest.pest_name,
+              pest.is_other ? 1 : 0,
+              pest.other_description || null
+            ]
+          );
+        }
+      }
+    }
+
+    // ========================================================================
+    // STEP 5: Handle Fumigation Chemicals
+    // ========================================================================
+    if (updateData.fumigation_chemicals !== undefined && Array.isArray(updateData.fumigation_chemicals)) {
+      // Delete all existing fumigation chemicals and reinsert
+      await connection.query('DELETE FROM fumigation_chemicals WHERE report_id = ?', [reportId]);
+      
+      for (const chem of updateData.fumigation_chemicals) {
+        if (chem.chemical_id) {
+          await connection.query(
+            `INSERT INTO fumigation_chemicals (report_id, chemical_id, quantity, batch_number)
+             VALUES (?, ?, ?, ?)`,
+            [reportId, chem.chemical_id, chem.quantity, chem.batch_number]
+          );
+        }
+      }
+    }
+
+    // ========================================================================
+    // STEP 6: Handle Insect Monitors (Full CRUD)
+    // ========================================================================
+    if (updateData.insect_monitors !== undefined && Array.isArray(updateData.insect_monitors)) {
+      // Get existing monitor IDs
+      const existingMonitors = await connection.query<RowDataPacket[]>(
+        'SELECT id FROM insect_monitors WHERE report_id = ?',
+        [reportId]
+      );
+      const existingIds = existingMonitors[0].map((m: any) => m.id);
+      const incomingIds = updateData.insect_monitors
+        .filter((m: any) => m.id)
+        .map((m: any) => m.id);
+
+      // Delete removed monitors
+      const toDelete = existingIds.filter((id: number) => !incomingIds.includes(id));
+      for (const monitorId of toDelete) {
+        await connection.query('DELETE FROM insect_monitors WHERE id = ?', [monitorId]);
+      }
+
+      // Update or insert monitors
+      for (const monitor of updateData.insect_monitors) {
+        if (monitor.id) {
+          // Update existing monitor
+          await connection.query(
+            `UPDATE insect_monitors SET
+              monitor_type = ?,
+              monitor_condition = ?,
+              monitor_condition_other = ?,
+              light_condition = ?,
+              light_faulty_type = ?,
+              light_faulty_other = ?,
+              glue_board_replaced = ?,
+              tubes_replaced = ?,
+              warning_sign_condition = ?,
+              monitor_serviced = ?
+            WHERE id = ? AND report_id = ?`,
+            [
+              monitor.monitor_type,
+              monitor.monitor_condition,
+              monitor.monitor_condition_other || null,
+              monitor.light_condition || null,
+              monitor.light_faulty_type || null,
+              monitor.light_faulty_other || null,
+              monitor.glue_board_replaced === 'yes' ? 1 : (monitor.glue_board_replaced === 'no' ? 0 : monitor.glue_board_replaced),
+              monitor.tubes_replaced === 'yes' ? 1 : (monitor.tubes_replaced === 'no' ? 0 : monitor.tubes_replaced),
+              monitor.warning_sign_condition,
+              monitor.monitor_serviced === 'yes' ? 1 : (monitor.monitor_serviced === 'no' ? 0 : monitor.monitor_serviced),
+              monitor.id,
+              reportId
+            ]
+          );
+        } else {
+          // Insert new monitor
+          await connection.query(
+            `INSERT INTO insect_monitors (
+              report_id, monitor_type, monitor_condition, monitor_condition_other,
+              light_condition, light_faulty_type, light_faulty_other,
+              glue_board_replaced, tubes_replaced, warning_sign_condition, monitor_serviced
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              reportId,
+              monitor.monitor_type,
+              monitor.monitor_condition,
+              monitor.monitor_condition_other || null,
+              monitor.light_condition || null,
+              monitor.light_faulty_type || null,
+              monitor.light_faulty_other || null,
+              monitor.glue_board_replaced === 'yes' ? 1 : (monitor.glue_board_replaced === 'no' ? 0 : monitor.glue_board_replaced),
+              monitor.tubes_replaced === 'yes' ? 1 : (monitor.tubes_replaced === 'no' ? 0 : monitor.tubes_replaced),
+              monitor.warning_sign_condition,
+              monitor.monitor_serviced === 'yes' ? 1 : (monitor.monitor_serviced === 'no' ? 0 : monitor.monitor_serviced)
+            ]
+          );
+        }
+      }
+    }
+
+    await connection.commit();
+
+    logger.info(`Report ${reportId} comprehensively updated by admin ${adminId}`);
+
+    return res.json({
+      success: true,
+      message: 'Report updated successfully',
+      data: {
+        report_id: reportId
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    logger.error('Error in adminUpdateReport:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update report',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  } finally {
+    connection.release();
   }
 };

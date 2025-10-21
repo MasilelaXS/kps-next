@@ -23,7 +23,9 @@ router.delete('/pco/reports/:id/insect-monitors/:monitorId', auth_1.authenticate
 router.get('/admin/reports', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.reportListQuerySchema, 'query'), reportController_1.getAdminReports);
 router.get('/admin/reports/pending', auth_1.authenticateToken, reportController_1.getPendingReports);
 router.get('/admin/reports/:id', auth_1.authenticateToken, reportController_1.getReportById);
+router.put('/admin/reports/:id', auth_1.authenticateToken, reportController_1.adminUpdateReport);
 router.post('/admin/reports/:id/approve', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.approveReportSchema), reportController_1.approveReport);
 router.post('/admin/reports/:id/decline', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.declineReportSchema), reportController_1.declineReport);
+router.post('/admin/reports/:id/archive', auth_1.authenticateToken, reportController_1.archiveReport);
 exports.default = router;
 //# sourceMappingURL=reportRoutes.js.map

@@ -14,7 +14,10 @@ export const reportListQuerySchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
   client_id: Joi.number().integer().optional(),
   pco_id: Joi.number().integer().optional(),
-  status: Joi.string().valid('draft', 'pending', 'approved', 'declined', 'archived').optional(),
+  status: Joi.string().valid('draft', 'pending', 'approved', 'declined', 'archived', 'all').optional(),
+  status_group: Joi.string().valid('draft', 'approved', 'emailed', 'archived', 'all').optional(),
+  report_type: Joi.string().valid('bait_inspection', 'fumigation', 'both', 'all').optional(),
+  search: Joi.string().optional(),
   date_from: Joi.date().optional(),
   date_to: Joi.date().optional()
 });

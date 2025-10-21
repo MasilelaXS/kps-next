@@ -148,7 +148,32 @@ class ClientController {
                 });
                 return;
             }
-            const { company_name, address_line1, address_line2, city, state, postal_code, contacts = [] } = req.body;
+            const { company_name, address_line1, address_line2, city, state, postal_code, country = 'South Africa', total_bait_stations_inside = 0, total_bait_stations_outside = 0, total_insect_monitors_light = 0, total_insect_monitors_box = 0, contacts = [] } = req.body;
+            if (!company_name || !address_line1 || !city || !state || !postal_code) {
+                res.status(400).json({
+                    success: false,
+                    message: 'Missing required fields',
+                    errors: [
+                        { field: 'company_name', message: !company_name ? 'Company name is required' : undefined },
+                        { field: 'address_line1', message: !address_line1 ? 'Address is required' : undefined },
+                        { field: 'city', message: !city ? 'City is required' : undefined },
+                        { field: 'state', message: !state ? 'State is required' : undefined },
+                        { field: 'postal_code', message: !postal_code ? 'Postal code is required' : undefined }
+                    ].filter(e => e.message)
+                });
+                return;
+            }
+            logger_1.logger.info('Creating client', {
+                company_name,
+                city,
+                equipment: {
+                    bait_inside: total_bait_stations_inside,
+                    bait_outside: total_bait_stations_outside,
+                    monitor_light: total_insect_monitors_light,
+                    monitor_box: total_insect_monitors_box
+                },
+                contacts: contacts.length
+            });
             const existingClient = await (0, database_1.executeQuerySingle)('SELECT id FROM clients WHERE company_name = ? AND deleted_at IS NULL', [company_name]);
             if (existingClient) {
                 res.status(409).json({
@@ -164,9 +189,14 @@ class ClientController {
           address_line2, 
           city, 
           state, 
-          postal_code, 
+          postal_code,
+          country,
+          total_bait_stations_inside,
+          total_bait_stations_outside,
+          total_insect_monitors_light,
+          total_insect_monitors_box,
           status
-        ) VALUES (?, ?, ?, ?, ?, ?, 'active')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
       `;
             const result = await (0, database_1.executeQuery)(insertQuery, [
                 company_name,
@@ -174,7 +204,12 @@ class ClientController {
                 address_line2 || null,
                 city,
                 state,
-                postal_code
+                postal_code,
+                country,
+                total_bait_stations_inside,
+                total_bait_stations_outside,
+                total_insect_monitors_light,
+                total_insect_monitors_box
             ]);
             const clientId = result.insertId;
             if (contacts.length > 0) {
@@ -241,11 +276,14 @@ class ClientController {
         catch (error) {
             logger_1.logger.error('Create client error', {
                 error: error instanceof Error ? error.message : error,
-                admin_id: req.user?.id
+                stack: error instanceof Error ? error.stack : undefined,
+                admin_id: req.user?.id,
+                body: req.body
             });
             res.status(500).json({
                 success: false,
-                message: 'Failed to create client'
+                message: 'Failed to create client',
+                error: error instanceof Error ? error.message : 'Unknown error'
             });
         }
     }
@@ -355,7 +393,7 @@ class ClientController {
                 return;
             }
             const { id } = req.params;
-            const { company_name, address_line1, address_line2, city, state, postal_code } = req.body;
+            const { company_name, address_line1, address_line2, city, state, postal_code, country, total_bait_stations_inside, total_bait_stations_outside, total_insect_monitors_light, total_insect_monitors_box } = req.body;
             const existingClient = await (0, database_1.executeQuerySingle)('SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL', [id]);
             if (!existingClient) {
                 res.status(404).json({
@@ -382,7 +420,12 @@ class ClientController {
           address_line2 = ?, 
           city = ?, 
           state = ?, 
-          postal_code = ?, 
+          postal_code = ?,
+          country = ?,
+          total_bait_stations_inside = ?,
+          total_bait_stations_outside = ?,
+          total_insect_monitors_light = ?,
+          total_insect_monitors_box = ?,
           updated_at = NOW()
         WHERE id = ?
       `;
@@ -393,6 +436,11 @@ class ClientController {
                 city || existingClient.city,
                 state || existingClient.state,
                 postal_code || existingClient.postal_code,
+                country !== undefined ? country : existingClient.country,
+                total_bait_stations_inside !== undefined ? total_bait_stations_inside : existingClient.total_bait_stations_inside,
+                total_bait_stations_outside !== undefined ? total_bait_stations_outside : existingClient.total_bait_stations_outside,
+                total_insect_monitors_light !== undefined ? total_insect_monitors_light : existingClient.total_insect_monitors_light,
+                total_insect_monitors_box !== undefined ? total_insect_monitors_box : existingClient.total_insect_monitors_box,
                 id
             ]);
             const updatedClient = await (0, database_1.executeQuerySingle)('SELECT id, company_name, address_line1, address_line2, city, state, postal_code, status, created_at, updated_at FROM clients WHERE id = ?', [id]);

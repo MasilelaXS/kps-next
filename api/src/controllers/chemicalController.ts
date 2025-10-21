@@ -151,8 +151,14 @@ export class ChemicalController {
         active_ingredients, 
         usage_type, 
         quantity_unit,
+        l_number,
+        batch_number,
         safety_information
       } = req.body;
+
+      // Convert L number and batch number to uppercase
+      const normalizedLNumber = l_number ? l_number.trim().toUpperCase() : null;
+      const normalizedBatchNumber = batch_number ? batch_number.trim().toUpperCase() : null;
 
       // Check for duplicate chemical name
       const existingChemical = await executeQuerySingle(
@@ -175,9 +181,11 @@ export class ChemicalController {
           active_ingredients, 
           usage_type, 
           quantity_unit,
+          l_number,
+          batch_number,
           safety_information,
           status
-        ) VALUES (?, ?, ?, ?, ?, 'active')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
       `;
 
       const result = await executeQuery(insertQuery, [
@@ -185,6 +193,8 @@ export class ChemicalController {
         active_ingredients,
         usage_type,
         quantity_unit,
+        normalizedLNumber,
+        normalizedBatchNumber,
         safety_information || null
       ]);
 
@@ -294,8 +304,18 @@ export class ChemicalController {
         active_ingredients, 
         usage_type, 
         quantity_unit,
+        l_number,
+        batch_number,
         safety_information
       } = req.body;
+
+      // Convert L number and batch number to uppercase
+      const normalizedLNumber = l_number !== undefined 
+        ? (l_number ? l_number.trim().toUpperCase() : null)
+        : undefined;
+      const normalizedBatchNumber = batch_number !== undefined
+        ? (batch_number ? batch_number.trim().toUpperCase() : null)
+        : undefined;
 
       // Check if chemical exists
       const existingChemical = await executeQuerySingle(
@@ -335,6 +355,8 @@ export class ChemicalController {
           active_ingredients = ?, 
           usage_type = ?, 
           quantity_unit = ?,
+          l_number = ?,
+          batch_number = ?,
           safety_information = ?,
           updated_at = NOW()
         WHERE id = ?
@@ -345,6 +367,8 @@ export class ChemicalController {
         active_ingredients || existingChemical.active_ingredients,
         usage_type || existingChemical.usage_type,
         quantity_unit || existingChemical.quantity_unit,
+        normalizedLNumber !== undefined ? normalizedLNumber : existingChemical.l_number,
+        normalizedBatchNumber !== undefined ? normalizedBatchNumber : existingChemical.batch_number,
         safety_information !== undefined ? safety_information : existingChemical.safety_information,
         id
       ]);
@@ -531,6 +555,61 @@ export class ChemicalController {
   }
 
   /**
+   * Get chemicals for PCO (active only) by usage type
+   * GET /api/pco/chemicals/:usage_type
+   * Returns a flat array of chemicals for easier consumption by mobile app
+   */
+  static async getChemicalsForPco(req: Request, res: Response): Promise<void> {
+    try {
+      const { usage_type } = req.params;
+
+      // Validate usage type
+      const validTypes = ['bait_inspection', 'fumigation', 'multi_purpose'];
+      if (!validTypes.includes(usage_type)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid usage type. Must be: bait_inspection, fumigation, or multi_purpose'
+        });
+        return;
+      }
+
+      // Build query - only active chemicals for PCO
+      let query = `
+        SELECT 
+          id,
+          name,
+          active_ingredients,
+          usage_type,
+          quantity_unit,
+          safety_information,
+          l_number,
+          batch_number
+        FROM chemicals
+        WHERE (usage_type = ? OR usage_type = 'multi_purpose') AND status = 'active'
+        ORDER BY name ASC
+      `;
+
+      const chemicals = await executeQuery(query, [usage_type]);
+
+      res.json({
+        success: true,
+        data: chemicals
+      });
+    } catch (error) {
+      logger.error('Get chemicals for PCO error', { 
+        error: error instanceof Error ? error.message : error,
+        usage_type: req.params.usage_type,
+        user_id: req.user?.id 
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve chemicals'
+      });
+    }
+  }
+
+  /**
    * Search chemicals
    * GET /api/chemicals/search
    */
@@ -601,6 +680,111 @@ export class ChemicalController {
       res.status(500).json({
         success: false,
         message: 'Failed to search chemicals'
+      });
+    }
+  }
+
+  /**
+   * Delete chemical (soft delete if used in reports, hard delete otherwise)
+   * DELETE /api/admin/chemicals/:id
+   */
+  static async deleteChemical(req: Request, res: Response): Promise<void> {
+    try {
+      // Check if user is admin
+      if (req.user?.role !== 'admin') {
+        res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+        return;
+      }
+
+      const { id } = req.params;
+
+      // Check if chemical exists
+      const chemical = await executeQuerySingle(
+        'SELECT * FROM chemicals WHERE id = ? AND deleted_at IS NULL',
+        [id]
+      );
+
+      if (!chemical) {
+        res.status(404).json({
+          success: false,
+          message: 'Chemical not found'
+        });
+        return;
+      }
+
+      // Check if chemical is used in any reports
+      const stationUsage = await executeQuerySingle(
+        'SELECT COUNT(*) as count FROM station_chemicals WHERE chemical_id = ?',
+        [id]
+      );
+
+      const fumigationUsage = await executeQuerySingle(
+        'SELECT COUNT(*) as count FROM fumigation_chemicals WHERE chemical_id = ?',
+        [id]
+      );
+
+      const totalUsage = (stationUsage?.count || 0) + (fumigationUsage?.count || 0);
+
+      if (totalUsage > 0) {
+        // Soft delete: Chemical is used in reports
+        await executeQuery(
+          'UPDATE chemicals SET deleted_at = NOW(), status = "inactive", updated_at = NOW() WHERE id = ?',
+          [id]
+        );
+
+        logger.info('Chemical soft deleted (used in reports)', {
+          chemical_id: id,
+          chemical_name: chemical.name,
+          usage_count: totalUsage,
+          deleted_by: req.user.id
+        });
+
+        res.json({
+          success: true,
+          message: `Chemical "${chemical.name}" has been deactivated`,
+          data: {
+            delete_type: 'soft',
+            reason: 'Chemical is linked to existing reports',
+            usage_count: totalUsage,
+            note: 'Chemical data preserved for report history'
+          }
+        });
+      } else {
+        // Hard delete: Chemical not used in any reports
+        await executeQuery(
+          'DELETE FROM chemicals WHERE id = ?',
+          [id]
+        );
+
+        logger.info('Chemical hard deleted (no report associations)', {
+          chemical_id: id,
+          chemical_name: chemical.name,
+          deleted_by: req.user.id
+        });
+
+        res.json({
+          success: true,
+          message: `Chemical "${chemical.name}" has been permanently deleted`,
+          data: {
+            delete_type: 'hard',
+            reason: 'No report associations found'
+          }
+        });
+      }
+
+    } catch (error) {
+      logger.error('Delete chemical error', { 
+        error: error instanceof Error ? error.message : error,
+        chemical_id: req.params.id,
+        admin_id: req.user?.id 
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete chemical'
       });
     }
   }
