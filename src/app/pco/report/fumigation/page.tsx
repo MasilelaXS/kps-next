@@ -568,7 +568,7 @@ function FumigationContent() {
             disabled={selectedAreas.length === 0 || selectedPests.length === 0 || chemicalsUsed.length === 0}
             className="flex-1 px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue to Summary
+            Next
           </button>
         </div>
       </div>

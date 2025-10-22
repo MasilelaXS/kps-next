@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
+exports.getLastReportForClient = exports.updateClientCounts = exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const getFullSync = async (req, res) => {
@@ -25,6 +25,10 @@ const getFullSync = async (req, res) => {
         c.postal_code,
         c.country,
         c.status,
+        c.total_bait_stations_inside,
+        c.total_bait_stations_outside,
+        c.total_insect_monitors_light,
+        c.total_insect_monitors_box,
         cpa.assigned_at,
         CONCAT('[', COALESCE(GROUP_CONCAT(
           JSON_OBJECT(
@@ -40,7 +44,7 @@ const getFullSync = async (req, res) => {
        JOIN client_pco_assignments cpa ON c.id = cpa.client_id
        LEFT JOIN client_contacts cc ON cc.client_id = c.id
        WHERE cpa.pco_id = ? AND cpa.status = 'active' AND c.status = 'active'
-       GROUP BY c.id, c.company_name, c.address_line1, c.address_line2, c.city, c.state, c.postal_code, c.country, c.status, cpa.assigned_at
+       GROUP BY c.id, c.company_name, c.address_line1, c.address_line2, c.city, c.state, c.postal_code, c.country, c.status, c.total_bait_stations_inside, c.total_bait_stations_outside, c.total_insect_monitors_light, c.total_insect_monitors_box, cpa.assigned_at
        ORDER BY c.company_name`, [pcoId]);
         const chemicals = await (0, database_1.executeQuery)(`SELECT 
         id,
@@ -138,6 +142,10 @@ const syncClients = async (req, res) => {
         c.postal_code,
         c.country,
         c.status,
+        c.total_bait_stations_inside,
+        c.total_bait_stations_outside,
+        c.total_insect_monitors_light,
+        c.total_insect_monitors_box,
         c.updated_at,
         cpa.assigned_at
     `;
@@ -171,7 +179,7 @@ const syncClients = async (req, res) => {
             params.push(since, since);
         }
         if (include_contacts === 'true') {
-            query += ` GROUP BY c.id, c.company_name, c.address_line1, c.address_line2, c.city, c.state, c.postal_code, c.country, c.status, c.updated_at, cpa.assigned_at`;
+            query += ` GROUP BY c.id, c.company_name, c.address_line1, c.address_line2, c.city, c.state, c.postal_code, c.country, c.status, c.total_bait_stations_inside, c.total_bait_stations_outside, c.total_insect_monitors_light, c.total_insect_monitors_box, c.updated_at, cpa.assigned_at`;
         }
         query += ` ORDER BY c.company_name`;
         const clients = await (0, database_1.executeQuery)(query, params);
@@ -499,4 +507,164 @@ const exportData = async (req, res) => {
     }
 };
 exports.exportData = exportData;
+const updateClientCounts = async (req, res) => {
+    try {
+        const pcoId = req.user.id;
+        const clientId = parseInt(req.params.id);
+        const { total_bait_stations_inside, total_bait_stations_outside, total_insect_monitors_light, total_insect_monitors_box } = req.body;
+        const clients = await (0, database_1.executeQuery)('SELECT id, company_name FROM clients WHERE id = ? AND deleted_at IS NULL', [clientId]);
+        if (clients.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Client not found'
+            });
+        }
+        const assignments = await (0, database_1.executeQuery)('SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = "active"', [clientId, pcoId]);
+        if (assignments.length === 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not assigned to this client'
+            });
+        }
+        const updateFields = [];
+        const updateValues = [];
+        if (total_bait_stations_inside !== undefined) {
+            updateFields.push('total_bait_stations_inside = ?');
+            updateValues.push(total_bait_stations_inside);
+        }
+        if (total_bait_stations_outside !== undefined) {
+            updateFields.push('total_bait_stations_outside = ?');
+            updateValues.push(total_bait_stations_outside);
+        }
+        if (total_insect_monitors_light !== undefined) {
+            updateFields.push('total_insect_monitors_light = ?');
+            updateValues.push(total_insect_monitors_light);
+        }
+        if (total_insect_monitors_box !== undefined) {
+            updateFields.push('total_insect_monitors_box = ?');
+            updateValues.push(total_insect_monitors_box);
+        }
+        if (updateFields.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No fields to update'
+            });
+        }
+        updateFields.push('updated_at = NOW()');
+        updateValues.push(clientId);
+        const updateQuery = `UPDATE clients SET ${updateFields.join(', ')} WHERE id = ?`;
+        await (0, database_1.executeQuery)(updateQuery, updateValues);
+        const updatedClients = await (0, database_1.executeQuery)(`SELECT 
+        id, 
+        company_name,
+        total_bait_stations_inside,
+        total_bait_stations_outside,
+        total_insect_monitors_light,
+        total_insect_monitors_box,
+        updated_at
+       FROM clients WHERE id = ?`, [clientId]);
+        logger_1.logger.info(`Client counts updated by PCO ${pcoId} for client ${clientId}`);
+        return res.json({
+            success: true,
+            message: 'Client counts updated successfully',
+            data: updatedClients[0]
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in updateClientCounts:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update client counts',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.updateClientCounts = updateClientCounts;
+const getLastReportForClient = async (req, res) => {
+    try {
+        const pcoId = req.user.id;
+        const clientId = parseInt(req.params.clientId);
+        const assignments = await (0, database_1.executeQuery)('SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = "active"', [clientId, pcoId]);
+        if (assignments.length === 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not assigned to this client'
+            });
+        }
+        const lastReportQuery = `
+      SELECT id, service_date 
+      FROM reports 
+      WHERE client_id = ? AND status = 'approved'
+      ORDER BY service_date DESC, id DESC
+      LIMIT 1
+    `;
+        const lastReports = await (0, database_1.executeQuery)(lastReportQuery, [clientId]);
+        if (lastReports.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No previous reports found',
+                data: null
+            });
+        }
+        const reportId = lastReports[0].id;
+        const baitStations = await (0, database_1.executeQuery)(`SELECT 
+        station_number,
+        location,
+        is_accessible,
+        inaccessible_reason,
+        activity_detected,
+        activity_droppings,
+        activity_gnawing,
+        activity_tracks,
+        activity_other,
+        activity_other_description,
+        bait_status,
+        station_condition,
+        action_taken,
+        warning_sign_condition,
+        rodent_box_replaced,
+        station_remarks
+      FROM bait_stations 
+      WHERE report_id = ?
+      ORDER BY location, station_number`, [reportId]);
+        const stationChemicals = await (0, database_1.executeQuery)(`SELECT 
+        sc.station_id as bait_station_id,
+        sc.chemical_id,
+        c.name as chemical_name,
+        sc.quantity,
+        sc.batch_number
+      FROM bait_stations bs
+      JOIN station_chemicals sc ON bs.id = sc.station_id
+      JOIN chemicals c ON sc.chemical_id = c.id
+      WHERE bs.report_id = ?`, [reportId]);
+        const stationsWithChemicals = baitStations.map((station) => ({
+            ...station,
+            chemicals: stationChemicals.filter((chem) => chem.bait_station_id === station.id).map((chem) => ({
+                chemicalId: chem.chemical_id,
+                chemicalName: chem.chemical_name,
+                quantity: chem.quantity,
+                batchNumber: chem.batch_number
+            }))
+        }));
+        logger_1.logger.info(`Last report data retrieved for client ${clientId} by PCO ${pcoId}`);
+        return res.json({
+            success: true,
+            message: 'Previous report data retrieved successfully',
+            data: {
+                report_id: reportId,
+                service_date: lastReports[0].service_date,
+                bait_stations: stationsWithChemicals
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in getLastReportForClient:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve previous report data',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.getLastReportForClient = getLastReportForClient;
 //# sourceMappingURL=pcoSyncController.js.map

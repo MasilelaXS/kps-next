@@ -2,12 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
-import { User, Mail, Phone, MapPin, Calendar, LogOut } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, LogOut, Lock, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useNotification } from '@/contexts/NotificationContext';
 
 export default function PCOProfile() {
   const router = useRouter();
+  const notification = useNotification();
   const [user, setUser] = useState<any>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('kps_user');
@@ -15,6 +27,68 @@ export default function PCOProfile() {
       setUser(JSON.parse(userData));
     }
   }, []);
+
+  const handleChangePassword = async () => {
+    // Validate passwords
+    if (!passwordData.current_password || !passwordData.new_password || !passwordData.confirm_password) {
+      notification.error('Validation Error', 'Please fill in all password fields');
+      return;
+    }
+
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      notification.error('Validation Error', 'New passwords do not match');
+      return;
+    }
+
+    if (passwordData.new_password.length < 8) {
+      notification.error('Validation Error', 'New password must be at least 8 characters long');
+      return;
+    }
+
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(passwordData.new_password)) {
+      notification.error('Validation Error', 'Password must contain uppercase, lowercase, and number');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem('kps_token');
+
+      const response = await fetch('http://192.168.1.128:3001/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to change password');
+      }
+
+      notification.success('Password Changed', data.message);
+      
+      // Reset form and close modal
+      setPasswordData({
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      });
+      setShowChangePassword(false);
+
+    } catch (error) {
+      console.error('Error changing password:', error);
+      notification.error('Change Password Failed', error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('kps_token');
@@ -96,6 +170,131 @@ export default function PCOProfile() {
                 <p className="text-sm font-medium text-gray-900">{user.login_id}</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Security Section */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">Security</h2>
+          </div>
+
+          <div className="p-4">
+            <button
+              onClick={() => setShowChangePassword(!showChangePassword)}
+              className="w-full bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <Lock className="w-5 h-5" />
+              Change Password
+            </button>
+
+            {/* Password Change Form */}
+            {showChangePassword && (
+              <div className="mt-4 space-y-4 p-4 bg-gray-50 rounded-xl">
+                {/* Current Password */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      value={passwordData.current_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Enter current password"
+                      disabled={submitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={passwordData.new_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Enter new password"
+                      disabled={submitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Must be 8+ characters with uppercase, lowercase, and number
+                  </p>
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={passwordData.confirm_password}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Confirm new password"
+                      disabled={submitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowChangePassword(false);
+                      setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+                    }}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={submitting}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      'Update Password'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

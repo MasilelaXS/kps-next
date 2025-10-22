@@ -8,6 +8,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
 
@@ -23,7 +24,7 @@ export class ChemicalController {
   static async getChemicalList(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -138,7 +139,7 @@ export class ChemicalController {
   static async createChemical(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -208,7 +209,7 @@ export class ChemicalController {
         chemical_id: newChemical.id,
         name,
         usage_type,
-        created_by: req.user.id
+        created_by: req.user!.id
       });
 
       res.status(201).json({
@@ -290,7 +291,7 @@ export class ChemicalController {
   static async updateChemical(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -382,7 +383,7 @@ export class ChemicalController {
       logger.info('Chemical updated', {
         chemical_id: id,
         updated_fields: { name, active_ingredients, usage_type, quantity_unit },
-        updated_by: req.user.id
+        updated_by: req.user!.id
       });
 
       res.json({
@@ -413,7 +414,7 @@ export class ChemicalController {
   static async updateChemicalStatus(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -445,7 +446,7 @@ export class ChemicalController {
         logger.warn('Attempt to deactivate chemical in use', {
           chemical_id: id,
           usage_count: usageCount.count,
-          attempted_by: req.user.id
+          attempted_by: req.user!.id
         });
       }
 
@@ -459,7 +460,7 @@ export class ChemicalController {
         chemical_id: id,
         old_status: chemical.status,
         new_status: status,
-        updated_by: req.user.id,
+        updated_by: req.user!.id,
         usage_count: usageCount?.count || 0
       });
 
@@ -691,7 +692,7 @@ export class ChemicalController {
   static async deleteChemical(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -739,7 +740,7 @@ export class ChemicalController {
           chemical_id: id,
           chemical_name: chemical.name,
           usage_count: totalUsage,
-          deleted_by: req.user.id
+          deleted_by: req.user!.id
         });
 
         res.json({
@@ -762,7 +763,7 @@ export class ChemicalController {
         logger.info('Chemical hard deleted (no report associations)', {
           chemical_id: id,
           chemical_name: chemical.name,
-          deleted_by: req.user.id
+          deleted_by: req.user!.id
         });
 
         res.json({

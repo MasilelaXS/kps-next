@@ -40,10 +40,12 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
 
-      // Only allow PCO users
-      if (parsedUser.role !== 'pco') {
-        console.log(`Access denied: User is ${parsedUser.role}, redirecting to correct portal`);
-        if (parsedUser.role === 'admin') {
+      // Check role_context for access (handles dual-role users correctly)
+      const roleContext = parsedUser.role_context || parsedUser.role;
+      
+      if (roleContext !== 'pco') {
+        console.log(`Access denied: User context is ${roleContext}, redirecting to correct portal`);
+        if (roleContext === 'admin') {
           router.push('/admin/dashboard');
         } else {
           logout();
@@ -63,8 +65,17 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
     { name: 'Profile', href: '/pco/profile', icon: User },
   ];
 
-  // Prevent hydration mismatch and ensure user is PCO
-  if (!mounted || !user || user.role !== 'pco') {
+  // Prevent hydration mismatch and ensure user has PCO context
+  if (!mounted || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  const roleContext = user.role_context || user.role;
+  if (roleContext !== 'pco') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>

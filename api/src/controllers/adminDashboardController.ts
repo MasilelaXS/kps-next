@@ -17,6 +17,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import { logger } from '../config/logger';
@@ -76,7 +77,7 @@ const getCachedData = async (
  */
 export const getMetrics = async (req: Request, res: Response) => {
   try {
-    if (req.user?.role !== 'admin') {
+    if (!hasRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Admin access required'
@@ -256,7 +257,7 @@ export const getMetrics = async (req: Request, res: Response) => {
  */
 export const getActivity = async (req: Request, res: Response) => {
   try {
-    if (req.user?.role !== 'admin') {
+    if (!hasRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Admin access required'
@@ -436,7 +437,7 @@ export const getActivity = async (req: Request, res: Response) => {
  */
 export const getStats = async (req: Request, res: Response) => {
   try {
-    if (req.user?.role !== 'admin') {
+    if (!hasRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Admin access required'
@@ -511,6 +512,7 @@ export const getStats = async (req: Request, res: Response) => {
             u.id as pco_id,
             u.name as pco_name,
             u.pco_number,
+            u.role,
             COUNT(r.id) as total_reports,
             SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_reports,
             SUM(CASE WHEN r.status = 'declined' THEN 1 ELSE 0 END) as declined_reports,
@@ -522,10 +524,10 @@ export const getStats = async (req: Request, res: Response) => {
             AND r.status IN ('approved', 'declined')
           LEFT JOIN client_pco_assignments cpa ON u.id = cpa.pco_id
             AND cpa.status = 'active'
-          WHERE u.role = 'pco' 
+          WHERE u.role IN ('pco', 'both')
             AND u.status = 'active'
             AND u.deleted_at IS NULL
-          GROUP BY u.id, u.name, u.pco_number
+          GROUP BY u.id, u.name, u.pco_number, u.role
           HAVING total_reports > 0
           ORDER BY total_reports DESC
           LIMIT 10`,
@@ -612,7 +614,7 @@ export const getStats = async (req: Request, res: Response) => {
  */
 export const getPerformance = async (req: Request, res: Response) => {
   try {
-    if (req.user?.role !== 'admin') {
+    if (!hasRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Admin access required'
@@ -717,7 +719,7 @@ export const getPerformance = async (req: Request, res: Response) => {
  */
 export const refreshCache = async (req: Request, res: Response) => {
   try {
-    if (req.user?.role !== 'admin') {
+    if (!hasRole(req.user, 'admin')) {
       return res.status(403).json({
         success: false,
         message: 'Admin access required'
@@ -735,7 +737,7 @@ export const refreshCache = async (req: Request, res: Response) => {
 
     cacheKeysCleared.forEach(key => dashboardCache.delete(key));
 
-    logger.info(`Dashboard cache refreshed by admin ${req.user.id}. Cleared ${cacheKeysCleared.length} entries.`);
+    logger.info(`Dashboard cache refreshed by admin ${req.user!.id}. Cleared ${cacheKeysCleared.length} entries.`);
 
     return res.json({
       success: true,

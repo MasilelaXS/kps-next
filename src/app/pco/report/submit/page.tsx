@@ -514,7 +514,7 @@ export default function SubmitReport() {
             ) : (
               <>
                 <Send className="w-5 h-5" />
-                Submit Report
+                Submit
               </>
             )}
           </button>

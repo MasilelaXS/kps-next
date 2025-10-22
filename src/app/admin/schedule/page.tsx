@@ -9,7 +9,6 @@ import {
   Search,
   Users,
   MapPin,
-  Phone,
   Building2,
   Plus,
   Trash2,
@@ -19,7 +18,8 @@ import {
   UserCheck,
   UserX,
   TrendingUp,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 
 interface PCO {
@@ -36,8 +36,8 @@ interface Client {
   company_name: string;
   address_line1: string;
   city: string;
-  phone: string;
   status: 'active' | 'inactive';
+  assignment_id?: number; // ID of the client_pco_assignments record
   assigned_pco_id?: number;
   assigned_pco_name?: string;
   assigned_at?: string;
@@ -92,7 +92,7 @@ export default function SchedulePage() {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/users?role=pco&status=${statusFilter}&pageSize=100`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/users?role=pco&status=${statusFilter}&limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -120,7 +120,7 @@ export default function SchedulePage() {
     try {
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/assignments?pco_id=${pcoId}&status=active&limit=100`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments?pco_id=${pcoId}&status=active&limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -145,13 +145,20 @@ export default function SchedulePage() {
       const token = localStorage.getItem('kps_token');
       
       // Fetch ALL active clients (not just unassigned) to show assignment status
-      const response = await fetch(`http://localhost:3001/api/admin/clients?status=active&limit=100`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/clients?status=active&limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Failed to fetch clients:', data);
+        notification.error('Failed to fetch clients', data.message || 'Unknown error');
+        setAvailableClients([]);
+        return;
+      }
 
       if (data.success && Array.isArray(data.data?.clients)) {
         setAvailableClients(data.data.clients);
@@ -160,6 +167,7 @@ export default function SchedulePage() {
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
+      notification.error('Failed to fetch clients', error instanceof Error ? error.message : 'Network error');
       setAvailableClients([]);
     }
   };
@@ -171,7 +179,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/assignments/bulk-assign`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments/bulk-assign`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -212,7 +220,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/assignments/bulk-unassign`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments/bulk-unassign`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -240,6 +248,51 @@ export default function SchedulePage() {
         fetchAssignments(selectedPco.id);
       }
       fetchPCOs(); // Refresh counts
+    } catch (error) {
+      console.error('Error unassigning client:', error);
+      notification.error('Unassign Failed', error instanceof Error ? error.message : 'Failed to unassign client');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUnassignFromModal = async (assignmentId: number, clientName: string) => {
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem('kps_token');
+      
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments/bulk-unassign`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          assignment_ids: [assignmentId]
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to unassign client');
+      }
+
+      notification.success(
+        'Client Unassigned',
+        `${clientName} has been unassigned`
+      );
+      
+      // Update the available clients list to reflect the change
+      await fetchAvailableClients();
+      
+      // Refresh assignments if viewing the same PCO
+      if (selectedPco) {
+        fetchAssignments(selectedPco.id);
+      }
+      
+      // Refresh PCO counts
+      fetchPCOs();
     } catch (error) {
       console.error('Error unassigning client:', error);
       notification.error('Unassign Failed', error instanceof Error ? error.message : 'Failed to unassign client');
@@ -598,16 +651,17 @@ export default function SchedulePage() {
                   {filteredAvailableClients.map((client) => {
                     const isAssigned = client.is_assigned === 1;
                     const isAssignedToCurrentPco = client.assigned_pco_id === selectedPco.id;
+                    const assignmentId = client.assignment_id;
                     
                     return (
-                      <label
+                      <div
                         key={client.id}
                         className={`flex items-center gap-3 p-3 border rounded-lg transition-colors ${
                           isAssigned
-                            ? 'bg-gray-50 border-gray-200 cursor-not-allowed'
+                            ? 'bg-gray-50 border-gray-200'
                             : selectedClientsToAssign.includes(client.id)
-                            ? 'bg-purple-50 border-purple-300 cursor-pointer'
-                            : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
+                            ? 'bg-purple-50 border-purple-300'
+                            : 'border-gray-200 hover:bg-gray-50'
                         }`}
                       >
                         {/* Assignment Status Dot */}
@@ -618,45 +672,61 @@ export default function SchedulePage() {
                         </div>
                         
                         {/* Checkbox - Only show for unassigned clients */}
-                        {!isAssigned && (
-                          <input
-                            type="checkbox"
-                            checked={selectedClientsToAssign.includes(client.id)}
-                            onChange={() => toggleClientSelection(client.id)}
-                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                          />
+                        {!isAssigned ? (
+                          <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedClientsToAssign.includes(client.id)}
+                              onChange={() => toggleClientSelection(client.id)}
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-gray-900">
+                                  {client.company_name}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  {client.city}
+                                </span>
+                              </div>
+                            </div>
+                          </label>
+                        ) : (
+                          <>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-gray-500">
+                                  {client.company_name}
+                                </p>
+                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                                  {isAssignedToCurrentPco ? 'Assigned to this PCO' : `Assigned to ${client.assigned_pco_name}`}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  {client.city}
+                                </span>
+                              </div>
+                            </div>
+                            {/* Unassign Button */}
+                            {assignmentId && (
+                              <button
+                                onClick={() => handleUnassignFromModal(assignmentId, client.company_name)}
+                                disabled={submitting}
+                                className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
+                                title="Unassign this client"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                Unassign
+                              </button>
+                            )}
+                          </>
                         )}
-                        
-                        {/* Spacer for assigned clients to maintain alignment */}
-                        {isAssigned && <div className="w-4" />}
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className={`font-medium ${
-                              isAssigned ? 'text-gray-500' : 'text-gray-900'
-                            }`}>
-                              {client.company_name}
-                            </p>
-                            {isAssigned && (
-                              <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                                {isAssignedToCurrentPco ? 'Assigned to this PCO' : `Assigned to ${client.assigned_pco_name}`}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {client.city}
-                            </span>
-                            {client.phone && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="w-3 h-3" />
-                                {client.phone}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>

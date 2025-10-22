@@ -8,6 +8,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import bcrypt from 'bcrypt';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
@@ -31,7 +32,7 @@ export class UserController {
   static async getUserList(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -57,8 +58,17 @@ export class UserController {
 
       // Filter by role
       if (role && role !== 'all') {
-        whereConditions.push('role = ?');
-        queryParams.push(role as string);
+        // When filtering for PCO, include users with role='both' as they can also act as PCOs
+        if (role === 'pco') {
+          whereConditions.push('(role = ? OR role = ?)');
+          queryParams.push('pco', 'both');
+        } else if (role === 'admin') {
+          whereConditions.push('(role = ? OR role = ?)');
+          queryParams.push('admin', 'both');
+        } else {
+          whereConditions.push('role = ?');
+          queryParams.push(role as string);
+        }
       }
 
       // Filter by status
@@ -156,7 +166,7 @@ export class UserController {
   static async createUser(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -236,7 +246,7 @@ export class UserController {
         pco_number: finalPcoNumber,
         name,
         role: role || 'pco',
-        created_by: req.user.id
+        created_by: req.user!.id
       });
 
       res.status(201).json({
@@ -265,7 +275,7 @@ export class UserController {
   static async getUserById(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -350,7 +360,7 @@ export class UserController {
   static async updateUser(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -415,7 +425,7 @@ export class UserController {
       logger.info('User updated', {
         user_id: id,
         updated_fields: { name, email, phone, role },
-        updated_by: req.user.id
+        updated_by: req.user!.id
       });
 
       res.json({
@@ -445,7 +455,7 @@ export class UserController {
   static async deleteUser(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -470,7 +480,7 @@ export class UserController {
       }
 
       // Prevent deleting self
-      if (parseInt(id) === req.user.id) {
+      if (parseInt(id) === req.user!.id) {
         res.status(400).json({
           success: false,
           message: 'Cannot delete your own account'
@@ -504,7 +514,7 @@ export class UserController {
       logger.info('User soft deleted', {
         deleted_user_id: id,
         deleted_user_name: user.name,
-        deleted_by: req.user.id
+        deleted_by: req.user!.id
       });
 
       res.json({
@@ -533,7 +543,7 @@ export class UserController {
   static async updateUserStatus(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -559,7 +569,7 @@ export class UserController {
       }
 
       // Prevent deactivating self
-      if (parseInt(id) === req.user.id && status === 'inactive') {
+      if (parseInt(id) === req.user!.id && status === 'inactive') {
         res.status(400).json({
           success: false,
           message: 'Cannot deactivate your own account'
@@ -571,7 +581,7 @@ export class UserController {
       if (status === 'inactive') {
         await executeQuery(
           'UPDATE client_pco_assignments SET status = "inactive", unassigned_at = NOW(), unassigned_by = ? WHERE pco_id = ? AND status = "active"',
-          [req.user.id, id]
+          [req.user!.id, id]
         );
       }
 
@@ -585,7 +595,7 @@ export class UserController {
         user_id: id,
         old_status: user.status,
         new_status: status,
-        updated_by: req.user.id
+        updated_by: req.user!.id
       });
 
       res.json({
@@ -614,7 +624,7 @@ export class UserController {
   static async resetUserPassword(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -657,7 +667,7 @@ export class UserController {
       logger.info('User password reset by admin', {
         user_id: id,
         user_name: user.name,
-        reset_by: req.user.id
+        reset_by: req.user!.id
       });
 
       res.json({
@@ -686,7 +696,7 @@ export class UserController {
   static async getUserAssignments(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -775,7 +785,7 @@ export class UserController {
   static async unassignAllClients(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -818,13 +828,13 @@ export class UserController {
         UPDATE client_pco_assignments 
         SET status = 'inactive', unassigned_at = NOW(), unassigned_by = ?
         WHERE pco_id = ? AND status = 'active'
-      `, [req.user.id, id]);
+      `, [req.user!.id, id]);
 
       logger.info('User unassigned from all clients', {
         user_id: id,
         user_name: user.name,
         assignments_removed: activeCount.count,
-        unassigned_by: req.user.id
+        unassigned_by: req.user!.id
       });
 
       res.json({
@@ -856,7 +866,7 @@ export class UserController {
   static async searchUsers(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -893,8 +903,17 @@ export class UserController {
       let queryParams = [searchTerm, searchTerm, searchTerm];
 
       if (role && role !== 'all') {
-        query += ' AND role = ?';
-        queryParams.push(role as string);
+        // When filtering for PCO, include users with role='both' as they can also act as PCOs
+        if (role === 'pco') {
+          query += ' AND (role = ? OR role = ?)';
+          queryParams.push('pco', 'both');
+        } else if (role === 'admin') {
+          query += ' AND (role = ? OR role = ?)';
+          queryParams.push('admin', 'both');
+        } else {
+          query += ' AND role = ?';
+          queryParams.push(role as string);
+        }
       }
 
       if (status && status !== 'all') {

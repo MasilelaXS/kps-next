@@ -55,6 +55,15 @@ exports.config = {
     upload: {
         maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10),
         allowedTypes: (process.env.UPLOAD_ALLOWED_TYPES || 'image/jpeg,image/png,application/pdf').split(',')
+    },
+    email: {
+        host: process.env.SMTP_HOST || 'mail.kpspestcontrol.co.za',
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER || 'mail@kpspestcontrol.co.za',
+        password: process.env.SMTP_PASSWORD || '',
+        from: process.env.EMAIL_FROM || 'KPS Pest Control <mail@kpspestcontrol.co.za>',
+        replyTo: process.env.EMAIL_REPLY_TO || 'mail@kpspestcontrol.co.za'
     }
 };
 const isDevelopment = () => exports.config.server.env === 'development';

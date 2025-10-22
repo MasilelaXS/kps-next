@@ -432,4 +432,31 @@ router.get('/lockout-status', AuthController.checkLockoutStatus);
  */
 router.post('/unlock-account', authenticateToken, AuthController.unlockAccount);
 
+/**
+ * @swagger
+ * /auth/test-email:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Test email configuration (Development only)
+ *     description: Send a test email to verify SMTP configuration
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: test@example.com
+ *     responses:
+ *       200:
+ *         description: Test email sent
+ */
+router.post('/test-email', AuthController.testEmail);
+
 export default router;

@@ -8,6 +8,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
 
@@ -139,7 +140,7 @@ export class VersionController {
   static async releaseVersion(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin (developers should have admin role)
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required for version releases'
@@ -215,8 +216,8 @@ export class VersionController {
         version,
         platform: platform || 'both',
         force_update: force_update || false,
-        released_by: req.user.id,
-        admin_name: req.user.first_name || req.user.login_id
+        released_by: req.user!.id,
+        admin_name: req.user!.first_name || req.user!.login_id
       });
 
       res.status(201).json({
@@ -245,7 +246,7 @@ export class VersionController {
   static async getVersionHistory(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -335,7 +336,7 @@ export class VersionController {
   static async updateVersionStatus(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -379,7 +380,7 @@ export class VersionController {
         version: version.version,
         old_status: version.is_active,
         new_status: is_active,
-        updated_by: req.user.id
+        updated_by: req.user!.id
       });
 
       res.json({

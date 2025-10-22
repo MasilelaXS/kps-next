@@ -85,6 +85,30 @@ const clientUpdateSchema = joi_1.default.object({
         .messages({
         'string.min': 'Postal code must be at least 3 characters',
         'string.max': 'Postal code cannot exceed 20 characters'
+    }),
+    total_bait_stations_inside: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Inside bait stations must be a number',
+        'number.integer': 'Inside bait stations must be a whole number',
+        'number.min': 'Inside bait stations cannot be negative'
+    }),
+    total_bait_stations_outside: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Outside bait stations must be a number',
+        'number.integer': 'Outside bait stations must be a whole number',
+        'number.min': 'Outside bait stations cannot be negative'
+    }),
+    total_insect_monitors_light: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Light insect monitors must be a number',
+        'number.integer': 'Light insect monitors must be a whole number',
+        'number.min': 'Light insect monitors cannot be negative'
+    }),
+    total_insect_monitors_box: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Box insect monitors must be a number',
+        'number.integer': 'Box insect monitors must be a whole number',
+        'number.min': 'Box insect monitors cannot be negative'
     })
 }).min(1).messages({
     'object.min': 'At least one field must be provided for update'

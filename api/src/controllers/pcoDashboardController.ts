@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { pool } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 

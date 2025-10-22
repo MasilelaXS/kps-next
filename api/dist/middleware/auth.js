@@ -76,12 +76,21 @@ const authenticateToken = async (req, res, next) => {
         req.user = {
             id: session.user_id,
             login_id: session.pco_number,
-            role: session.role,
+            role: session.role_context || session.role,
             first_name: session.name,
             last_name: '',
             email: session.email,
             session_id: decoded.sessionId
         };
+        if (session.role === 'both') {
+            logger_1.logger.info('Dual-role user authenticated', {
+                user_id: session.user_id,
+                actual_role: session.role,
+                role_context: session.role_context,
+                req_user_role: req.user.role,
+                endpoint: req.originalUrl
+            });
+        }
         (0, logger_1.logAuth)('token_validated', session.id, {
             session_id: decoded.sessionId,
             ip: req.ip
@@ -111,7 +120,8 @@ const requireRole = (...roles) => {
             });
             return;
         }
-        if (!roles.includes(req.user.role)) {
+        const hasAccess = req.user.role === 'both' || roles.includes(req.user.role);
+        if (!hasAccess) {
             (0, logger_1.logAuth)('access_denied', req.user.id, {
                 required_roles: roles,
                 user_role: req.user.role,

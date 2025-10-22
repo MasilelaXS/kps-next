@@ -1168,13 +1168,13 @@ export default function ReportsPage() {
                                   <div className="col-span-4">
                                     <p className="text-gray-600 font-medium mb-1">Chemicals Used:</p>
                                     <div className="space-y-1">
-                                      {station.chemicals.map((chem: Chemical) => (
+                                      {station.chemicals.filter((chem: Chemical) => chem && chem.chemical_name).map((chem: Chemical) => (
                                         <div key={chem.id} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200">
                                           <span className="font-medium text-gray-900">{chem.chemical_name}</span>
                                           <span className="text-gray-600">-</span>
-                                          <span className="text-gray-700">Qty: {chem.quantity}</span>
+                                          <span className="text-gray-700">Qty: {chem.quantity || 'N/A'}</span>
                                           <span className="text-gray-600">-</span>
-                                          <span className="text-gray-500 text-xs">Batch: {chem.batch_number}</span>
+                                          <span className="text-gray-500 text-xs">Batch: {chem.batch_number || 'N/A'}</span>
                                         </div>
                                       ))}
                                     </div>

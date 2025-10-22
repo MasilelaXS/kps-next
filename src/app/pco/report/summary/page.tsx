@@ -398,7 +398,8 @@ export default function ReportSummary() {
             disabled={!nextServiceDate}
             className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue to Signature
+            Next
+            
           </button>
         </div>
       </div>

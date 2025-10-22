@@ -8,6 +8,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
 
@@ -19,7 +20,7 @@ export class AssignmentController {
   static async getAssignmentList(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -147,7 +148,7 @@ export class AssignmentController {
   static async getAssignmentStats(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -174,14 +175,15 @@ export class AssignmentController {
           u.id as pco_id,
           u.name as pco_name,
           u.pco_number,
+          u.role,
           COUNT(ca.id) as client_count,
           (SELECT COUNT(*) FROM reports WHERE pco_id = u.id) as total_reports,
           (SELECT COUNT(*) FROM reports WHERE pco_id = u.id 
            AND service_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as reports_last_30_days
         FROM users u
         LEFT JOIN client_pco_assignments ca ON u.id = ca.pco_id AND ca.status = 'active'
-        WHERE u.role IN ('pco', 'admin') AND u.status = 'active'
-        GROUP BY u.id
+        WHERE u.role IN ('pco', 'admin', 'both') AND u.status = 'active'
+        GROUP BY u.id, u.role
         ORDER BY client_count DESC
       `);
 
@@ -235,7 +237,7 @@ export class AssignmentController {
   static async bulkAssignClients(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -259,7 +261,7 @@ export class AssignmentController {
         return;
       }
 
-      if (pco.role !== 'pco' && pco.role !== 'admin') {
+      if (pco.role !== 'pco' && pco.role !== 'admin' && pco.role !== 'both') {
         res.status(400).json({
           success: false,
           message: 'User must have PCO or Admin role'
@@ -331,7 +333,7 @@ export class AssignmentController {
       logger.info('Bulk assignment completed', {
         pco_id,
         client_count: assignable.length,
-        assigned_by: req.user.id
+        assigned_by: req.user!.id
       });
 
       res.status(201).json({
@@ -365,7 +367,7 @@ export class AssignmentController {
   static async bulkUnassignClients(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -456,7 +458,7 @@ export class AssignmentController {
   static async getWorkloadBalance(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -470,11 +472,12 @@ export class AssignmentController {
           u.id,
           u.name,
           u.pco_number,
+          u.role,
           COUNT(ca.id) as current_clients
         FROM users u
         LEFT JOIN client_pco_assignments ca ON u.id = ca.pco_id AND ca.status = 'active'
-        WHERE u.role IN ('pco', 'admin') AND u.status = 'active'
-        GROUP BY u.id
+        WHERE u.role IN ('pco', 'admin', 'both') AND u.status = 'active'
+        GROUP BY u.id, u.role
         ORDER BY current_clients ASC
       `);
 

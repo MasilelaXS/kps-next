@@ -27,12 +27,21 @@ declare global {
 export interface AuthenticatedUser {
   id: number;
   login_id: string;
-  role: 'admin' | 'pco';
+  role: 'admin' | 'pco' | 'both';
   first_name: string;
   last_name: string;
   email: string;
   session_id: string;
 }
+
+/**
+ * Check if user has required role
+ * Users with role 'both' have access to both admin and pco endpoints
+ */
+export const hasRole = (user: AuthenticatedUser | undefined, requiredRole: 'admin' | 'pco'): boolean => {
+  if (!user) return false;
+  return user.role === 'both' || user.role === requiredRole;
+};
 
 // JWT payload interface
 interface JWTPayload {
@@ -132,10 +141,10 @@ export const authenticateToken = async (
     // Attach user info to request
     req.user = {
       id: session.user_id,
-      login_id: session.pco_number, // Keep interface consistent
-      role: session.role,
-      first_name: session.name, // Keep interface consistent
-      last_name: '', // Not available in this schema
+      login_id: session.pco_number,
+      role: session.role, // Always use actual role, not role_context
+      first_name: session.name,
+      last_name: '',
       email: session.email,
       session_id: decoded.sessionId
     };
@@ -176,7 +185,10 @@ export const requireRole = (...roles: ('admin' | 'pco')[]) => {
       return;
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Allow access if user has 'both' role OR if their role matches required roles
+    const hasAccess = req.user.role === 'both' || roles.includes(req.user.role as 'admin' | 'pco');
+    
+    if (!hasAccess) {
       logAuth('access_denied', req.user.id, {
         required_roles: roles,
         user_role: req.user.role,

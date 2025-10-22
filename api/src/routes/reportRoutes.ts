@@ -133,7 +133,7 @@ router.delete(
 /**
  * POST /api/pco/reports/:id/submit
  * Submit report for admin review
- * Business Rule: Auto-unassigns PCO from client
+ * Business Rule: Auto-unassigns PCO from client, marks new equipment
  */
 router.post(
   '/pco/reports/:id/submit',

@@ -11,6 +11,7 @@ export declare class AuthController {
     static checkLockoutStatus(req: Request, res: Response): Promise<void>;
     static unlockAccount(req: Request, res: Response): Promise<void>;
     static validateToken(req: Request, res: Response): Promise<void>;
+    static testEmail(req: Request, res: Response): Promise<void>;
 }
 export default AuthController;
 //# sourceMappingURL=authController.d.ts.map

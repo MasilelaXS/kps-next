@@ -8,6 +8,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,6 +21,7 @@ import {
   validateChangePasswordInput,
   validateProfileUpdateInput 
 } from '../utils/validation';
+import { sendPasswordResetEmail } from '../services/emailService';
 
 // Helper function to generate session ID
 const generateSessionId = (): string => {
@@ -324,11 +326,11 @@ export class AuthController {
             pco_number: user.pco_number,
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            role_context: user.role_context // Use prefix-based role for routing (admin/pco)
           },
           token,
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          role_context: user.role_context
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
         }
       });
 
@@ -648,18 +650,23 @@ export class AuthController {
         )`, [user.id, resetToken]
       );
 
-      // In a real application, you would send an email here
-      logger.info('Password reset token generated', { 
+      // Send password reset email
+      const emailSent = await sendPasswordResetEmail(user.email, user.name, resetToken);
+
+      if (!emailSent) {
+        logger.warn('Password reset email failed to send', { userId: user.id, email: user.email });
+        // Continue anyway - token is generated, user can contact admin
+      }
+
+      logger.info('Password reset requested', { 
         userId: user.id, 
-        token: resetToken, // Remove this in production
-        email: user.email 
+        email: user.email,
+        emailSent 
       });
 
       res.json({
         success: true,
-        message: 'If the PCO number exists, a password reset email has been sent.',
-        // For testing purposes only - remove in production
-        debug: process.env.NODE_ENV === 'development' ? { token: resetToken } : undefined
+        message: 'If the PCO number exists, a password reset email has been sent.'
       });
 
     } catch (error) {
@@ -720,6 +727,7 @@ export class AuthController {
         data: {
           pco_number: resetData.pco_number,
           name: resetData.name,
+          email: resetData.email,
           expires_at: resetData.expires_at
         }
       });
@@ -877,7 +885,7 @@ export class AuthController {
   static async unlockAccount(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -910,9 +918,9 @@ export class AuthController {
       }
 
       // Log the unlock action
-      logAuth('account_unlocked', req.user.id, {
+      logAuth('account_unlocked', req.user!.id, {
         unlocked_pco_number: pco_number,
-        admin_user: req.user.id,
+        admin_user: req.user!.id,
         ip: req.ip
       });
 
@@ -947,6 +955,49 @@ export class AuthController {
         expires_in: '24h' // This should be calculated from JWT
       }
     });
+  }
+
+  /**
+   * Test email configuration
+   * POST /api/auth/test-email
+   */
+  static async testEmail(req: Request, res: Response): Promise<void> {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        res.status(400).json({
+          success: false,
+          message: 'Email address is required'
+        });
+        return;
+      }
+
+      // Import test email function
+      const { sendTestEmail } = await import('../services/emailService');
+      const emailSent = await sendTestEmail(email);
+
+      if (emailSent) {
+        res.json({
+          success: true,
+          message: `Test email sent to ${email}`
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to send test email. Check server logs for details.'
+        });
+      }
+    } catch (error) {
+      logger.error('Test email error', { 
+        error: error instanceof Error ? error.message : error 
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send test email'
+      });
+    }
   }
 }
 

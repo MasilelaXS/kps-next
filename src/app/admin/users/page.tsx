@@ -120,7 +120,7 @@ export default function UsersPage() {
         params.append('status', statusFilter);
       }
 
-      const response = await fetch(`http://localhost:3001/api/admin/users?${params}`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/users?${params}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -185,7 +185,7 @@ export default function UsersPage() {
       setFormErrors({});
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch('http://localhost:3001/api/admin/users', {
+      const response = await fetch('http://192.168.1.128:3001/api/admin/users', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -246,7 +246,7 @@ export default function UsersPage() {
         delete updateData.password;
       }
       
-      const response = await fetch(`http://localhost:3001/api/admin/users/${selectedUser.id}`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -303,7 +303,7 @@ export default function UsersPage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/users/${selectedUser.id}/reset-password`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/users/${selectedUser.id}/reset-password`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -336,7 +336,7 @@ export default function UsersPage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/users/${selectedUser.id}`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/users/${selectedUser.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -786,7 +786,7 @@ export default function UsersPage() {
                   {/* PCO Number */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      PCO Number <span className="text-xs text-gray-500">(Optional - auto-generated)</span>
+                      PCO Number <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"

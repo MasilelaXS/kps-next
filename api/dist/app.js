@@ -18,8 +18,28 @@ app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: false
 }));
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://192.168.1.128:3000',
+    env_1.config.security.corsOrigin
+].filter(Boolean);
 app.use((0, cors_1.default)({
-    origin: env_1.config.security.corsOrigin,
+    origin: (origin, callback) => {
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        }
+        else {
+            if (env_1.config.server.env === 'development' && origin.match(/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/)) {
+                callback(null, true);
+            }
+            else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

@@ -10,7 +10,7 @@ declare global {
 export interface AuthenticatedUser {
     id: number;
     login_id: string;
-    role: 'admin' | 'pco';
+    role: 'admin' | 'pco' | 'both';
     first_name: string;
     last_name: string;
     email: string;

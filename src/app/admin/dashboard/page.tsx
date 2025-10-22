@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Users, Building2, FileText, CheckCircle, TrendingUp, Clock, Hand } from 'lucide-react';
+import { API_CONFIG } from '@/lib/api';
 
 interface DashboardStats {
   totalClients: number;
@@ -46,7 +47,7 @@ export default function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('kps_token');
-      const response = await fetch('http://localhost:3001/api/admin/dashboard/metrics', {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/admin/dashboard/metrics`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

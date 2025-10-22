@@ -8,6 +8,7 @@
  */
 
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
 import { createNotification } from './notificationController';
@@ -67,7 +68,7 @@ export class ClientController {
   static async getClientList(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -148,6 +149,7 @@ export class ClientController {
           c.created_at,
           c.updated_at,
           -- PCO Assignment info
+          cpa.id as assignment_id,
           u.id as assigned_pco_id,
           u.name as assigned_pco_name,
           u.pco_number as assigned_pco_number,
@@ -211,7 +213,7 @@ export class ClientController {
   static async createClient(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -365,7 +367,7 @@ export class ClientController {
         client_id: clientId,
         company_name,
         contacts_count: contacts.length,
-        created_by: req.user.id
+        created_by: req.user!.id
       });
 
       res.status(201).json({
@@ -400,7 +402,7 @@ export class ClientController {
   static async getClientById(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -512,7 +514,7 @@ export class ClientController {
   static async updateClient(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -608,7 +610,7 @@ export class ClientController {
       logger.info('Client updated', {
         client_id: id,
         updated_fields: { company_name, address_line1, city, state },
-        updated_by: req.user.id
+        updated_by: req.user!.id
       });
 
       res.json({
@@ -638,7 +640,7 @@ export class ClientController {
   static async deleteClient(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -686,7 +688,7 @@ export class ClientController {
 
         await executeQuery(
           'UPDATE client_pco_assignments SET status = "inactive", unassigned_at = NOW(), unassigned_by = ? WHERE client_id = ? AND status = "active"',
-          [req.user.id, id]
+          [req.user!.id, id]
         );
 
         return;
@@ -701,13 +703,13 @@ export class ClientController {
       // Deactivate any PCO assignments
       await executeQuery(
         'UPDATE client_pco_assignments SET status = "inactive", unassigned_at = NOW(), unassigned_by = ? WHERE client_id = ? AND status = "active"',
-        [req.user.id, id]
+        [req.user!.id, id]
       );
 
       logger.info('Client soft deleted', {
         deleted_client_id: id,
         deleted_client_name: client.company_name,
-        deleted_by: req.user.id
+        deleted_by: req.user!.id
       });
 
       res.json({
@@ -736,7 +738,7 @@ export class ClientController {
   static async getClientContacts(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -809,7 +811,7 @@ export class ClientController {
   static async addClientContact(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -858,7 +860,7 @@ export class ClientController {
         client_id: id,
         contact_id: (result as any).insertId,
         name,
-        added_by: req.user.id
+        added_by: req.user!.id
       });
 
       res.status(201).json({
@@ -888,7 +890,7 @@ export class ClientController {
   static async updateClientContact(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -944,7 +946,7 @@ export class ClientController {
       logger.info('Client contact updated', {
         client_id: id,
         contact_id: contactId,
-        updated_by: req.user.id
+        updated_by: req.user!.id
       });
 
       res.json({
@@ -975,7 +977,7 @@ export class ClientController {
   static async deleteClientContact(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -1023,7 +1025,7 @@ export class ClientController {
         client_id: id,
         contact_id: contactId,
         contact_name: contact.name,
-        deleted_by: req.user.id
+        deleted_by: req.user!.id
       });
 
       res.json({
@@ -1053,7 +1055,7 @@ export class ClientController {
   static async getClientReports(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -1146,7 +1148,7 @@ export class ClientController {
   static async assignPcoToClient(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -1211,7 +1213,7 @@ export class ClientController {
           assigned_at, 
           status
         ) VALUES (?, ?, ?, NOW(), 'active')
-      `, [id, pco_id, req.user.id]);
+      `, [id, pco_id, req.user!.id]);
 
       // Send notification to PCO
       await createNotification(
@@ -1226,7 +1228,7 @@ export class ClientController {
         client_name: client.company_name,
         pco_id,
         pco_name: pco.name,
-        assigned_by: req.user.id
+        assigned_by: req.user!.id
       });
 
       res.json({
@@ -1261,7 +1263,7 @@ export class ClientController {
   static async unassignPcoFromClient(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -1313,14 +1315,14 @@ export class ClientController {
         UPDATE client_pco_assignments 
         SET status = 'inactive', unassigned_at = NOW(), unassigned_by = ?
         WHERE client_id = ? AND status = 'active'
-      `, [req.user.id, id]);
+      `, [req.user!.id, id]);
 
       logger.info('PCO unassigned from client', {
         client_id: id,
         client_name: client.company_name,
         pco_id: activeAssignment.pco_id,
         pco_name: activeAssignment.pco_name,
-        unassigned_by: req.user.id
+        unassigned_by: req.user!.id
       });
 
       res.json({
@@ -1349,7 +1351,7 @@ export class ClientController {
   static async getClientPcoAssignments(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'
@@ -1432,7 +1434,7 @@ export class ClientController {
   static async searchClients(req: Request, res: Response): Promise<void> {
     try {
       // Check if user is admin
-      if (req.user?.role !== 'admin') {
+      if (!hasRole(req.user, 'admin')) {
         res.status(403).json({
           success: false,
           message: 'Admin access required'

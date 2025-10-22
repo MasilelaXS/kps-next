@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -11,6 +44,7 @@ const env_1 = require("../config/env");
 const logger_1 = require("../config/logger");
 const database_1 = require("../config/database");
 const validation_1 = require("../utils/validation");
+const emailService_1 = require("../services/emailService");
 const generateSessionId = () => {
     return (0, uuid_1.v4)().replace(/-/g, '');
 };
@@ -202,11 +236,11 @@ class AuthController {
                         pco_number: user.pco_number,
                         name: user.name,
                         email: user.email,
-                        role: user.role
+                        role: user.role,
+                        role_context: user.role_context
                     },
                     token,
-                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                    role_context: user.role_context
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
                 }
             });
         }
@@ -423,15 +457,18 @@ class AuthController {
         ) VALUES (
             ?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR)
         )`, [user.id, resetToken]);
-            logger_1.logger.info('Password reset token generated', {
+            const emailSent = await (0, emailService_1.sendPasswordResetEmail)(user.email, user.name, resetToken);
+            if (!emailSent) {
+                logger_1.logger.warn('Password reset email failed to send', { userId: user.id, email: user.email });
+            }
+            logger_1.logger.info('Password reset requested', {
                 userId: user.id,
-                token: resetToken,
-                email: user.email
+                email: user.email,
+                emailSent
             });
             res.json({
                 success: true,
-                message: 'If the PCO number exists, a password reset email has been sent.',
-                debug: process.env.NODE_ENV === 'development' ? { token: resetToken } : undefined
+                message: 'If the PCO number exists, a password reset email has been sent.'
             });
         }
         catch (error) {
@@ -481,6 +518,7 @@ class AuthController {
                 data: {
                     pco_number: resetData.pco_number,
                     name: resetData.name,
+                    email: resetData.email,
                     expires_at: resetData.expires_at
                 }
             });
@@ -650,6 +688,41 @@ class AuthController {
                 expires_in: '24h'
             }
         });
+    }
+    static async testEmail(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email) {
+                res.status(400).json({
+                    success: false,
+                    message: 'Email address is required'
+                });
+                return;
+            }
+            const { sendTestEmail } = await Promise.resolve().then(() => __importStar(require('../services/emailService')));
+            const emailSent = await sendTestEmail(email);
+            if (emailSent) {
+                res.json({
+                    success: true,
+                    message: `Test email sent to ${email}`
+                });
+            }
+            else {
+                res.status(500).json({
+                    success: false,
+                    message: 'Failed to send test email. Check server logs for details.'
+                });
+            }
+        }
+        catch (error) {
+            logger_1.logger.error('Test email error', {
+                error: error instanceof Error ? error.message : error
+            });
+            res.status(500).json({
+                success: false,
+                message: 'Failed to send test email'
+            });
+        }
     }
 }
 exports.AuthController = AuthController;

@@ -41,10 +41,13 @@ export default function LoginPage() {
         localStorage.setItem('kps_user', JSON.stringify(data.data.user));
         localStorage.setItem('kps_login_time', new Date().toISOString());
 
-        // Redirect based on role
-        if (data.data.user.role === 'admin') {
+        // Redirect based on role_context (determined by login prefix: admin12345 or pco12345)
+        // This allows users with role='both' to access either portal based on how they log in
+        const roleContext = data.data.user.role_context || data.data.user.role;
+        
+        if (roleContext === 'admin') {
           router.push('/admin/dashboard');
-        } else if (data.data.user.role === 'pco') {
+        } else if (roleContext === 'pco') {
           router.push('/pco/dashboard');
         } else {
           router.push('/login');
@@ -123,11 +126,22 @@ export default function LoginPage() {
             </div>
           </div>
 
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <a
+                href="/forgot-password"
+                className="font-medium text-purple-600 hover:text-purple-500"
+              >
+                Forgot your password?
+              </a>
+            </div>
+          </div>
+
           <div>
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-purple-400 disabled:cursor-not-allowed"
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>

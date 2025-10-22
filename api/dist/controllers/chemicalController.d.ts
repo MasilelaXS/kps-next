@@ -6,6 +6,7 @@ export declare class ChemicalController {
     static updateChemical(req: Request, res: Response): Promise<void>;
     static updateChemicalStatus(req: Request, res: Response): Promise<void>;
     static getChemicalsByType(req: Request, res: Response): Promise<void>;
+    static getChemicalsForPco(req: Request, res: Response): Promise<void>;
     static searchChemicals(req: Request, res: Response): Promise<void>;
     static deleteChemical(req: Request, res: Response): Promise<void>;
 }

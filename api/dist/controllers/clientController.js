@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClientController = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
+const notificationController_1 = require("./notificationController");
 class ClientController {
     static async debugDatabase(req, res) {
         try {
@@ -48,7 +49,7 @@ class ClientController {
                 });
                 return;
             }
-            const { page = 1, limit = 25, status, pco_id, search } = req.query;
+            const { page = 1, limit = 25, status, pco_id, search, unassigned } = req.query;
             const pageNum = parseInt(page);
             const limitNum = parseInt(limit);
             const offset = (pageNum - 1) * limitNum;
@@ -61,6 +62,9 @@ class ClientController {
             if (pco_id && pco_id !== 'all') {
                 whereConditions.push('EXISTS(SELECT 1 FROM client_pco_assignments cpa WHERE cpa.client_id = c.id AND cpa.pco_id = ? AND cpa.status = "active")');
                 queryParams.push(pco_id);
+            }
+            if (unassigned === 'true') {
+                whereConditions.push('NOT EXISTS(SELECT 1 FROM client_pco_assignments cpa WHERE cpa.client_id = c.id AND cpa.status = "active")');
             }
             if (search) {
                 whereConditions.push('(c.company_name LIKE ? OR c.city LIKE ? OR c.address_line1 LIKE ?)');
@@ -92,9 +96,12 @@ class ClientController {
           c.created_at,
           c.updated_at,
           -- PCO Assignment info
+          u.id as assigned_pco_id,
           u.name as assigned_pco_name,
           u.pco_number as assigned_pco_number,
           cpa.assigned_at,
+          -- Assignment status flag
+          CASE WHEN cpa.id IS NOT NULL THEN 1 ELSE 0 END as is_assigned,
           -- Service statistics
           (SELECT COUNT(*) FROM reports WHERE client_id = c.id) as total_reports,
           (SELECT MAX(service_date) FROM reports WHERE client_id = c.id) as last_service_date,
@@ -857,6 +864,7 @@ class ClientController {
           status
         ) VALUES (?, ?, ?, NOW(), 'active')
       `, [id, pco_id, req.user.id]);
+            await (0, notificationController_1.createNotification)(pco_id, 'assignment', 'New Client Assignment', `You've been assigned to ${client.company_name}`);
             logger_1.logger.info('PCO assigned to client', {
                 client_id: id,
                 client_name: client.company_name,

@@ -382,6 +382,49 @@ class ChemicalController {
             });
         }
     }
+    static async getChemicalsForPco(req, res) {
+        try {
+            const { usage_type } = req.params;
+            const validTypes = ['bait_inspection', 'fumigation', 'multi_purpose'];
+            if (!validTypes.includes(usage_type)) {
+                res.status(400).json({
+                    success: false,
+                    message: 'Invalid usage type. Must be: bait_inspection, fumigation, or multi_purpose'
+                });
+                return;
+            }
+            let query = `
+        SELECT 
+          id,
+          name,
+          active_ingredients,
+          usage_type,
+          quantity_unit,
+          safety_information,
+          l_number,
+          batch_number
+        FROM chemicals
+        WHERE (usage_type = ? OR usage_type = 'multi_purpose') AND status = 'active'
+        ORDER BY name ASC
+      `;
+            const chemicals = await (0, database_1.executeQuery)(query, [usage_type]);
+            res.json({
+                success: true,
+                data: chemicals
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Get chemicals for PCO error', {
+                error: error instanceof Error ? error.message : error,
+                usage_type: req.params.usage_type,
+                user_id: req.user?.id
+            });
+            res.status(500).json({
+                success: false,
+                message: 'Failed to retrieve chemicals'
+            });
+        }
+    }
     static async searchChemicals(req, res) {
         try {
             const { q, usage_type, status, limit = 20 } = req.query;

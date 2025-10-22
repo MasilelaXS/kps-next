@@ -14,8 +14,18 @@ export default function Home() {
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr);
-        // Redirect to appropriate dashboard based on role
-        if (user.role === 'admin') {
+        // Redirect to appropriate dashboard based on role and role_context
+        if (user.role === 'both') {
+          // For dual-role users, use role_context to determine dashboard
+          if (user.role_context === 'admin') {
+            router.replace('/admin/dashboard');
+          } else if (user.role_context === 'pco') {
+            router.replace('/pco/dashboard');
+          } else {
+            // Default to admin dashboard if role_context is missing
+            router.replace('/admin/dashboard');
+          }
+        } else if (user.role === 'admin') {
           router.replace('/admin/dashboard');
         } else if (user.role === 'pco') {
           router.replace('/pco/dashboard');

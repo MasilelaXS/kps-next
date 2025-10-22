@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.exportQuerySchema = exports.uploadReportsSchema = exports.syncQuerySchema = void 0;
+exports.updateClientCountsSchema = exports.exportQuerySchema = exports.uploadReportsSchema = exports.syncQuerySchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.syncQuerySchema = joi_1.default.object({
     since: joi_1.default.date().iso().optional()
@@ -91,5 +91,33 @@ exports.uploadReportsSchema = joi_1.default.object({
 exports.exportQuerySchema = joi_1.default.object({
     format: joi_1.default.string().valid('json').default('json')
         .description('Export format (only json supported currently)')
+});
+exports.updateClientCountsSchema = joi_1.default.object({
+    total_bait_stations_inside: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Inside bait stations must be a number',
+        'number.integer': 'Inside bait stations must be a whole number',
+        'number.min': 'Inside bait stations cannot be negative'
+    }),
+    total_bait_stations_outside: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Outside bait stations must be a number',
+        'number.integer': 'Outside bait stations must be a whole number',
+        'number.min': 'Outside bait stations cannot be negative'
+    }),
+    total_insect_monitors_light: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Light monitors must be a number',
+        'number.integer': 'Light monitors must be a whole number',
+        'number.min': 'Light monitors cannot be negative'
+    }),
+    total_insect_monitors_box: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Box monitors must be a number',
+        'number.integer': 'Box monitors must be a whole number',
+        'number.min': 'Box monitors cannot be negative'
+    })
+}).min(1).messages({
+    'object.min': 'At least one count field must be provided'
 });
 //# sourceMappingURL=syncValidation.js.map

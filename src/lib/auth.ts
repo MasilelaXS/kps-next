@@ -4,10 +4,11 @@
 
 export interface User {
   id: number;
-  username: string;
-  full_name: string;
+  pco_number: string;
+  name: string;
   email: string;
-  role: 'admin' | 'pco';
+  role: 'admin' | 'pco' | 'both';
+  role_context?: 'admin' | 'pco';
   phone?: string;
 }
 
@@ -113,8 +114,17 @@ export const requireAuth = (requiredRole?: 'admin' | 'pco'): boolean => {
   
   if (requiredRole) {
     const user = getCurrentUser();
-    if (!user || user.role !== requiredRole) {
-      console.log(`Role mismatch: expected ${requiredRole}, got ${user?.role}`);
+    if (!user) {
+      console.log('No user data found');
+      logout();
+      return false;
+    }
+    
+    // For dual-role users, check role_context; otherwise check role
+    const effectiveRole = user.role === 'both' ? user.role_context : user.role;
+    
+    if (effectiveRole !== requiredRole) {
+      console.log(`Role mismatch: expected ${requiredRole}, got ${effectiveRole} (user.role: ${user.role})`);
       logout();
       return false;
     }

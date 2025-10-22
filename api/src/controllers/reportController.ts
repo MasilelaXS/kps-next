@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle, pool } from '../config/database';
 import { logger } from '../config/logger';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
@@ -417,10 +418,11 @@ export const getReportById = async (req: Request, res: Response) => {
         AND (
           r.pco_id = ? 
           OR ? = 'admin'
+          OR ? = 'both'
         )
     `;
 
-    const reports = await executeQuery<RowDataPacket[]>(reportQuery, [reportId, userId, userRole]);
+    const reports = await executeQuery<RowDataPacket[]>(reportQuery, [reportId, userId, userRole, userRole]);
 
     if (reports.length === 0) {
       return res.status(404).json({
@@ -770,6 +772,28 @@ export const submitReport = async (req: Request, res: Response) => {
        WHERE id = ?`,
       [reportId]
     );
+
+    // Mark new equipment additions (compare actual vs expected counts)
+    const { 
+      markNewBaitStations, 
+      markNewInsectMonitors,
+      updateReportNewEquipmentCounts,
+      updateClientExpectedCounts 
+    } = await import('../utils/equipmentTracking');
+
+    // Mark new bait stations (inside and outside)
+    await markNewBaitStations(reportId, report.client_id, 'inside');
+    await markNewBaitStations(reportId, report.client_id, 'outside');
+
+    // Mark new insect monitors (fly_trap and box)
+    await markNewInsectMonitors(reportId, report.client_id, 'fly_trap');
+    await markNewInsectMonitors(reportId, report.client_id, 'box');
+
+    // Update report summary counts for new equipment
+    await updateReportNewEquipmentCounts(reportId);
+
+    // Update client expected equipment counts based on this report
+    await updateClientExpectedCounts(reportId, report.client_id);
 
     // Auto-unassign PCO from client (critical business rule)
     // First delete any old inactive assignments to avoid unique constraint issues

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
+const notificationController_1 = require("./notificationController");
 const getPCOReports = async (req, res) => {
     try {
         const pcoId = req.user.id;
@@ -167,6 +168,8 @@ const getAdminReports = async (req, res) => {
         const countQuery = `
       SELECT COUNT(*) as total
       FROM reports r
+      JOIN clients c ON r.client_id = c.id
+      JOIN users u ON r.pco_id = u.id
       WHERE ${whereClause}
     `;
         const countResult = await (0, database_1.executeQuery)(countQuery, queryParams);
@@ -541,26 +544,24 @@ const submitReport = async (req, res) => {
             });
         }
         await (0, database_1.executeQuery)(`UPDATE reports 
-       SET status = 'pending', submitted_at = NOW(), updated_at = NOW()
+       SET status = 'draft', submitted_at = NOW(), updated_at = NOW()
        WHERE id = ?`, [reportId]);
         await (0, database_1.executeQuery)(`DELETE FROM client_pco_assignments 
        WHERE client_id = ? AND status = 'inactive'`, [report.client_id]);
         await (0, database_1.executeQuery)(`UPDATE client_pco_assignments 
        SET status = 'inactive', unassigned_at = NOW()
        WHERE client_id = ? AND pco_id = ? AND status = 'active'`, [report.client_id, pcoId]);
-        const adminUsers = await (0, database_1.executeQuery)(`SELECT id FROM users WHERE role IN ('admin', 'both') AND status = 'active' LIMIT 1`);
+        const adminUsers = await (0, database_1.executeQuery)(`SELECT id, name FROM users WHERE role IN ('admin', 'both') AND status = 'active' LIMIT 1`);
         if (adminUsers.length > 0) {
             const adminId = adminUsers[0].id;
-            await (0, database_1.executeQuery)(`INSERT INTO notifications (user_id, type, title, message)
-         VALUES (?, 'report_submitted', 'New Report Submitted', ?)`, [
-                adminId,
-                `${report.company_name}: New report submitted by ${pcoId} for review`
-            ]);
+            const pcoInfo = await (0, database_1.executeQuerySingle)('SELECT name FROM users WHERE id = ?', [pcoId]);
+            const pcoName = pcoInfo?.name || 'PCO';
+            await (0, notificationController_1.createNotification)(adminId, 'report_submitted', 'New Report Submitted', `${pcoName} submitted report for ${report.company_name}`);
         }
-        logger_1.logger.info(`Report ${reportId} submitted by PCO ${pcoId} - PCO auto-unassigned from client`);
+        logger_1.logger.info(`Report ${reportId} submitted by PCO ${pcoId} - status remains draft`);
         return res.json({
             success: true,
-            message: 'Report submitted successfully for admin review'
+            message: 'Report submitted successfully'
         });
     }
     catch (error) {
@@ -578,13 +579,17 @@ const approveReport = async (req, res) => {
         const reportId = parseInt(req.params.id);
         const adminId = req.user.id;
         const { admin_notes, recommendations } = req.body;
-        const reportCheck = await (0, database_1.executeQuery)(`SELECT id FROM reports WHERE id = ? AND status = 'pending'`, [reportId]);
+        const reportCheck = await (0, database_1.executeQuery)(`SELECT r.id, r.pco_id, c.company_name 
+       FROM reports r
+       JOIN clients c ON r.client_id = c.id
+       WHERE r.id = ? AND r.status IN ('draft', 'pending')`, [reportId]);
         if (reportCheck.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Report not found or not in pending status'
+                message: 'Report not found or not available for approval'
             });
         }
+        const report = reportCheck[0];
         await (0, database_1.executeQuery)(`UPDATE reports 
        SET status = 'approved',
            admin_notes = ?,
@@ -592,7 +597,8 @@ const approveReport = async (req, res) => {
            reviewed_by = ?,
            reviewed_at = NOW(),
            updated_at = NOW()
-       WHERE id = ? AND status = 'pending'`, [admin_notes || null, recommendations || null, adminId, reportId]);
+       WHERE id = ? AND status IN ('draft', 'pending')`, [admin_notes || null, recommendations || null, adminId, reportId]);
+        await (0, notificationController_1.createNotification)(report.pco_id, 'report_submitted', 'Report Approved', `Your report for ${report.company_name} has been approved by the admin.${admin_notes ? ` Notes: ${admin_notes}` : ''}`);
         logger_1.logger.info(`Report ${reportId} approved by admin ${adminId}`);
         return res.json({
             success: true,
@@ -624,11 +630,11 @@ const declineReport = async (req, res) => {
        FROM reports r
        JOIN clients c ON r.client_id = c.id
        JOIN users u ON r.pco_id = u.id
-       WHERE r.id = ? AND r.status = 'pending'`, [reportId]);
+       WHERE r.id = ? AND r.status IN ('draft', 'pending')`, [reportId]);
         if (reportCheck.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Report not found or not in pending status'
+                message: 'Report not found or not available for decline'
             });
         }
         const report = reportCheck[0];
@@ -638,17 +644,13 @@ const declineReport = async (req, res) => {
            reviewed_by = ?,
            reviewed_at = NOW(),
            updated_at = NOW()
-       WHERE id = ? AND status = 'pending'`, [admin_notes, adminId, reportId]);
+       WHERE id = ? AND status IN ('draft', 'pending')`, [admin_notes, adminId, reportId]);
         await (0, database_1.executeQuery)(`UPDATE client_pco_assignments 
        SET status = 'active', assigned_at = NOW()
        WHERE client_id = ? AND pco_id = ? AND status = 'inactive'
        ORDER BY unassigned_at DESC
        LIMIT 1`, [report.client_id, report.pco_id]);
-        await (0, database_1.executeQuery)(`INSERT INTO notifications (user_id, type, title, message)
-       VALUES (?, 'report_declined', 'Report Declined - Revision Required', ?)`, [
-            report.pco_id,
-            `Your report for ${report.company_name} has been declined. Admin feedback: ${admin_notes}`
-        ]);
+        await (0, notificationController_1.createNotification)(report.pco_id, 'report_declined', 'Report Declined - Revision Required', `Your report for ${report.company_name} has been declined. Admin feedback: ${admin_notes}`);
         logger_1.logger.info(`Report ${reportId} declined by admin ${adminId} - PCO reassigned to client`);
         return res.json({
             success: true,
@@ -1102,7 +1104,10 @@ const archiveReport = async (req, res) => {
     try {
         const reportId = parseInt(req.params.id);
         const adminId = req.user.id;
-        const reportCheck = await (0, database_1.executeQuery)(`SELECT id, status FROM reports WHERE id = ?`, [reportId]);
+        const reportCheck = await (0, database_1.executeQuery)(`SELECT r.id, r.status, r.pco_id, c.company_name 
+       FROM reports r
+       JOIN clients c ON r.client_id = c.id
+       WHERE r.id = ?`, [reportId]);
         if (reportCheck.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -1122,6 +1127,7 @@ const archiveReport = async (req, res) => {
            reviewed_at = NOW(),
            updated_at = NOW()
        WHERE id = ?`, [adminId, reportId]);
+        await (0, notificationController_1.createNotification)(report.pco_id, 'system_update', 'Report Archived', `Your report for ${report.company_name} has been archived by the admin.`);
         logger_1.logger.info(`Report ${reportId} archived by admin ${adminId}`);
         return res.json({
             success: true,

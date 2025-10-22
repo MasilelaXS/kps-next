@@ -41,10 +41,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
 
-    // Only allow admin users
-    if (parsedUser.role !== 'admin') {
-      console.log(`Access denied: User is ${parsedUser.role}, redirecting to correct portal`);
-      if (parsedUser.role === 'pco') {
+    // Check role_context for access (handles dual-role users correctly)
+    const roleContext = parsedUser.role_context || parsedUser.role;
+    
+    if (roleContext !== 'admin') {
+      console.log(`Access denied: User context is ${roleContext}, redirecting to correct portal`);
+      if (roleContext === 'pco') {
         router.push('/pco/dashboard');
       } else {
         localStorage.removeItem('kps_token');
@@ -69,8 +71,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: 'Chemicals', href: '/admin/chemicals', icon: Beaker },
   ];
 
-  // Prevent hydration mismatch and ensure user is admin
-  if (!mounted || !user || user.role !== 'admin') {
+  // Prevent hydration mismatch and ensure user has admin context
+  if (!mounted || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  const roleContext = user.role_context || user.role;
+  if (roleContext !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
@@ -150,17 +161,22 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* User Profile */}
           <div className="p-4 border-t border-gray-200">
-            <div className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center'}`}>
+            <button
+              onClick={() => router.push('/admin/profile')}
+              className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center'} w-full hover:bg-gray-50 rounded-lg p-2 transition-colors cursor-pointer`}
+            >
               <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
                 {user.name?.charAt(0) || 'U'}
               </div>
               {sidebarOpen && (
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                  <p className="text-xs text-gray-500">Administrator</p>
+                  <p className="text-xs text-gray-500">
+                    {user.role === 'both' ? 'Administrator / PCO' : 'Administrator'}
+                  </p>
                 </div>
               )}
-            </div>
+            </button>
             {sidebarOpen ? (
               <button 
                 onClick={handleLogout} 

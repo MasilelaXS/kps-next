@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { hasRole } from '../middleware/auth';
 import { executeQuery } from '../config/database';
 import { logger } from '../config/logger';
 

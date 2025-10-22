@@ -35,6 +35,15 @@ export declare const config: {
         maxSize: number;
         allowedTypes: string[];
     };
+    email: {
+        host: string;
+        port: number;
+        secure: boolean;
+        user: string;
+        password: string;
+        from: string;
+        replyTo: string;
+    };
 };
 export declare const isDevelopment: () => boolean;
 export declare const isProduction: () => boolean;

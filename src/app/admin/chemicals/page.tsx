@@ -116,7 +116,7 @@ export default function ChemicalsPage() {
         params.append('status', statusFilter);
       }
 
-      const response = await fetch(`http://localhost:3001/api/admin/chemicals?${params}`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals?${params}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -172,7 +172,7 @@ export default function ChemicalsPage() {
       setFormErrors({});
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch('http://localhost:3001/api/admin/chemicals', {
+      const response = await fetch('http://192.168.1.128:3001/api/admin/chemicals', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -228,7 +228,7 @@ export default function ChemicalsPage() {
       setFormErrors({});
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/chemicals/${selectedChemical.id}`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals/${selectedChemical.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -280,7 +280,7 @@ export default function ChemicalsPage() {
       const token = localStorage.getItem('kps_token');
       const newStatus = chemical.status === 'active' ? 'inactive' : 'active';
       
-      const response = await fetch(`http://localhost:3001/api/admin/chemicals/${chemical.id}/status`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals/${chemical.id}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -309,7 +309,7 @@ export default function ChemicalsPage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://localhost:3001/api/admin/chemicals/${selectedChemical.id}`, {
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals/${selectedChemical.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
