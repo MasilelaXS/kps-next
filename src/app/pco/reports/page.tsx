@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
+import Loading from '@/components/Loading';
 import { apiCall } from '@/lib/api';
 import { 
   FileText, 
@@ -208,7 +209,7 @@ export default function PCOReportsPage() {
     return (
       <PcoDashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <Loading size="lg" />
         </div>
       </PcoDashboardLayout>
     );
@@ -306,9 +307,9 @@ export default function PCOReportsPage() {
                 key={report.id}
                 onClick={() => {
                   // Navigate based on status
-                  if (report.status === 'draft') {
-                    // TODO: Navigate to edit/continue draft
-                    console.log('Continue draft:', report.id);
+                  if (report.status === 'draft' || report.status === 'declined') {
+                    // Navigate to edit/resubmit form
+                    router.push(`/pco/report/new?reportId=${report.id}`);
                   } else {
                     // TODO: Navigate to view report details
                     console.log('View report:', report.id);

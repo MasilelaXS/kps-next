@@ -74,7 +74,7 @@ exports.uploadReportsSchema = joi_1.default.object({
             })).optional()
         }).optional(),
         insect_monitors: joi_1.default.array().items(joi_1.default.object({
-            monitor_type: joi_1.default.string().valid('box', 'fly_trap').required(),
+            monitor_type: joi_1.default.string().valid('box', 'light').required(),
             monitor_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'other').default('good'),
             monitor_condition_other: joi_1.default.string().max(255).optional().allow(null),
             warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted').default('good'),

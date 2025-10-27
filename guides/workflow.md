@@ -323,23 +323,38 @@ All passwords must meet the following criteria:
 4. Save client (initially unassigned to any PCO)
 
 #### Assigning PCO to Client
-1. Navigate to Schedule page
-2. Select a PCO from the left sidebar (shows PCO name, number, and current assignment count)
-3. View assigned clients on the right side (or "No Assigned Clients" message)
-4. Click "Assign Clients" button
-5. In the modal:
-   - Search for clients using the search box
-   - View list showing all clients with status indicators:
-     - Green dot = Already assigned (shows which PCO)
-     - Gray dot = Unassigned (available to select)
-   - Select one or multiple unassigned clients using checkboxes
-   - Can unassign clients directly from modal using "Unassign" button
-6. Click "Assign Selected" button
-7. **System Actions**:
-   - Bulk assignment records created with 'active' status
-   - Clients immediately appear in selected PCO's schedule
+
+**Purpose**: Assign clients to PCOs for service visits.
+
+**How to Access**:
+1. Navigate to the Schedule page from the admin menu
+
+**The Schedule Interface**:
+- **Left Sidebar**: List of all PCOs
+  - Shows PCO name, number, and how many clients they're assigned to
+- **Right Panel**: Shows the selected PCO's assigned clients
+  - If no clients assigned, you'll see "No Assigned Clients" message
+
+**Assigning Clients**:
+1. Click on a PCO from the left sidebar
+2. Click the "Assign Clients" button
+3. In the assignment modal:
+   - **Search Box**: Type to find specific clients quickly
+   - **Client List**: Shows all clients with status indicators
+     - 🟢 Green dot = Already assigned to a PCO (shows which one)
+     - ⚪ Gray dot = Unassigned and available to select
+   - **Checkboxes**: Select one or multiple unassigned clients
+4. Click "Assign Selected" button
+5. **What Happens**:
+   - Selected clients immediately appear in the PCO's schedule
    - Assignment count updates
-   - Success notification displayed
+   - PCO can now see these clients in their portal
+   - Success notification confirms the assignment
+
+**Unassigning Clients**:
+- Click the "Unassign" button next to any assigned client
+- Client is immediately removed from PCO's schedule
+- Note: PCOs are automatically unassigned after submitting a report
 
 #### Client Deletion Logic
 - **Soft Delete Only**: All client deletions are soft deletes (sets `deleted_at` timestamp)
@@ -393,44 +408,50 @@ All passwords must meet the following criteria:
 
 #### Report Status System
 **Available Statuses:**
-- **draft**: Reports being created or edited by PCO (includes submitted reports awaiting review)
+- **draft**: Reports being created or edited by PCO (includes submitted reports awaiting admin review)
+- **pending**: Alternative status for submitted reports (functionally same as draft)
 - **approved**: Reports reviewed and approved by admin
 - **declined**: Reports rejected by admin, requiring PCO revision
+- **emailed**: Reports that have been sent to clients via email
 - **archived**: Completed reports removed from active workflow
 
 #### Viewing All Reports
-1. Navigate to Reports section (default shows "Draft" tab)
-2. Filter reports by **Status Group** (tabs at top):
-   - **Draft** (created by PCO, awaiting admin review) - *default view*
-   - **Approved** (reviewed and approved reports)
-   - **Emailed** (reports sent to clients)
-   - **Archived** (completed reports not for client distribution)
-   - **All Reports** (view all statuses)
+1. Navigate to Reports section (default shows "Draft / Pending" tab)
+2. Filter reports by **Status Group** (5 tabs at top):
+   - **Draft / Pending** (reports awaiting admin review - includes both 'draft' and 'pending' statuses) - *default view*
+   - **Approved** (reviewed and approved reports only)
+   - **Emailed** (reports that have been sent to clients via email)
+   - **Archived** (completed reports removed from active workflow)
+   - **All Reports** (view all statuses including declined reports)
 3. **Search and Filters**:
    - **Search**: Client or PCO name
    - **Report Type Filter**: All Types, Bait Inspection, Fumigation, Both
    - **Date From/To**: Filter by service date range
 4. Results displayed in table with pagination (25 per page)
 5. **Status Badges**:
-   - Draft: Yellow badge
+   - Draft/Pending: Yellow badge
    - Approved: Green badge
    - Declined: Red badge
    - Archived: Gray badge
+   - Emailed: Blue badge (if implemented)
 
 #### Report Status Flow
 ```
-Draft → Approved    (admin approves)
-      → Declined    (admin declines with notes, PCO reassigned to client)
-      → Archived    (admin archives)
+Draft/Pending → Approved    (admin approves)
+              → Declined    (admin declines with notes, PCO reassigned to client)
+              → Archived    (admin archives)
 
-Declined → Draft (PCO edits and resubmits)
+Approved → Emailed    (admin sends report to client via email)
+
+Declined → Draft/Pending (PCO edits and resubmits)
 ```
 
 **Critical Business Rules:**
-- When PCO submits report, status remains 'draft'
-- Reports stay in 'draft' status until admin takes action
+- When PCO submits report, status remains 'draft' (or 'pending')
+- Reports stay in 'draft'/'pending' status until admin takes action
 - PCO is auto-unassigned from client when report is submitted
 - PCO is reassigned to client when report is declined
+- Declined reports appear in "All Reports" tab (not in Draft/Pending tab)
 
 #### Report Actions (per report)
 Available actions vary by status:
@@ -495,258 +516,283 @@ When viewing a report, modal displays:
 ## PCO Mobile App Workflows
 
 ### Dashboard
-**Display Elements:**
-- Assigned clients count
-- Draft reports count (reports in progress or awaiting admin review)
-- Reports needing revision (declined reports)
-- Quick access to create new report
-- Service history summary
+
+When you log in to the PCO portal, your dashboard shows:
+
+**At a Glance**:
+- **Assigned Clients**: How many clients you're currently assigned to service
+- **Draft Reports**: Reports you've started or submitted that are awaiting admin review
+- **Needs Revision**: Reports that admin declined and need your attention
+
+**Quick Actions**:
+- **Create New Report**: Jump straight to creating a report for an assigned client
+- **View Schedule**: See all your assigned clients
+- **View Service History**: Check your past completed reports
+
+**What You Can Do**:
+- Click on any metric to see the full list
+- Access your most recent activity
+- Navigate to any section using the menu
 
 ### Schedule Management
 
-#### Viewing Assigned Clients
-1. Navigate to Schedule
-2. View list of assigned clients (name and address only for security)
-3. **Client Status Handling**:
-   - Active clients: Show normally
-   - Inactive clients: Display "Client is currently inactive" message
+#### Viewing Your Assigned Clients
+
+**How to Access**:
+1. Click "Schedule" from the main menu
+2. See a list of all clients assigned to you
+
+**What You'll See**:
+- Client company name
+- Service address (for navigation)
+- Client status
+
+**Important Notes**:
+- Only clients assigned to you by admin appear here
+- If a client shows "Client is currently inactive", contact admin before visiting
+- After you submit a report, you're automatically unassigned (admin will reassign for next service)
 
 #### Starting a New Report
-1. Select client from schedule
-2. System checks for previous reports and pre-loads data in background
-3. System loads expected station count (from client profile)
-4. Begin report creation workflow
 
-**Equipment Tracking (Automatic Detection)**: 
-- PCO can add equipment beyond the expected count (e.g., if client expects 5 inside stations, PCO can add 8)
-- **System automatically detects and marks new equipment on report submission** (no manual confirmation needed)
-- **Detection Logic**:
-  - For **Bait Stations**: Compares actual count in report vs. client's expected count by location
-    - Inside stations: If report has 5 but client expects 2, last 3 added are marked as new
-    - Outside stations: If report has 3 but client expects 1, last 2 added are marked as new
-  - For **Insect Monitors**: Compares actual count in report vs. client's expected count by monitor type
-    - Fly Trap (Light) monitors: If report has 3 but client expects 1, last 2 added are marked as new
-    - Box monitors: If report has 2 but client expects 1, last 1 added is marked as new
-- **Tracking Process** (happens automatically when PCO submits report):
-  1. System counts actual equipment in report by type/location
-  2. Compares against client's expected counts (stored in client profile)
-  3. Marks excess equipment with `is_new_addition = 1` flag (uses `ORDER BY id DESC` to mark most recently added)
-  4. Updates report summary: `new_bait_stations_count` and `new_insect_monitors_count`
-  5. Updates client's expected counts to match actual (for next visit)
-- **Invoicing Benefits**:
-  - New additions highlighted on report PDF for easy identification
-  - Summary counts show total new equipment at a glance
-  - No manual tracking needed - fully automated on submission
-- **Client Profile Expected Counts**:
-  - `total_bait_stations_inside`: Expected inside bait stations
-  - `total_bait_stations_outside`: Expected outside bait stations
-  - `total_insect_monitors_light`: Expected fly trap (light) monitors
-  - `total_insect_monitors_box`: Expected box monitors
-  - These values auto-update after each report submission to match actual counts
+**Steps**:
+1. From your Schedule, click on a client
+2. Click "Create New Report" button
+3. The system automatically:
+   - Loads information from your last visit (if any)
+   - Retrieves the client's expected equipment counts
+   - Prepares pre-filled data to save you time
 
-**Example Workflow**:
-```
-Initial Visit (Setup):
-- Client profile set: 2 inside, 1 outside, 1 fly_trap, 1 box
+**What Happens Next**:
+You'll be guided through the report creation screens (explained in the next section)
 
-First Report:
-- PCO adds: 5 inside, 3 outside, 3 fly_trap, 2 box
-- System marks as new: 3 inside, 2 outside, 2 fly_trap, 1 box
-- Client expected updated to: 5 inside, 3 outside, 3 fly_trap, 2 box
-
-Second Report (Next Visit):
-- PCO adds: 5 inside, 3 outside, 3 fly_trap, 2 box
-- System marks as new: 0 (all match expected)
-- Client expected remains: 5 inside, 3 outside, 3 fly_trap, 2 box
-```
-
-**Missing Station Warning**: If PCO submits report with fewer stations than expected, app shows warning but allows submission if PCO chooses to proceed
+**About Adding Equipment**:
+- You can add as much equipment as needed during the service visit
+- If you add more equipment than the client normally has, the system will ask you to confirm
+- The system automatically tracks new additions for invoicing
+- Don't worry - you can't mess it up! The system has safety checks built in
 
 ### Report Creation Workflow
 
-#### Screen 1: Report Setup
-```
-┌─────────────────────────────────┐
-│ Report Type Selection           │
-├─────────────────────────────────┤
-│ ○ Bait Inspection               │
-│ ○ Fumigation                    │
-│ ○ Both                          │
-├─────────────────────────────────┤
-│ Service Date: [Today's Date]    │
-│ (Cannot be future date)         │
-├─────────────────────────────────┤
-│ PCO Signature: [Digital Pad]    │
-├─────────────────────────────────┤
-│ [Continue] [Save Draft]         │
-└─────────────────────────────────┘
-```
+Creating a report is a simple 5-step process. The system guides you through each screen and saves your progress automatically.
 
-#### Screen 2A: Bait Station Inspection
-**Pre-filling Logic:**
-- System loads last report data for this client
-- When PCO adds station with same location + number, auto-populate previous data
-- Visual indicators show pre-filled vs. new data (different background color/icon)
+#### Step 1: Report Setup
 
-**Station Management:**
-```
-Location: [Inside/Outside]
-Available Stations: [List with edit/delete options]
-Missing Station Warning: If expected stations not inspected, show warning before submission
+**What You'll Do**:
+1. **Choose Report Type**:
+   - Bait Inspection only
+   - Fumigation only
+   - Both (if doing both services)
 
-Add New Station:
-┌─────────────────────────────────┐
-│ Station Number: [___]           │
-│ Station Accessible: [Yes/No]    │
-│ ↳ If No: Reason: [_______]     │
-│                                 │
-│ Activity Detected: [Yes/No]     │
-│ ↳ If Yes:                      │
-│   ☐ Droppings ☐ Gnawing        │
-│   ☐ Tracks ☐ Other: [____]     │
-│                                 │
-│ Bait Status:                    │
-│ ○ Clean (default - no poison)   │
-│ ○ Eaten ○ Wet ○ Old            │
-│                                 │
-│ Station Condition:              │
-│ ○ Good ○ Needs Repair          │
-│ ○ Damaged ○ Missing            │
-│ ↳ If Needs Repair/Damaged/      │
-│   Missing: Action Taken:        │
-│   ○ Repaired ○ Replaced        │
-│                                 │
-│ Warning Sign Condition:         │
-│ ○ Good ○ Replaced              │
-│ ○ Repaired ○ Remounted         │
-│                                 │
-│ Chemicals Used: [+ Add]         │
-│ [Chemical Name] [Qty] [Batch#]  │
-│ (Batch# linked to this report) │
-│                                 │
-│ Station Remarks: [_______]      │
-├─────────────────────────────────┤
-│ [Save Station] [Cancel]         │
-└─────────────────────────────────┘
-```
+2. **Confirm Service Date**:
+   - Defaults to today's date
+   - You cannot select a future date
 
-#### Screen 2B: Fumigation
-**Pre-filling Logic:**
-- Load chemicals and monitors from last fumigation report
-- Show pre-filled data with visual indicators
+3. **Add Your Signature**:
+   - Use the digital signature pad to sign
+   - This confirms you performed the service
 
-```
-┌─────────────────────────────────┐
-│ Areas Treated: (Multi-select)   │
-│ ☐ Kitchen ☐ Storage Room       │
-│ ☐ Loading Dock ☐ Dining Area   │
-│ ☐ Prep Area ☐ Main Kitchen     │
-│ ☐ Dining Hall ☐ Bathroom       │
-│ ☐ Office ☐ Warehouse           │
-│ ☐ Other: [____________]        │
-├─────────────────────────────────┤
-│ Target Pests: (Multi-select)    │
-│ ☐ Cockroaches ☐ Ants ☐ Flies  │
-│ ☐ Moths ☐ Spiders ☐ Beetles   │
-│ ☐ Termites ☐ Other: [____]    │
-├─────────────────────────────────┤
-│ Chemicals Used: [+ Add]         │
-│ [Chemical] [Qty] [Unit] [Batch] │
-├─────────────────────────────────┤
-│ Insect Monitors: [+ Add]        │
-│ Monitor Type: [Box/Light (Fly Trap)] │
-│                                 │
-│ Monitor Condition:              │
-│ ○ Good ○ Replaced              │
-│ ○ Repaired ○ Other: [____]     │
-│                                 │
-│ Light Monitor (Fly Trap) Only:  │
-│ Light Condition:                │
-│ ○ Good ○ Faulty               │
-│ ↳ If Faulty:                   │
-│   ○ Starter ○ Tube ○ Cable    │
-│   ○ Electricity ○ Other: [___] │
-│ Glue Board Replaced: [Yes/No]   │
-│ Tubes Replaced: [Yes/No]        │
-│ (only if Fly Trap)               │
-│                                 │
-│ Warning Sign Condition:         │
-│ ○ Good ○ Replaced              │
-│ ○ Repaired ○ Remounted         │
-│                                 │
-│ Monitor Serviced: [Yes/No]      │
-├─────────────────────────────────┤
-│ General Remarks: [_______]      │
-├─────────────────────────────────┤
-│ [Continue] [Save Draft]         │
-└─────────────────────────────────┘
-```
+**Navigation**:
+- Click "Continue" to move to the next step
+- Click "Save Draft" to save and finish later
 
-#### Screen 3: Summary & Next Service
-```
-┌─────────────────────────────────┐
-│ Report Summary                  │
-├─────────────────────────────────┤
-│ Service Date: [Date]            │
-│ Report Type: [Type]             │
-│ PCO: [Name]                     │
-│                                 │
-│ [Bait Stations Summary]         │
-│ [Fumigation Summary]            │
-│                                 │
-│ Next Service Date: [Date Pick]  │
-├─────────────────────────────────┤
-│ [Edit Report] [Continue]        │
-└─────────────────────────────────┘
-```
+---
 
-#### Screen 4: Client Signature
-```
-┌─────────────────────────────────┐
-│ Client Signature Required       │
-├─────────────────────────────────┤
-│ [Digital Signature Pad]         │
-│                                 │
-│ Client Name: [____________]     │
-│                                 │
-├─────────────────────────────────┤
-│ [Clear] [Continue]              │
-└─────────────────────────────────┘
-```
+#### Step 2A: Bait Station Inspection (if selected)
 
-#### Screen 5: Submit Report
-```
-┌─────────────────────────────────┐
-│ Submit Report                   │
-├─────────────────────────────────┤
-│ ✓ All sections completed        │
-│ ✓ Client signature obtained     │
-│                                 │
-│ [Submit Report]                 │
-│ [Save as Draft]                 │
-│ [Download as JSON]              │
-│ (for offline backup)            │
-└─────────────────────────────────┘
-```
+**Smart Pre-filling**:
+- The system automatically loads data from your last visit to this client
+- Stations with the same location and number get pre-filled with previous data
+- Pre-filled data is highlighted so you know what's carried over
+- You can edit any pre-filled information
+
+**Adding Stations**:
+
+Choose location first: **Inside** or **Outside**
+
+For each station, you'll record:
+
+1. **Station Number**: Your identification number for this station
+
+2. **Accessibility**:
+   - Was the station accessible?
+   - If No: Briefly explain why
+
+3. **Activity Check**:
+   - Any signs of rodent activity?
+   - If Yes: Select what you found (Droppings, Gnawing, Tracks, or Other)
+
+4. **Bait Status**:
+   - Clean (no poison used - default)
+   - Eaten
+   - Wet
+   - Old
+
+5. **Station Condition**:
+   - Good
+   - Needs Repair
+   - Damaged
+   - Missing
+   - If not "Good": Select action taken (Repaired or Replaced)
+
+6. **Warning Sign**:
+   - Good
+   - Replaced
+   - Repaired
+   - Remounted
+
+7. **Chemicals Used** (if any):
+   - Click "+ Add" to add chemicals
+   - Enter chemical name, quantity, and batch number
+   - You can add multiple chemicals per station
+
+8. **Station Remarks** (optional):
+   - Add any additional notes about this station
+
+**Managing Your Stations**:
+- Click "Save Station" to add it to your report
+- View all added stations in the list
+- Edit or delete stations as needed
+- **Missing Station Alert**: If you submit with fewer stations than expected, you'll get a warning (but you can still proceed if needed)
+
+**When Done**:
+- Click "Continue" to proceed
+- If you added more stations than expected, you'll get a confirmation message asking if you want to update the client's baseline count
+
+---
+
+#### Step 2B: Fumigation (if selected)
+
+**Smart Pre-filling**:
+- Chemicals and monitors from your last fumigation are pre-loaded
+- Pre-filled data is highlighted for easy identification
+- Edit anything that changed
+
+**Fumigation Details**:
+
+1. **Areas Treated** (select all that apply):
+   - Kitchen, Storage Room, Loading Dock, Dining Area
+   - Prep Area, Main Kitchen, Dining Hall, Bathroom
+   - Office, Warehouse
+   - Other (specify)
+
+2. **Target Pests** (select all that apply):
+   - Cockroaches, Ants, Flies, Moths
+   - Spiders, Beetles, Termites
+   - Other (specify)
+
+3. **Chemicals Used**:
+   - Click "+ Add Chemical"
+   - Select chemical, enter quantity, unit, and batch number
+   - Add as many chemicals as used
+
+4. **Insect Monitors**:
+   - Click "+ Add Monitor"
+   - Choose type: Box or Light (Fly Trap)
+   
+   For each monitor, record:
+   - **Monitor Condition**: Good, Replaced, Repaired, or Other
+   - **Warning Sign**: Good, Replaced, Repaired, or Remounted
+   - **Monitor Serviced**: Yes or No
+   
+   **For Light Monitors (Fly Traps) Only**:
+   - **Light Condition**: Good or Faulty
+   - If Faulty: What's wrong? (Starter, Tube, Cable, Electricity, Other)
+   - **Glue Board Replaced**: Yes or No
+   - **Tubes Replaced**: Yes or No
+
+5. **General Remarks** (optional):
+   - Add any overall notes about the fumigation
+
+**When Done**:
+- Click "Continue" to proceed
+- If you added more monitors than expected, you'll get a confirmation message
+
+---
+
+#### Step 3: Review Summary & Schedule Next Service
+
+**What You'll See**:
+- Service date
+- Report type
+- Your name
+- Summary of bait stations (if applicable)
+- Summary of fumigation (if applicable)
+
+**Set Next Service Date**:
+- Pick a date for the next scheduled service
+- This helps admin plan future assignments
+
+**Navigation**:
+- Click "Edit Report" to go back and make changes
+- Click "Continue" when everything looks good
+
+---
+
+#### Step 4: Client Signature
+
+**Getting the Signature**:
+1. Hand the device to the client
+2. Client signs on the digital signature pad
+3. Client types their name in the field below
+
+**Navigation**:
+- Click "Clear" to erase and start over
+- Click "Continue" when signature is complete
+
+---
+
+#### Step 5: Submit Report
+
+**Final Check**:
+- ✓ All sections completed
+- ✓ Client signature obtained
+
+**Choose Your Action**:
+
+1. **Submit Report** (recommended):
+   - Sends report to admin for review
+   - You'll be unassigned from this client
+   - Admin will reassign you for the next service
+   - You'll get notified when admin reviews your report
+
+2. **Save as Draft**:
+   - Keep working on it later
+   - Report stays in your drafts
+   - You remain assigned to the client
+
+3. **Download as JSON** (optional):
+   - Creates an offline backup
+   - Useful if you have connectivity concerns
+
+---
 
 ### Report Submission Process
-1. **Online Submission**:
-   - Submit directly to server
-   - Show success confirmation
-   - Auto-unassign PCO from client
-   - Send notification to admin
 
-2. **Offline Submission**:
-   - Save report locally
-   - Queue for submission when online
-   - Allow JSON export as backup
-   - Retry submission on next sync
+**If You're Online**:
+- Report submits immediately
+- You'll see a success confirmation
+- Admin gets notified right away
+
+**If You're Offline**:
+- Report saves locally on your device
+- Queues for automatic submission when you're back online
+- You can export as JSON for extra backup
+- System will retry submission on next sync
+
+---
 
 ### Report History & Revision
-- View all submitted reports with status
-- Access reports marked "Needs Revision" from dashboard
-- View admin notes for declined reports
-- Resubmit revised reports
+
+**Viewing Your Reports**:
+- Go to Reports section to see all your submitted reports
+- Reports show their current status (Draft, Approved, Declined, Archived)
+
+**If Admin Declines Your Report**:
+- You'll see it in "Needs Revision" on your dashboard
+- Open the report to read admin's notes
+- Make the required changes
+- Resubmit for review
+- You'll be automatically reassigned to that client so you can access the report
 
 ---
 
@@ -793,198 +839,147 @@ Add New Station:
 
 ---
 
-## Equipment Tracking & Invoicing
+## Equipment Tracking
 
 ### Overview
-The system automatically tracks newly added bait stations and insect monitors for invoicing purposes. No manual confirmation required - detection happens automatically when PCO submits a report.
+The system automatically tracks newly added bait stations and insect monitors to help with invoicing. When a PCO installs new equipment at a client site, the system flags it as "new" so it's easy to identify on reports and invoices.
 
-### Client Expected Equipment Counts
-Each client profile maintains expected equipment counts:
-- `total_bait_stations_inside`: Expected inside bait stations (default: 0)
-- `total_bait_stations_outside`: Expected outside bait stations (default: 0)
-- `total_insect_monitors_light`: Expected fly trap (light) monitors (default: 0)
-- `total_insect_monitors_box`: Expected box monitors (default: 0)
+### How It Works
 
-**Purpose**: These baseline counts enable automatic detection of new equipment additions.
+#### Setting Up Client Equipment Baselines
+When you create a new client, you set their expected equipment counts:
+- **Inside Bait Stations**: How many bait stations are currently installed inside
+- **Outside Bait Stations**: How many bait stations are currently installed outside
+- **Light Monitors (Fly Traps)**: How many fly trap monitors are installed
+- **Box Monitors**: How many box-type monitors are installed
 
-### Automatic Detection Process
+These numbers tell the system what the client already has, so it can automatically detect when something new is added.
 
-#### When Detection Occurs
-Equipment tracking runs automatically when PCO submits a report (status changes from draft to draft-awaiting-review).
+#### Adding New Equipment During a Service Visit
 
-#### Detection Logic
+When a PCO creates a report and adds equipment:
 
-**For Bait Stations** (by location):
-1. System counts actual inside stations in report
-2. Compares to client's `total_bait_stations_inside`
-3. If actual > expected:
-   - Excess count = actual - expected
-   - Mark the last N stations added as new (`is_new_addition = 1`)
-   - Uses `ORDER BY id DESC LIMIT N` to identify most recently added
-4. Repeat for outside stations
-
-**For Insect Monitors** (by type):
-1. System counts actual fly_trap monitors in report
-2. Compares to client's `total_insect_monitors_light`
-3. If actual > expected:
-   - Excess count = actual - expected
-   - Mark the last N monitors added as new (`is_new_addition = 1`)
-   - Uses `ORDER BY id DESC LIMIT N` to identify most recently added
-4. Repeat for box monitors
-
-#### Database Fields
-
-**Bait Stations Table**:
-- `is_new_addition TINYINT(1) DEFAULT 0`: Flag indicating newly added station
-
-**Insect Monitors Table**:
-- `is_new_addition TINYINT(1) DEFAULT 0`: Flag indicating newly added monitor
-
-**Reports Table**:
-- `new_bait_stations_count INT(11) DEFAULT 0`: Total new bait stations (inside + outside)
-- `new_insect_monitors_count INT(11) DEFAULT 0`: Total new insect monitors (fly_trap + box)
-
-**Clients Table**:
-- `total_bait_stations_inside INT(11) DEFAULT 0`: Expected inside stations
-- `total_bait_stations_outside INT(11) DEFAULT 0`: Expected outside stations
-- `total_insect_monitors_light INT(11) DEFAULT 0`: Expected fly trap monitors
-- `total_insect_monitors_box INT(11) DEFAULT 0`: Expected box monitors
-
-### Workflow Example
-
-#### Initial Setup
-```
-Admin creates client with expected counts:
-- Inside stations: 2
-- Outside stations: 1
-- Fly trap monitors: 1
-- Box monitors: 1
-```
-
-#### First Service Visit
-```
-PCO adds equipment:
-- 5 inside stations
-- 3 outside stations
-- 3 fly trap monitors
-- 2 box monitors
-
-PCO submits report → System processes:
-
-1. Inside Stations: 5 actual vs 2 expected = 3 new
-   - Marks stations #3, #4, #5 as is_new_addition = 1
+**Scenario 1: Client has 5 inside bait stations**
+1. PCO adds 7 inside bait stations to the report
+2. When clicking "Continue", the system notices the difference
+3. **A confirmation message appears**:
+   ```
+   You have added more stations than expected:
+   • Inside: 7 (expected 5)
    
-2. Outside Stations: 3 actual vs 1 expected = 2 new
-   - Marks stations #2, #3 as is_new_addition = 1
+   Would you like to update the client's station count?
+   ```
+4. **If PCO clicks "Yes, Update"**:
+   - The system automatically marks the 2 extra stations as "new"
+   - The client's expected count is updated from 5 to 7
+   - Next visit, the system will expect 7 stations
+5. **If PCO clicks "No"**:
+   - The report continues without updating
+   - A warning will show about missing expected equipment
+
+**The same process happens for**:
+- Outside bait stations
+- Light monitors (fly traps)
+- Box monitors
+
+#### Why This Matters for Invoicing
+
+**Before (Manual Tracking)**:
+- Admin had to manually count new equipment from reports
+- Easy to miss new installations
+- Time-consuming to prepare invoices
+
+**Now (Automatic Tracking)**:
+- New equipment is automatically flagged on the report
+- Report summary shows total count of new equipment
+- Easy to identify on PDF reports (new equipment highlighted)
+- Accurate billing with no manual counting
+
+#### Safety Net (Automatic Backup)
+If the PCO skips the confirmation or something goes wrong, the system has a backup:
+- When the report is submitted, the system double-checks the equipment counts
+- If it finds equipment that wasn't marked as new, it marks it automatically
+- This ensures no new equipment is ever missed
+
+### Real-World Examples
+
+#### Example 1: Regular Service Visit (No New Equipment)
+
+**Situation**: ABC Restaurant has been a client for 6 months. They have 5 inside bait stations and 2 outside.
+
+**What Happens**:
+1. PCO arrives and services all 5 inside and 2 outside stations
+2. PCO creates report and adds all 7 stations
+3. When clicking "Continue" → **No message appears** (everything matches expected)
+4. PCO completes report normally
+5. **Report shows**: 0 new equipment added
+
+**Result**: Quick and easy - no interruptions since nothing new was installed.
+
+---
+
+#### Example 2: Client Expansion (New Equipment Installed)
+
+**Situation**: ABC Restaurant expands their kitchen. PCO installs 2 additional inside bait stations and 1 outside station.
+
+**What Happens**:
+1. PCO services and adds 7 inside stations and 3 outside stations to the report
+2. When clicking "Continue" → **Confirmation message appears**:
+   ```
+   You have added more stations than expected:
+   • Inside: 7 (expected 5)
+   • Outside: 3 (expected 2)
    
-3. Fly Trap Monitors: 3 actual vs 1 expected = 2 new
-   - Marks monitors #2, #3 as is_new_addition = 1
-   
-4. Box Monitors: 2 actual vs 1 expected = 1 new
-   - Marks monitor #2 as is_new_addition = 1
+   Would you like to update the client's station count?
+   ```
+3. PCO clicks **"Yes, Update"**
+4. System automatically marks the 2 extra inside and 1 extra outside station as "new"
+5. Client's expected count updates to match actual (7 inside, 3 outside)
+6. **Report shows**: 3 new bait stations added
+7. Admin sees report with new equipment highlighted for invoicing
 
-5. Updates report summary:
-   - new_bait_stations_count = 5 (3 inside + 2 outside)
-   - new_insect_monitors_count = 3 (2 fly_trap + 1 box)
+**Result**: New equipment automatically tracked, ready for billing.
 
-6. Updates client expected counts:
-   - total_bait_stations_inside = 5
-   - total_bait_stations_outside = 3
-   - total_insect_monitors_light = 3
-   - total_insect_monitors_box = 2
-```
+---
 
-#### Second Service Visit (Next Month)
-```
-PCO adds same equipment:
-- 5 inside stations
-- 3 outside stations
-- 3 fly trap monitors
-- 2 box monitors
+#### Example 3: Next Visit After Expansion
 
-PCO submits report → System processes:
+**Situation**: PCO returns to ABC Restaurant the following month. Client now has 7 inside and 3 outside stations (new baseline).
 
-1. All counts match expected (5, 3, 3, 2)
-2. No equipment marked as new (is_new_addition = 0 for all)
-3. Report summary shows:
-   - new_bait_stations_count = 0
-   - new_insect_monitors_count = 0
-4. Client expected counts unchanged
-```
+**What Happens**:
+1. PCO services all 7 inside and 3 outside stations
+2. PCO creates report and adds all 10 stations
+3. When clicking "Continue" → **No message appears** (matches new expected count)
+4. PCO completes report normally
+5. **Report shows**: 0 new equipment added
 
-#### Third Visit - Client Expansion
-```
-Client adds new area, PCO installs more equipment:
-- 7 inside stations (2 more)
-- 3 outside stations (same)
-- 5 fly trap monitors (2 more)
-- 2 box monitors (same)
+**Result**: System remembers the updated count - smooth workflow continues.
 
-PCO submits report → System processes:
+### Benefits
 
-1. Inside Stations: 7 actual vs 5 expected = 2 new
-   - Marks stations #6, #7 as is_new_addition = 1
-   
-2. Outside Stations: 3 actual vs 3 expected = 0 new
-   
-3. Fly Trap Monitors: 5 actual vs 3 expected = 2 new
-   - Marks monitors #4, #5 as is_new_addition = 1
-   
-4. Box Monitors: 2 actual vs 2 expected = 0 new
-
-5. Updates report summary:
-   - new_bait_stations_count = 2
-   - new_insect_monitors_count = 2
-
-6. Updates client expected counts:
-   - total_bait_stations_inside = 7
-   - total_bait_stations_outside = 3
-   - total_insect_monitors_light = 5
-   - total_insect_monitors_box = 2
-```
-
-### Invoicing Benefits
-
-**For Admin/Billing**:
-- Instant visibility of new equipment additions
-- Report summary shows totals at a glance
-- Individual equipment flagged for detailed breakdown
-- No manual counting or tracking required
-
-**For PCO**:
-- No extra steps or confirmations needed
-- Just add equipment and submit as normal
-- System handles all detection automatically
-
-**For Client Invoicing**:
-- Clear differentiation between regular service and new installations
+**For Admin/Billing Team**:
+- See new equipment at a glance on report summary
 - New equipment highlighted on PDF reports
-- Accurate tracking for billing purposes
-- Historical data preserved for auditing
+- No need to manually count or track additions
+- Ready for accurate invoicing
 
-### Technical Implementation
+**For PCO Users**:
+- Simple workflow - just add equipment and continue
+- System handles all tracking automatically
+- Get confirmation when adding more than expected
+- One click to update client equipment counts
 
-**Backend Functions** (`api/src/utils/equipmentTracking.ts`):
-- `markNewBaitStations(reportId, clientId, location)`: Identifies and marks new bait stations
-- `markNewInsectMonitors(reportId, clientId, monitorType)`: Identifies and marks new monitors
-- `updateClientExpectedCounts(reportId, clientId)`: Updates client baseline counts
-- `countNewBaitStations(reportId)`: Counts total new bait stations
-- `countNewInsectMonitors(reportId)`: Counts total new monitors
-- `updateReportNewEquipmentCounts(reportId)`: Updates report summary counts
+**For Clients**:
+- Clear documentation of what's new vs. regular service
+- Transparent billing - new installations clearly marked
+- Professional reports with equipment history
 
-**Integration Point** (`reportController.ts` → `submitReport()`):
-```typescript
-// After report submission validation
-await markNewBaitStations(reportId, clientId, 'inside');
-await markNewBaitStations(reportId, clientId, 'outside');
-await markNewInsectMonitors(reportId, clientId, 'fly_trap');
-await markNewInsectMonitors(reportId, clientId, 'box');
+### Key Points to Remember
 
-await updateReportNewEquipmentCounts(reportId);
-await updateClientExpectedCounts(reportId, clientId);
-```
-
-**Database Migration**: `api/migrations/add_new_equipment_tracking.sql`
+1. **Always set expected equipment counts** when creating a new client
+2. **Click "Yes, Update"** when the system asks about new equipment - this keeps the client's baseline current
+3. **New equipment is automatically highlighted** on reports for easy invoicing
+4. **The system has a safety net** - even if something is missed, it will catch it during submission
 
 ---
 

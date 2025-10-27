@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TextBox from '@/components/TextBox';
+import Loading from '@/components/Loading';
 import { Lock, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function ResetPasswordPage() {
@@ -120,10 +121,7 @@ export default function ResetPasswordPage() {
   if (verifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Verifying reset token...</p>
-        </div>
+        <Loading size="lg" text="Verifying reset token..." />
       </div>
     );
   }

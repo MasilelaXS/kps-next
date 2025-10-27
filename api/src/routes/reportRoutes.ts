@@ -20,11 +20,14 @@ import {
   getPendingReports,
   getReportById,
   createReport,
+  createCompleteReport,
   updateReport,
+  updateCompleteReport,
   deleteReport,
   submitReport,
   approveReport,
   declineReport,
+  forceDeclineReport,
   archiveReport,
   adminUpdateReport,
   
@@ -42,7 +45,18 @@ import {
   deleteInsectMonitor,
   
   // Pre-fill Data
-  getPreFillData
+  getPreFillData,
+  
+  // Equipment Tracking
+  markNewEquipmentBeforeUpdate,
+  
+  // Offline Sync - JSON Export/Import
+  exportReportAsJSON,
+  importReportFromJSON,
+  
+  // PDF Generation
+  adminDownloadReportPDF,
+  adminEmailReportPDF
 } from '../controllers/reportController';
 import {
   createReportSchema,
@@ -109,6 +123,17 @@ router.post(
 );
 
 /**
+ * POST /api/pco/reports/complete
+ * Submit complete report with all data in one request
+ * Body: { client_id, report_type, service_date, next_service_date, pco_signature_data, client_signature_data, client_signature_name, general_remarks, bait_stations, fumigation }
+ */
+router.post(
+  '/pco/reports/complete',
+  authenticateToken,
+  createCompleteReport
+);
+
+/**
  * PUT /api/pco/reports/:id
  * Update draft report
  * Body: Same as create (all optional)
@@ -121,6 +146,17 @@ router.put(
 );
 
 /**
+ * PUT /api/pco/reports/:id/complete
+ * Update and resubmit complete report (for declined reports)
+ * Body: { report_type, service_date, next_service_date, pco_signature_data, client_signature_data, client_signature_name, general_remarks, bait_stations, fumigation }
+ */
+router.put(
+  '/pco/reports/:id/complete',
+  authenticateToken,
+  updateCompleteReport
+);
+
+/**
  * DELETE /api/pco/reports/:id
  * Delete draft report
  */
@@ -128,6 +164,17 @@ router.delete(
   '/pco/reports/:id',
   authenticateToken,
   deleteReport
+);
+
+/**
+ * POST /api/pco/reports/:id/mark-new-equipment
+ * Mark equipment as new before updating client counts
+ * Called when PCO confirms new equipment additions
+ */
+router.post(
+  '/pco/reports/:id/mark-new-equipment',
+  authenticateToken,
+  markNewEquipmentBeforeUpdate
 );
 
 /**
@@ -304,6 +351,19 @@ router.post(
 );
 
 /**
+ * POST /api/admin/reports/:id/decline/force
+ * Force decline with reassignment (handles conflict)
+ * Body: { admin_notes } - REQUIRED (min 10 chars)
+ * Used when admin confirms reassignment despite existing assignment
+ */
+router.post(
+  '/admin/reports/:id/decline/force',
+  authenticateToken,
+  validateRequest(declineReportSchema),
+  forceDeclineReport
+);
+
+/**
  * POST /api/admin/reports/:id/archive
  * Archive a report
  * Business Rule: Archived reports are completed but not for client distribution
@@ -312,6 +372,66 @@ router.post(
   '/admin/reports/:id/archive',
   authenticateToken,
   archiveReport
+);
+
+/**
+ * GET /api/admin/reports/:id/download
+ * Generate and download PDF report
+ * Business Rule: Admin only, generates PDF matching legacy format
+ */
+router.get(
+  '/admin/reports/:id/download',
+  authenticateToken,
+  adminDownloadReportPDF
+);
+
+/**
+ * POST /api/admin/reports/:id/email
+ * Generate PDF and email to client
+ * Business Rule: Admin only, emails PDF to client's registered email
+ */
+router.post(
+  '/admin/reports/:id/email',
+  authenticateToken,
+  adminEmailReportPDF
+);
+
+// ============================================================================
+// OFFLINE SYNC - JSON EXPORT/IMPORT
+// ============================================================================
+
+/**
+ * GET /api/pco/reports/:id/export-json
+ * Export a complete report as JSON for offline backup
+ * 
+ * Use Case: When sync fails, PCO can export report as JSON file
+ * Business Rules:
+ * - PCO can only export their own reports
+ * - Exports complete structure with all relationships
+ * - Preserves equipment tracking flags
+ */
+router.get(
+  '/pco/reports/:id/export-json',
+  authenticateToken,
+  exportReportAsJSON
+);
+
+/**
+ * POST /api/admin/reports/import-json
+ * Import a report from JSON file (for offline sync failures)
+ * 
+ * Use Case: Admin manually uploads report when offline sync failed
+ * Body: { reportData: <JSON structure from export> }
+ * Business Rules:
+ * - Admin only
+ * - Validates structure and required fields
+ * - Checks for duplicates
+ * - Transaction-based (all-or-nothing)
+ */
+router.post(
+  '/admin/reports/import-json',
+  authenticateToken,
+  importReportFromJSON
 );
 
 export default router;

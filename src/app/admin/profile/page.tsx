@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import Loading from '@/components/Loading';
 import { User, Mail, Phone, MapPin, Calendar, LogOut, Lock, Eye, EyeOff, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -100,7 +101,7 @@ export default function AdminProfile() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          <Loading size="lg" />
         </div>
       </DashboardLayout>
     );

@@ -10,8 +10,11 @@ router.get('/pco/reports', auth_1.authenticateToken, (0, validation_1.validateRe
 router.get('/pco/reports/pre-fill/:clientId', auth_1.authenticateToken, reportController_1.getPreFillData);
 router.get('/pco/reports/:id', auth_1.authenticateToken, reportController_1.getReportById);
 router.post('/pco/reports', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.createReportSchema), reportController_1.createReport);
+router.post('/pco/reports/complete', auth_1.authenticateToken, reportController_1.createCompleteReport);
 router.put('/pco/reports/:id', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.updateReportSchema), reportController_1.updateReport);
+router.put('/pco/reports/:id/complete', auth_1.authenticateToken, reportController_1.updateCompleteReport);
 router.delete('/pco/reports/:id', auth_1.authenticateToken, reportController_1.deleteReport);
+router.post('/pco/reports/:id/mark-new-equipment', auth_1.authenticateToken, reportController_1.markNewEquipmentBeforeUpdate);
 router.post('/pco/reports/:id/submit', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.submitReportSchema), reportController_1.submitReport);
 router.post('/pco/reports/:id/bait-stations', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.addBaitStationSchema), reportController_1.addBaitStation);
 router.put('/pco/reports/:id/bait-stations/:stationId', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.updateBaitStationSchema), reportController_1.updateBaitStation);
@@ -26,6 +29,11 @@ router.get('/admin/reports/:id', auth_1.authenticateToken, reportController_1.ge
 router.put('/admin/reports/:id', auth_1.authenticateToken, reportController_1.adminUpdateReport);
 router.post('/admin/reports/:id/approve', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.approveReportSchema), reportController_1.approveReport);
 router.post('/admin/reports/:id/decline', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.declineReportSchema), reportController_1.declineReport);
+router.post('/admin/reports/:id/decline/force', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.declineReportSchema), reportController_1.forceDeclineReport);
 router.post('/admin/reports/:id/archive', auth_1.authenticateToken, reportController_1.archiveReport);
+router.get('/admin/reports/:id/download', auth_1.authenticateToken, reportController_1.adminDownloadReportPDF);
+router.post('/admin/reports/:id/email', auth_1.authenticateToken, reportController_1.adminEmailReportPDF);
+router.get('/pco/reports/:id/export-json', auth_1.authenticateToken, reportController_1.exportReportAsJSON);
+router.post('/admin/reports/import-json', auth_1.authenticateToken, reportController_1.importReportFromJSON);
 exports.default = router;
 //# sourceMappingURL=reportRoutes.js.map

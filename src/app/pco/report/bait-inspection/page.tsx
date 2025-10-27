@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
 import StationForm from '@/components/StationForm';
+import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
 import { apiCall } from '@/lib/api';
@@ -76,7 +77,72 @@ function BaitInspectionContent() {
 
       // Load previously saved stations if any
       if (reportData.baitStations && Array.isArray(reportData.baitStations)) {
-        setStations(reportData.baitStations);
+        // Check if data is in DB format (has station_number) and needs transformation
+        const firstStation = reportData.baitStations[0];
+        if (firstStation && 'station_number' in firstStation) {
+          // Transform from DB format to frontend format
+          const transformedStations = reportData.baitStations.map((dbStation: any) => ({
+            id: dbStation.id,
+            stationNumber: dbStation.station_number,
+            location: dbStation.location,
+            accessible: dbStation.is_accessible,
+            accessReason: dbStation.inaccessible_reason || undefined,
+            activityDetected: dbStation.activity_detected,
+            activityTypes: [
+              dbStation.activity_droppings && 'droppings',
+              dbStation.activity_gnawing && 'gnawing',
+              dbStation.activity_tracks && 'tracks',
+              dbStation.activity_other && 'other'
+            ].filter(Boolean),
+            activityOtherDesc: dbStation.activity_other_description || undefined,
+            baitStatus: dbStation.bait_status,
+            stationCondition: dbStation.station_condition,
+            actionTaken: dbStation.action_taken || 'none',
+            warningSignCondition: dbStation.warning_sign_condition || 'good',
+            rodentBoxReplaced: dbStation.rodent_box_replaced || false,
+            remarks: dbStation.station_remarks || undefined,
+            chemicals: (dbStation.chemicals || []).map((chem: any) => ({
+              chemicalId: chem.chemical_id,
+              chemicalName: chem.chemical_name,
+              quantity: chem.quantity,
+              batchNumber: chem.batch_number
+            }))
+          }));
+          setStations(transformedStations);
+        } else {
+          // Already in frontend format
+          setStations(reportData.baitStations);
+        }
+      } else if (reportData.existingData?.baitStations && Array.isArray(reportData.existingData.baitStations)) {
+        // Load from existing report data (edit mode) and transform from DB format to frontend format
+        const transformedStations = reportData.existingData.baitStations.map((dbStation: any) => ({
+          id: dbStation.id,
+          stationNumber: dbStation.station_number,
+          location: dbStation.location,
+          accessible: dbStation.is_accessible,
+          accessReason: dbStation.inaccessible_reason || undefined,
+          activityDetected: dbStation.activity_detected,
+          activityTypes: [
+            dbStation.activity_droppings && 'droppings',
+            dbStation.activity_gnawing && 'gnawing',
+            dbStation.activity_tracks && 'tracks',
+            dbStation.activity_other && 'other'
+          ].filter(Boolean),
+          activityOtherDesc: dbStation.activity_other_description || undefined,
+          baitStatus: dbStation.bait_status,
+          stationCondition: dbStation.station_condition,
+          actionTaken: dbStation.action_taken || 'none',
+          warningSignCondition: dbStation.warning_sign_condition || 'good',
+          rodentBoxReplaced: dbStation.rodent_box_replaced || false,
+          remarks: dbStation.station_remarks || undefined,
+          chemicals: (dbStation.chemicals || []).map((chem: any) => ({
+            chemicalId: chem.chemical_id,
+            chemicalName: chem.chemical_name,
+            quantity: chem.quantity,
+            batchNumber: chem.batch_number
+          }))
+        }));
+        setStations(transformedStations);
       }
 
       // Fetch chemicals
@@ -85,8 +151,8 @@ function BaitInspectionContent() {
         setChemicals(chemicalsResponse.data);
       }
 
-      // Fetch previous report data for pre-filling
-      if (reportData.clientId) {
+      // Fetch previous report data for pre-filling (only if not in edit mode)
+      if (reportData.clientId && !reportData.isEditMode) {
         try {
           const previousReportResponse = await apiCall(`/api/pco/reports/last-for-client/${reportData.clientId}`);
           if (previousReportResponse.success && previousReportResponse.data?.bait_stations) {
@@ -251,43 +317,79 @@ function BaitInspectionContent() {
 
   const updateClientStationCounts = async (insideCount: number, outsideCount: number) => {
     try {
-      const response = await apiCall(`/api/pco/clients/${client.id}/update-counts`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          total_bait_stations_inside: insideCount,
-          total_bait_stations_outside: outsideCount
-        })
-      });
+      console.log('=== UPDATING CLIENT STATION COUNTS (LOCAL ONLY) ===');
+      console.log('Expected inside:', client?.total_bait_stations_inside, '→ New:', insideCount);
+      console.log('Expected outside:', client?.total_bait_stations_outside, '→ New:', outsideCount);
 
-      if (response.success) {
-        // Update local state
-        setClient((prev: any) => ({
-          ...prev,
-          total_bait_stations_inside: insideCount,
-          total_bait_stations_outside: outsideCount
-        }));
+      // Store old expected counts for missing check
+      const oldExpectedInside = client?.total_bait_stations_inside || 0;
+      const oldExpectedOutside = client?.total_bait_stations_outside || 0;
 
-        // Update localStorage
-        const savedReport = localStorage.getItem('current_report');
-        if (savedReport) {
-          const reportData = JSON.parse(savedReport);
-          reportData.client.total_bait_stations_inside = insideCount;
-          reportData.client.total_bait_stations_outside = outsideCount;
-          localStorage.setItem('current_report', JSON.stringify(reportData));
-        }
+      // Update local state
+      setClient((prev: any) => ({
+        ...prev,
+        total_bait_stations_inside: insideCount,
+        total_bait_stations_outside: outsideCount
+      }));
 
-        alert.showSuccess('Client station counts updated successfully!');
-        // Continue with missing check
-        if (!checkForMissingStations()) {
-          return;
-        }
-        proceedToNextStep();
-      } else {
-        alert.showError(response.message || 'Failed to update station counts');
+      // Update localStorage
+      const savedReport = localStorage.getItem('current_report');
+      if (savedReport) {
+        const reportData = JSON.parse(savedReport);
+        reportData.client.total_bait_stations_inside = insideCount;
+        reportData.client.total_bait_stations_outside = outsideCount;
+        localStorage.setItem('current_report', JSON.stringify(reportData));
+        console.log('Updated localStorage with new counts');
       }
+
+      // Don't show success alert here - it conflicts with missing stations check
+      
+      console.log('Checking for missing stations using OLD expected counts...');
+      // Check for missing stations using OLD expected counts (before update)
+      const insideStations = stations.filter(s => s.location === 'inside');
+      const outsideStations = stations.filter(s => s.location === 'outside');
+      
+      console.log('Inside stations:', insideStations.length, 'Expected (old):', oldExpectedInside);
+      console.log('Outside stations:', outsideStations.length, 'Expected (old):', oldExpectedOutside);
+      
+      const missingInside = oldExpectedInside - insideStations.length;
+      const missingOutside = oldExpectedOutside - outsideStations.length;
+
+      console.log('Missing inside:', missingInside, 'Missing outside:', missingOutside);
+
+      if (missingInside > 0 || missingOutside > 0) {
+        let message = 'Expected stations:\n';
+        if (missingInside > 0) {
+          message += `\n• ${missingInside} Inside stations missing`;
+        }
+        if (missingOutside > 0) {
+          message += `\n• ${missingOutside} Outside stations missing`;
+        }
+        message += '\n\nDo you want to continue anyway?';
+
+        console.log('Showing missing stations confirmation...');
+        
+        // Small delay to let the first alert fully close
+        setTimeout(() => {
+          alert.showConfirm(
+            message,
+            () => {
+              console.log('Missing stations confirmed - proceeding to next step');
+              proceedToNextStep();
+            },
+            'Missing Stations',
+            'warning'
+          );
+        }, 100);
+        return;
+      }
+      
+      console.log('No missing stations - proceeding to next step...');
+      proceedToNextStep();
     } catch (error) {
-      console.error('Error updating station counts:', error);
-      alert.showError('Failed to update station counts');
+      console.error('=== ERROR IN updateClientStationCounts ===');
+      console.error('Error details:', error);
+      alert.showError('Failed to update station counts. Check console for details.');
     }
   };
 
@@ -361,7 +463,7 @@ function BaitInspectionContent() {
     return (
       <ReportLayout currentStep={2} totalSteps={5} title="Bait Inspection">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     );
@@ -543,7 +645,7 @@ export default function BaitInspectionPage() {
     <Suspense fallback={
       <ReportLayout currentStep={2} totalSteps={5} title="Bait Inspection">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     }>

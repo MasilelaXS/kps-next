@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
 import { 
   Users, 
@@ -430,7 +431,7 @@ export default function UsersPage() {
     return (
       <DashboardLayout >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <Loading size="lg" text="Loading users..." />
         </div>
       </DashboardLayout>
     );

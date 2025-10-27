@@ -3,11 +3,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.optionalAuth = exports.requirePCO = exports.requireAdmin = exports.requireRole = exports.authenticateToken = void 0;
+exports.optionalAuth = exports.requirePCO = exports.requireAdmin = exports.requireRole = exports.authenticateToken = exports.hasRole = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const env_1 = require("../config/env");
+const hasRole = (user, requiredRole) => {
+    if (!user)
+        return false;
+    return user.role === 'both' || user.role === requiredRole;
+};
+exports.hasRole = hasRole;
 const authenticateToken = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -76,21 +82,12 @@ const authenticateToken = async (req, res, next) => {
         req.user = {
             id: session.user_id,
             login_id: session.pco_number,
-            role: session.role_context || session.role,
+            role: session.role,
             first_name: session.name,
             last_name: '',
             email: session.email,
             session_id: decoded.sessionId
         };
-        if (session.role === 'both') {
-            logger_1.logger.info('Dual-role user authenticated', {
-                user_id: session.user_id,
-                actual_role: session.role,
-                role_context: session.role_context,
-                req_user_role: req.user.role,
-                endpoint: req.originalUrl
-            });
-        }
         (0, logger_1.logAuth)('token_validated', session.id, {
             session_id: decoded.sessionId,
             ip: req.ip

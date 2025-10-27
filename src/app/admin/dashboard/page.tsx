@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import Loading from '@/components/Loading';
 import { Users, Building2, FileText, CheckCircle, TrendingUp, Clock, Hand } from 'lucide-react';
 import { API_CONFIG } from '@/lib/api';
 
@@ -78,9 +79,9 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <DashboardLayout >
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-12">
+          <Loading size="lg" text="Loading dashboard..." />
         </div>
       </DashboardLayout>
     );

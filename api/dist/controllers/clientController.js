@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClientController = void 0;
+const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const notificationController_1 = require("./notificationController");
@@ -42,7 +43,7 @@ class ClientController {
     }
     static async getClientList(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -83,6 +84,16 @@ class ClientController {
             const countResult = await (0, database_1.executeQuerySingle)(countQuery, queryParams);
             const totalClients = countResult?.total || 0;
             const totalPages = Math.ceil(totalClients / limitNum);
+            const statsQuery = `
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count,
+          SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive_count,
+          SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) as suspended_count
+        FROM clients
+        WHERE deleted_at IS NULL
+      `;
+            const statsResult = await (0, database_1.executeQuerySingle)(statsQuery);
             const clientsQuery = `
         SELECT 
           c.id,
@@ -96,6 +107,7 @@ class ClientController {
           c.created_at,
           c.updated_at,
           -- PCO Assignment info
+          cpa.id as assignment_id,
           u.id as assigned_pco_id,
           u.name as assigned_pco_name,
           u.pco_number as assigned_pco_number,
@@ -122,11 +134,18 @@ class ClientController {
                 has_next: pageNum < totalPages,
                 has_prev: pageNum > 1
             };
+            const stats = {
+                total: statsResult?.total || 0,
+                active: statsResult?.active_count || 0,
+                inactive: statsResult?.inactive_count || 0,
+                suspended: statsResult?.suspended_count || 0
+            };
             res.json({
                 success: true,
                 data: {
                     clients,
                     pagination,
+                    stats,
                     filters: {
                         status: status || 'all',
                         pco_id: pco_id || 'all',
@@ -148,7 +167,7 @@ class ClientController {
     }
     static async createClient(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -296,7 +315,7 @@ class ClientController {
     }
     static async getClientById(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -307,13 +326,20 @@ class ClientController {
             const client = await (0, database_1.executeQuerySingle)(`
         SELECT 
           c.id,
+          c.company_number,
           c.company_name,
           c.address_line1,
           c.address_line2,
           c.city,
           c.state,
           c.postal_code,
+          c.country,
+          c.total_bait_stations_inside,
+          c.total_bait_stations_outside,
+          c.total_insect_monitors_light,
+          c.total_insect_monitors_box,
           c.status,
+          c.service_notes,
           c.created_at,
           c.updated_at,
           -- Current PCO assignment
@@ -392,7 +418,7 @@ class ClientController {
     }
     static async updateClient(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -400,7 +426,7 @@ class ClientController {
                 return;
             }
             const { id } = req.params;
-            const { company_name, address_line1, address_line2, city, state, postal_code, country, total_bait_stations_inside, total_bait_stations_outside, total_insect_monitors_light, total_insect_monitors_box } = req.body;
+            const { company_number, company_name, address_line1, address_line2, city, state, postal_code, country, service_notes, total_bait_stations_inside, total_bait_stations_outside, total_insect_monitors_light, total_insect_monitors_box } = req.body;
             const existingClient = await (0, database_1.executeQuerySingle)('SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL', [id]);
             if (!existingClient) {
                 res.status(404).json({
@@ -422,6 +448,7 @@ class ClientController {
             const updateQuery = `
         UPDATE clients 
         SET 
+          company_number = ?,
           company_name = ?, 
           address_line1 = ?, 
           address_line2 = ?, 
@@ -429,6 +456,7 @@ class ClientController {
           state = ?, 
           postal_code = ?,
           country = ?,
+          service_notes = ?,
           total_bait_stations_inside = ?,
           total_bait_stations_outside = ?,
           total_insect_monitors_light = ?,
@@ -437,6 +465,7 @@ class ClientController {
         WHERE id = ?
       `;
             await (0, database_1.executeQuery)(updateQuery, [
+                company_number !== undefined ? company_number : existingClient.company_number,
                 company_name || existingClient.company_name,
                 address_line1 || existingClient.address_line1,
                 address_line2 !== undefined ? address_line2 : existingClient.address_line2,
@@ -444,13 +473,20 @@ class ClientController {
                 state || existingClient.state,
                 postal_code || existingClient.postal_code,
                 country !== undefined ? country : existingClient.country,
+                service_notes !== undefined ? service_notes : existingClient.service_notes,
                 total_bait_stations_inside !== undefined ? total_bait_stations_inside : existingClient.total_bait_stations_inside,
                 total_bait_stations_outside !== undefined ? total_bait_stations_outside : existingClient.total_bait_stations_outside,
                 total_insect_monitors_light !== undefined ? total_insect_monitors_light : existingClient.total_insect_monitors_light,
                 total_insect_monitors_box !== undefined ? total_insect_monitors_box : existingClient.total_insect_monitors_box,
                 id
             ]);
-            const updatedClient = await (0, database_1.executeQuerySingle)('SELECT id, company_name, address_line1, address_line2, city, state, postal_code, status, created_at, updated_at FROM clients WHERE id = ?', [id]);
+            const updatedClient = await (0, database_1.executeQuerySingle)(`SELECT 
+          id, company_number, company_name, address_line1, address_line2, 
+          city, state, postal_code, country, 
+          total_bait_stations_inside, total_bait_stations_outside, 
+          total_insect_monitors_light, total_insect_monitors_box, 
+          status, service_notes, created_at, updated_at 
+        FROM clients WHERE id = ?`, [id]);
             logger_1.logger.info('Client updated', {
                 client_id: id,
                 updated_fields: { company_name, address_line1, city, state },
@@ -476,7 +512,7 @@ class ClientController {
     }
     static async deleteClient(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -532,7 +568,7 @@ class ClientController {
     }
     static async getClientContacts(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -588,7 +624,7 @@ class ClientController {
     }
     static async addClientContact(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -639,7 +675,7 @@ class ClientController {
     }
     static async updateClientContact(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -698,7 +734,7 @@ class ClientController {
     }
     static async deleteClientContact(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -749,7 +785,7 @@ class ClientController {
     }
     static async getClientReports(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -819,7 +855,7 @@ class ClientController {
     }
     static async assignPcoToClient(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -897,7 +933,7 @@ class ClientController {
     }
     static async unassignPcoFromClient(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -961,7 +997,7 @@ class ClientController {
     }
     static async getClientPcoAssignments(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -1027,7 +1063,7 @@ class ClientController {
     }
     static async searchClients(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'

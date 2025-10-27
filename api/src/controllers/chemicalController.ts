@@ -564,9 +564,12 @@ export class ChemicalController {
     try {
       const { usage_type } = req.params;
 
+      console.log('getChemicalsForPco called with usage_type:', usage_type);
+
       // Validate usage type
       const validTypes = ['bait_inspection', 'fumigation', 'multi_purpose'];
       if (!validTypes.includes(usage_type)) {
+        console.log('Invalid usage_type:', usage_type);
         res.status(400).json({
           success: false,
           message: 'Invalid usage type. Must be: bait_inspection, fumigation, or multi_purpose'
@@ -582,23 +585,25 @@ export class ChemicalController {
           active_ingredients,
           usage_type,
           quantity_unit,
-          safety_information,
-          l_number,
-          batch_number
+          safety_information
         FROM chemicals
         WHERE (usage_type = ? OR usage_type = 'multi_purpose') AND status = 'active'
         ORDER BY name ASC
       `;
 
+      console.log('Executing query with param:', usage_type);
       const chemicals = await executeQuery(query, [usage_type]);
+      console.log('Query result count:', chemicals.length);
 
       res.json({
         success: true,
         data: chemicals
       });
     } catch (error) {
+      console.error('Get chemicals for PCO error:', error);
       logger.error('Get chemicals for PCO error', { 
         error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
         usage_type: req.params.usage_type,
         user_id: req.user?.id 
       });

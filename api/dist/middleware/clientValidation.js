@@ -60,6 +60,10 @@ const clientInputSchema = joi_1.default.object({
     })).optional().default([])
 });
 const clientUpdateSchema = joi_1.default.object({
+    company_number: joi_1.default.string().trim().max(50).allow('', null).optional()
+        .messages({
+        'string.max': 'Company number cannot exceed 50 characters'
+    }),
     company_name: joi_1.default.string().trim().min(2).max(255).optional()
         .messages({
         'string.min': 'Company name must be at least 2 characters',
@@ -85,6 +89,14 @@ const clientUpdateSchema = joi_1.default.object({
         .messages({
         'string.min': 'Postal code must be at least 3 characters',
         'string.max': 'Postal code cannot exceed 20 characters'
+    }),
+    country: joi_1.default.string().trim().max(100).optional()
+        .messages({
+        'string.max': 'Country cannot exceed 100 characters'
+    }),
+    service_notes: joi_1.default.string().trim().max(65535).allow('', null).optional()
+        .messages({
+        'string.max': 'Service notes cannot exceed 65535 characters'
     }),
     total_bait_stations_inside: joi_1.default.number().integer().min(0).optional()
         .messages({

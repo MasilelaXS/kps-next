@@ -1,12 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AssignmentController = void 0;
+const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 class AssignmentController {
     static async getAssignmentList(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -101,7 +102,7 @@ class AssignmentController {
     }
     static async getAssignmentStats(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -122,14 +123,15 @@ class AssignmentController {
           u.id as pco_id,
           u.name as pco_name,
           u.pco_number,
+          u.role,
           COUNT(ca.id) as client_count,
           (SELECT COUNT(*) FROM reports WHERE pco_id = u.id) as total_reports,
           (SELECT COUNT(*) FROM reports WHERE pco_id = u.id 
            AND service_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as reports_last_30_days
         FROM users u
         LEFT JOIN client_pco_assignments ca ON u.id = ca.pco_id AND ca.status = 'active'
-        WHERE u.role IN ('pco', 'admin') AND u.status = 'active'
-        GROUP BY u.id
+        WHERE u.role IN ('pco', 'admin', 'both') AND u.status = 'active'
+        GROUP BY u.id, u.role
         ORDER BY client_count DESC
       `);
             const avgWorkload = pcoWorkload.length > 0
@@ -171,7 +173,7 @@ class AssignmentController {
     }
     static async bulkAssignClients(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -187,7 +189,7 @@ class AssignmentController {
                 });
                 return;
             }
-            if (pco.role !== 'pco' && pco.role !== 'admin') {
+            if (pco.role !== 'pco' && pco.role !== 'admin' && pco.role !== 'both') {
                 res.status(400).json({
                     success: false,
                     message: 'User must have PCO or Admin role'
@@ -262,7 +264,7 @@ class AssignmentController {
     }
     static async bulkUnassignClients(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -323,7 +325,7 @@ class AssignmentController {
     }
     static async getWorkloadBalance(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -335,11 +337,12 @@ class AssignmentController {
           u.id,
           u.name,
           u.pco_number,
+          u.role,
           COUNT(ca.id) as current_clients
         FROM users u
         LEFT JOIN client_pco_assignments ca ON u.id = ca.pco_id AND ca.status = 'active'
-        WHERE u.role IN ('pco', 'admin') AND u.status = 'active'
-        GROUP BY u.id
+        WHERE u.role IN ('pco', 'admin', 'both') AND u.status = 'active'
+        GROUP BY u.id, u.role
         ORDER BY current_clients ASC
       `);
             const unassignedClients = await (0, database_1.executeQuery)(`
@@ -414,6 +417,52 @@ class AssignmentController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to calculate workload balance'
+            });
+        }
+    }
+    static async getPCOAssignments(req, res) {
+        try {
+            const pcoId = req.user.id;
+            const query = `
+        SELECT 
+          ca.id as assignment_id,
+          ca.client_id,
+          c.company_name as client_name,
+          c.company_number,
+          c.address_line1,
+          c.address_line2,
+          c.city,
+          c.state,
+          c.postal_code,
+          c.country,
+          c.total_bait_stations_inside,
+          c.total_bait_stations_outside,
+          c.total_insect_monitors_light,
+          c.total_insect_monitors_box,
+          c.status as client_status,
+          ca.assigned_at
+        FROM client_pco_assignments ca
+        JOIN clients c ON ca.client_id = c.id
+        WHERE ca.pco_id = ? AND ca.status = 'active'
+        ORDER BY c.company_name ASC
+      `;
+            const assignments = await (0, database_1.executeQuery)(query, [pcoId]);
+            res.json({
+                success: true,
+                data: assignments,
+                total: Array.isArray(assignments) ? assignments.length : 0
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Get PCO assignments error', {
+                error: error instanceof Error ? error.message : error,
+                stack: error instanceof Error ? error.stack : undefined,
+                user_id: req.user?.id
+            });
+            res.status(500).json({
+                success: false,
+                message: 'Failed to retrieve assignments',
+                error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
             });
         }
     }

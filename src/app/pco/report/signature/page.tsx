@@ -4,9 +4,10 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
 import TextBox from '@/components/TextBox';
+import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
-import { PenTool, Trash2, AlertCircle, User } from 'lucide-react';
+import { RotateCcw, AlertCircle, User, PenTool, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 // Dynamically import SignatureCanvas to avoid SSR issues
@@ -51,8 +52,15 @@ export default function ClientSignature() {
 
       setReport(reportData);
       
-      // Pre-fill client name from contact if available
-      if (reportData.client?.contacts?.[0]?.name) {
+      // Pre-fill client name from multiple sources (in order of priority)
+      if (reportData.clientName) {
+        // Already saved from previous edit
+        setClientName(reportData.clientName);
+      } else if (reportData.existingData?.clientName) {
+        // From existing report data (edit mode)
+        setClientName(reportData.existingData.clientName);
+      } else if (reportData.client?.contacts?.[0]?.name) {
+        // From client contact
         setClientName(reportData.client.contacts[0].name);
       }
 
@@ -63,6 +71,14 @@ export default function ClientSignature() {
         setTimeout(() => {
           if (signatureRef.current) {
             signatureRef.current.fromDataURL(reportData.clientSignature);
+          }
+        }, 100);
+      } else if (reportData.existingData?.clientSignature) {
+        // Load from existing report data (edit mode)
+        setHasSignature(true);
+        setTimeout(() => {
+          if (signatureRef.current) {
+            signatureRef.current.fromDataURL(reportData.existingData.clientSignature);
           }
         }, 100);
       }
@@ -120,7 +136,7 @@ export default function ClientSignature() {
     return (
       <ReportLayout currentStep={4} totalSteps={5} title="Client Signature">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     );

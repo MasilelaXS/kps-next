@@ -16,6 +16,7 @@ import {
   LogOut
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import Loading from './Loading';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -75,7 +76,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (!mounted || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <Loading size="lg" />
       </div>
     );
   }
@@ -84,7 +85,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (roleContext !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <Loading size="lg" />
       </div>
     );
   }

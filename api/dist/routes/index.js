@@ -50,6 +50,7 @@ router.use('/admin/users', userRoutes_1.default);
 router.use('/admin/clients', clientRoutes_1.default);
 router.use('/', chemicalRoutes_1.default);
 router.use('/admin/assignments', assignmentRoutes_1.default);
+router.use('/pco/assignments', assignmentRoutes_1.default);
 router.use('/', reportRoutes_1.default);
 router.use('/pco/dashboard', pcoDashboardRoutes_1.default);
 router.use('/', pcoSyncRoutes_1.default);

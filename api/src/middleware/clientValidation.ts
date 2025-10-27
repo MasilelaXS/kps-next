@@ -79,6 +79,11 @@ const clientInputSchema = Joi.object({
 });
 
 const clientUpdateSchema = Joi.object({
+  company_number: Joi.string().trim().max(50).allow('', null).optional()
+    .messages({
+      'string.max': 'Company number cannot exceed 50 characters'
+    }),
+  
   company_name: Joi.string().trim().min(2).max(255).optional()
     .messages({
       'string.min': 'Company name must be at least 2 characters',
@@ -109,6 +114,16 @@ const clientUpdateSchema = Joi.object({
     .messages({
       'string.min': 'Postal code must be at least 3 characters',
       'string.max': 'Postal code cannot exceed 20 characters'
+    }),
+  
+  country: Joi.string().trim().max(100).optional()
+    .messages({
+      'string.max': 'Country cannot exceed 100 characters'
+    }),
+  
+  service_notes: Joi.string().trim().max(65535).allow('', null).optional()
+    .messages({
+      'string.max': 'Service notes cannot exceed 65535 characters'
     }),
   
   // Station and monitor counts

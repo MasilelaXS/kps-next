@@ -1,12 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChemicalController = void 0;
+const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 class ChemicalController {
     static async getChemicalList(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -88,7 +89,7 @@ class ChemicalController {
     }
     static async createChemical(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -194,7 +195,7 @@ class ChemicalController {
     }
     static async updateChemical(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -276,7 +277,7 @@ class ChemicalController {
     }
     static async updateChemicalStatus(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -385,8 +386,10 @@ class ChemicalController {
     static async getChemicalsForPco(req, res) {
         try {
             const { usage_type } = req.params;
+            console.log('getChemicalsForPco called with usage_type:', usage_type);
             const validTypes = ['bait_inspection', 'fumigation', 'multi_purpose'];
             if (!validTypes.includes(usage_type)) {
+                console.log('Invalid usage_type:', usage_type);
                 res.status(400).json({
                     success: false,
                     message: 'Invalid usage type. Must be: bait_inspection, fumigation, or multi_purpose'
@@ -400,22 +403,24 @@ class ChemicalController {
           active_ingredients,
           usage_type,
           quantity_unit,
-          safety_information,
-          l_number,
-          batch_number
+          safety_information
         FROM chemicals
         WHERE (usage_type = ? OR usage_type = 'multi_purpose') AND status = 'active'
         ORDER BY name ASC
       `;
+            console.log('Executing query with param:', usage_type);
             const chemicals = await (0, database_1.executeQuery)(query, [usage_type]);
+            console.log('Query result count:', chemicals.length);
             res.json({
                 success: true,
                 data: chemicals
             });
         }
         catch (error) {
+            console.error('Get chemicals for PCO error:', error);
             logger_1.logger.error('Get chemicals for PCO error', {
                 error: error instanceof Error ? error.message : error,
+                stack: error instanceof Error ? error.stack : undefined,
                 usage_type: req.params.usage_type,
                 user_id: req.user?.id
             });
@@ -487,7 +492,7 @@ class ChemicalController {
     }
     static async deleteChemical(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'

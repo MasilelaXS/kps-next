@@ -11,7 +11,7 @@ exports.reportListQuerySchema = joi_1.default.object({
     client_id: joi_1.default.number().integer().optional(),
     pco_id: joi_1.default.number().integer().optional(),
     status: joi_1.default.string().valid('draft', 'pending', 'approved', 'declined', 'archived', 'all').optional(),
-    status_group: joi_1.default.string().valid('draft', 'approved', 'emailed', 'archived', 'all').optional(),
+    status_group: joi_1.default.string().valid('draft', 'approved', 'declined', 'emailed', 'archived', 'all').optional(),
     report_type: joi_1.default.string().valid('bait_inspection', 'fumigation', 'both', 'all').optional(),
     search: joi_1.default.string().optional(),
     date_from: joi_1.default.date().optional(),
@@ -82,6 +82,7 @@ exports.addBaitStationSchema = joi_1.default.object({
     station_number: joi_1.default.string().max(20).required()
         .messages({
         'any.required': 'Station number is required',
+        'string.base': 'Station number must be a string',
         'string.max': 'Station number must not exceed 20 characters'
     }),
     location: joi_1.default.string().valid('inside', 'outside').required()
@@ -139,7 +140,11 @@ exports.addBaitStationSchema = joi_1.default.object({
     chemicals: joi_1.default.array().items(baitStationChemicalSchema).optional().default([])
 });
 exports.updateBaitStationSchema = joi_1.default.object({
-    station_number: joi_1.default.string().max(20).optional(),
+    station_number: joi_1.default.string().max(20).optional()
+        .messages({
+        'string.base': 'Station number must be a string',
+        'string.max': 'Station number must not exceed 20 characters'
+    }),
     location: joi_1.default.string().valid('inside', 'outside').optional(),
     is_accessible: joi_1.default.boolean().optional(),
     inaccessible_reason: joi_1.default.string().max(255).optional().allow(null, ''),
@@ -218,10 +223,10 @@ exports.updateFumigationSchema = joi_1.default.object({
     })
 });
 exports.addInsectMonitorSchema = joi_1.default.object({
-    monitor_type: joi_1.default.string().valid('box', 'fly_trap').required()
+    monitor_type: joi_1.default.string().valid('box', 'light').required()
         .messages({
         'any.required': 'Monitor type is required',
-        'any.only': 'Monitor type must be either box or fly_trap'
+        'any.only': 'Monitor type must be either box or light'
     }),
     monitor_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'other').required()
         .messages({
@@ -242,9 +247,9 @@ exports.addInsectMonitorSchema = joi_1.default.object({
     }),
     light_condition: joi_1.default.string().valid('good', 'faulty', 'na').optional().default('na')
         .when('monitor_type', {
-        is: 'fly_trap',
+        is: 'light',
         then: joi_1.default.valid('good', 'faulty').required().messages({
-            'any.required': 'Light condition is required for fly trap monitors'
+            'any.required': 'Light condition is required for light monitors'
         })
     }),
     light_faulty_type: joi_1.default.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional().default('na')
@@ -267,9 +272,9 @@ exports.addInsectMonitorSchema = joi_1.default.object({
     }),
     tubes_replaced: joi_1.default.boolean().optional().allow(null)
         .when('monitor_type', {
-        is: 'fly_trap',
+        is: 'light',
         then: joi_1.default.required().messages({
-            'any.required': 'Tubes replacement status is required for fly traps'
+            'any.required': 'Tubes replacement status is required for light monitors'
         })
     }),
     monitor_serviced: joi_1.default.boolean().required()
@@ -278,7 +283,7 @@ exports.addInsectMonitorSchema = joi_1.default.object({
     })
 });
 exports.updateInsectMonitorSchema = joi_1.default.object({
-    monitor_type: joi_1.default.string().valid('box', 'fly_trap').optional(),
+    monitor_type: joi_1.default.string().valid('box', 'light').optional(),
     monitor_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'other').optional(),
     monitor_condition_other: joi_1.default.string().max(255).optional().allow(null, ''),
     warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted').optional(),

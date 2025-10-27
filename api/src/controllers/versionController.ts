@@ -57,8 +57,8 @@ export class VersionController {
       
       const params: any[] = [];
       
-      if (platform && platform !== 'both') {
-        query += ` AND (platform = ? OR platform = 'both')`;
+      if (platform && platform !== 'all') {
+        query += ` AND (platform = ? OR platform = 'all')`;
         params.push(platform);
       }
       
@@ -186,7 +186,7 @@ export class VersionController {
       if (force_update) {
         await executeQuery(
           'UPDATE app_versions SET is_active = 0 WHERE platform = ? OR platform = ?',
-          [platform || 'both', 'both']
+          [platform || 'all', 'all']
         );
       }
 
@@ -201,7 +201,7 @@ export class VersionController {
         ) VALUES (?, ?, ?, ?, 1)
       `, [
         version,
-        platform || 'both',
+        platform || 'all',
         force_update || false,
         release_notes || `Release version ${version}`
       ]);
@@ -214,7 +214,7 @@ export class VersionController {
 
       logger.info('New version released', {
         version,
-        platform: platform || 'both',
+        platform: platform || 'all',
         force_update: force_update || false,
         released_by: req.user!.id,
         admin_name: req.user!.first_name || req.user!.login_id
@@ -271,8 +271,8 @@ export class VersionController {
       const params: any[] = [];
       const conditions: string[] = [];
       
-      if (platform && platform !== 'both' && platform !== 'all') {
-        conditions.push('(platform = ? OR platform = "both")');
+      if (platform && platform !== 'all') {
+        conditions.push('(platform = ? OR platform = "all")');
         params.push(platform);
       }
       

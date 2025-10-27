@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
+import Loading from '@/components/Loading';
 import { apiCall } from '@/lib/api';
 import { 
   CheckCircle, 
@@ -23,6 +24,7 @@ export default function SubmitReport() {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<any>(null);
   const [reportId, setReportId] = useState<number | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
     loadReportData();
@@ -44,6 +46,12 @@ export default function SubmitReport() {
         setError('Please complete the client signature first.');
         setLoading(false);
         return;
+      }
+
+      // Check if this is an edit/resubmit
+      if (reportData.isEditMode && reportData.reportId) {
+        setIsEditMode(true);
+        setReportId(reportData.reportId);
       }
 
       setReport(reportData);
@@ -77,61 +85,30 @@ export default function SubmitReport() {
 
       // Map frontend report type to backend format
       const reportTypeMap: { [key: string]: string } = {
-        'bait': 'bait_inspection',
+        'bait': 'general',
         'fumigation': 'fumigation',
         'both': 'both'
       };
 
-      let newReportId: number;
-
-      // Step 1: Create the report (or use existing draft)
-      const createPayload = {
-        client_id: report.clientId,
-        report_type: reportTypeMap[report.reportType] || report.reportType,
+      // Prepare complete report payload for single endpoint submission
+      const completeReportPayload: any = {
+        client_id: report.clientId || report.client?.id,
+        report_type: reportTypeMap[report.reportType] || 'bait_inspection',
         service_date: report.serviceDate,
         next_service_date: report.nextServiceDate,
         pco_signature_data: report.pcoSignature,
+        client_signature_data: report.clientSignature,
+        client_signature_name: report.clientName,
         general_remarks: report.generalRemarks || null
       };
 
-      const createResponse = await apiCall('/api/pco/reports', {
-        method: 'POST',
-        body: JSON.stringify(createPayload)
-      });
-
-      if (!createResponse.success) {
-        // If there's an existing draft, delete it and try again
-        if (createResponse.existing_draft_id) {
-          await apiCall(`/api/pco/reports/${createResponse.existing_draft_id}`, {
-            method: 'DELETE'
-          });
-
-          // Retry creating the report
-          const retryResponse = await apiCall('/api/pco/reports', {
-            method: 'POST',
-            body: JSON.stringify(createPayload)
-          });
-
-          if (!retryResponse.success) {
-            throw new Error(retryResponse.message || 'Failed to create report after deleting draft');
-          }
-
-          newReportId = retryResponse.report_id;
-        } else {
-          throw new Error(createResponse.message || 'Failed to create report');
-        }
-      } else {
-        newReportId = createResponse.report_id;
-      }
-
-      setReportId(newReportId);
-
-      // Step 2: Add bait stations if report type includes bait
+      // Add bait stations if report type includes bait
       if ((report.reportType === 'bait' || report.reportType === 'both') && report.baitStations?.length > 0) {
-        console.log('Adding', report.baitStations.length, 'bait stations...');
+        console.log('=== BAIT STATIONS BEFORE MAPPING ===');
+        console.log('First station:', JSON.stringify(report.baitStations[0], null, 2));
+        console.log('Total stations:', report.baitStations.length);
         
-        for (const station of report.baitStations) {
-          const baitStationPayload = {
+        completeReportPayload.bait_stations = report.baitStations.map((station: any) => ({
             station_number: station.stationNumber,
             location: station.location, // 'inside' or 'outside'
             is_accessible: station.accessible,
@@ -153,24 +130,12 @@ export default function SubmitReport() {
               quantity: chem.quantity,
               batch_number: chem.batchNumber
             })) || []
-          };
-
-          const baitResponse = await apiCall(`/api/pco/reports/${newReportId}/bait-stations`, {
-            method: 'POST',
-            body: JSON.stringify(baitStationPayload)
-          });
-
-          if (!baitResponse.success) {
-            console.error('Failed to save bait station:', baitResponse);
-            throw new Error(baitResponse.message || 'Failed to save bait station data');
-          }
-        }
+          }));
       }
 
-      // Step 3: Add fumigation data if report type includes fumigation
+      // Add fumigation data if report type includes fumigation
       if ((report.reportType === 'fumigation' || report.reportType === 'both') && report.fumigation) {
-        // Prepare fumigation data payload
-        const fumigationPayload = {
+        completeReportPayload.fumigation = {
           areas: report.fumigation.areas?.map((area: string) => {
             const isOther = area === 'Other';
             return {
@@ -191,22 +156,13 @@ export default function SubmitReport() {
             chemical_id: chem.chemicalId,
             quantity: Number(chem.quantity),
             batch_number: chem.batchNumber || null
-          })) || []
+          })) || [],
+          monitors: []
         };
-
-        // Submit all fumigation data in one request
-        const fumigationResponse = await apiCall(`/api/pco/reports/${newReportId}/fumigation`, {
-          method: 'PUT',
-          body: JSON.stringify(fumigationPayload)
-        });
-
-        if (!fumigationResponse.success) {
-          throw new Error(fumigationResponse.message || 'Failed to save fumigation data');
-        }
 
         // Add insect monitors if any
         if (Array.isArray(report.fumigation.monitors) && report.fumigation.monitors.length > 0) {
-          for (const monitor of report.fumigation.monitors) {
+          completeReportPayload.fumigation.monitors = report.fumigation.monitors.map((monitor: any) => {
             const isFlyTrap = monitor.type === 'light';
             
             // Map frontend condition values to backend values
@@ -224,7 +180,7 @@ export default function SubmitReport() {
             }
             
             const monitorPayload: any = {
-              monitor_type: isFlyTrap ? 'fly_trap' : 'box',
+              monitor_type: isFlyTrap ? 'light' : 'box',
               monitor_condition: backendCondition,
               monitor_condition_other: monitor.conditionOther || null,
               warning_sign_condition: monitor.warningSignCondition || 'good',
@@ -245,53 +201,43 @@ export default function SubmitReport() {
               monitorPayload.tubes_replaced = null;
             }
 
-            console.log('Submitting monitor:', JSON.stringify(monitorPayload, null, 2));
-
-            const monitorResponse = await apiCall(`/api/pco/reports/${newReportId}/insect-monitors`, {
-              method: 'POST',
-              body: JSON.stringify(monitorPayload)
-            });
-
-            console.log('Monitor response:', JSON.stringify(monitorResponse, null, 2));
-
-            if (!monitorResponse.success) {
-              console.error('Failed to save monitor:', JSON.stringify(monitorResponse, null, 2));
-              // Continue with other monitors even if one fails
-            }
-          }
-        }
-
-        // Add remarks if any
-        if (report.fumigation.remarks) {
-          await apiCall(`/api/pco/reports/${newReportId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ general_remarks: report.fumigation.remarks })
+            return monitorPayload;
           });
         }
+
+        // Add fumigation remarks
+        if (report.fumigation.remarks) {
+          completeReportPayload.general_remarks = completeReportPayload.general_remarks 
+            ? `${completeReportPayload.general_remarks}\n\nFumigation Notes: ${report.fumigation.remarks}`
+            : report.fumigation.remarks;
+        }
       }
 
-      // Step 4: Add client signature
-      await apiCall(`/api/pco/reports/${newReportId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          client_signature_data: report.clientSignature,
-          client_signature_name: report.clientName
-        })
+      console.log('=== SUBMITTING COMPLETE REPORT ===');
+      console.log('Payload:', JSON.stringify(completeReportPayload, null, 2));
+      console.log('Edit Mode:', isEditMode);
+      console.log('Report ID:', reportId);
+
+      // Submit complete report - use PUT for edit mode, POST for new reports
+      const endpoint = isEditMode && reportId 
+        ? `/api/pco/reports/${reportId}/complete` 
+        : '/api/pco/reports/complete';
+      
+      const method = isEditMode && reportId ? 'PUT' : 'POST';
+
+      const submitResponse = await apiCall(endpoint, {
+        method,
+        body: JSON.stringify(completeReportPayload)
       });
 
-      // Step 5: Submit the report for admin review
-      const submitResponse = await apiCall(`/api/pco/reports/${newReportId}/submit`, {
-        method: 'POST'
-      });
+      console.log('Submit response:', submitResponse);
 
       if (!submitResponse.success) {
-        // Include missing requirements in error message if available
-        let errorMsg = submitResponse.message || 'Failed to submit report';
-        if (submitResponse.missing_requirements && Array.isArray(submitResponse.missing_requirements)) {
-          errorMsg += '\n\nMissing: ' + submitResponse.missing_requirements.join(', ');
-        }
-        throw new Error(errorMsg);
+        throw new Error(submitResponse.message || 'Failed to submit report');
       }
+
+      const newReportId = submitResponse.report_id || reportId;
+      setReportId(newReportId);
 
       // Success! Clear the report from localStorage
       localStorage.removeItem('current_report');
@@ -315,7 +261,7 @@ export default function SubmitReport() {
     return (
       <ReportLayout currentStep={5} totalSteps={5} title="Submit Report">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     );
@@ -356,12 +302,17 @@ export default function SubmitReport() {
   // Success state
   if (submitting && reportId && !error) {
     return (
-      <ReportLayout currentStep={5} totalSteps={5} title="Report Submitted">
+      <ReportLayout currentStep={5} totalSteps={5} title={isEditMode ? "Report Resubmitted" : "Report Submitted"}>
         <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
           <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-green-900 mb-2">Report Submitted Successfully!</h2>
+          <h2 className="text-2xl font-bold text-green-900 mb-2">
+            {isEditMode ? 'Report Resubmitted Successfully!' : 'Report Submitted Successfully!'}
+          </h2>
           <p className="text-green-700 mb-4">
-            Your report has been submitted for admin review. You will be notified once it's approved.
+            {isEditMode 
+              ? 'Your updated report has been resubmitted for admin review. The status has been changed to draft.'
+              : 'Your report has been submitted for admin review. You will be notified once it\'s approved.'
+            }
           </p>
           <p className="text-sm text-gray-600">
             Redirecting to schedule...
@@ -508,13 +459,13 @@ export default function SubmitReport() {
           >
             {submitting ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Submitting...
+                <Loading size="sm" />
+                {isEditMode ? 'Resubmitting...' : 'Submitting...'}
               </>
             ) : (
               <>
                 <Send className="w-5 h-5" />
-                Submit
+                {isEditMode ? 'Resubmit Report' : 'Submit Report'}
               </>
             )}
           </button>

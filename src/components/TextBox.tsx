@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 interface TextBoxProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,7 +9,8 @@ interface TextBoxProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const TextBox = React.forwardRef<HTMLInputElement, TextBoxProps>(
   ({ label, error, icon, helperText, className = '', ...props }, ref) => {
-    const inputId = props.id || props.name || `textbox-${Math.random().toString(36).substr(2, 9)}`;
+    const generatedId = useId();
+    const inputId = props.id || props.name || `textbox-${generatedId}`;
 
     return (
       <div className="w-full">

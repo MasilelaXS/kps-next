@@ -16,6 +16,7 @@ export interface AuthenticatedUser {
     email: string;
     session_id: string;
 }
+export declare const hasRole: (user: AuthenticatedUser | undefined, requiredRole: "admin" | "pco") => boolean;
 export declare const authenticateToken: (req: Request, res: Response, next: NextFunction) => Promise<void>;
 export declare const requireRole: (...roles: ("admin" | "pco")[]) => (req: Request, res: Response, next: NextFunction) => void;
 export declare const requireAdmin: (req: Request, res: Response, next: NextFunction) => void;

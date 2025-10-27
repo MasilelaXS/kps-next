@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserController = void 0;
+const auth_1 = require("../middleware/auth");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
@@ -15,7 +16,7 @@ const generatePcoNumber = () => {
 class UserController {
     static async getUserList(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -29,8 +30,18 @@ class UserController {
             let whereConditions = [];
             let queryParams = [];
             if (role && role !== 'all') {
-                whereConditions.push('role = ?');
-                queryParams.push(role);
+                if (role === 'pco') {
+                    whereConditions.push('(role = ? OR role = ?)');
+                    queryParams.push('pco', 'both');
+                }
+                else if (role === 'admin') {
+                    whereConditions.push('(role = ? OR role = ?)');
+                    queryParams.push('admin', 'both');
+                }
+                else {
+                    whereConditions.push('role = ?');
+                    queryParams.push(role);
+                }
             }
             if (status && status !== 'all') {
                 whereConditions.push('status = ?');
@@ -105,7 +116,7 @@ class UserController {
     }
     static async createUser(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -180,7 +191,7 @@ class UserController {
     }
     static async getUserById(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -251,7 +262,7 @@ class UserController {
     }
     static async updateUser(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -316,7 +327,7 @@ class UserController {
     }
     static async deleteUser(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -375,7 +386,7 @@ class UserController {
     }
     static async updateUserStatus(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -428,7 +439,7 @@ class UserController {
     }
     static async resetUserPassword(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -480,7 +491,7 @@ class UserController {
     }
     static async getUserAssignments(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -548,7 +559,7 @@ class UserController {
     }
     static async unassignAllClients(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -605,7 +616,7 @@ class UserController {
     }
     static async searchUsers(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -636,8 +647,18 @@ class UserController {
             const searchTerm = `%${q}%`;
             let queryParams = [searchTerm, searchTerm, searchTerm];
             if (role && role !== 'all') {
-                query += ' AND role = ?';
-                queryParams.push(role);
+                if (role === 'pco') {
+                    query += ' AND (role = ? OR role = ?)';
+                    queryParams.push('pco', 'both');
+                }
+                else if (role === 'admin') {
+                    query += ' AND (role = ? OR role = ?)';
+                    queryParams.push('admin', 'both');
+                }
+                else {
+                    query += ' AND role = ?';
+                    queryParams.push(role);
+                }
             }
             if (status && status !== 'all') {
                 query += ' AND status = ?';

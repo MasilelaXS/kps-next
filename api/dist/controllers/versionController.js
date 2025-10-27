@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VersionController = void 0;
+const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const isValidSemanticVersion = (version) => {
@@ -36,8 +37,8 @@ class VersionController {
         WHERE is_active = 1
       `;
             const params = [];
-            if (platform && platform !== 'both') {
-                query += ` AND (platform = ? OR platform = 'both')`;
+            if (platform && platform !== 'all') {
+                query += ` AND (platform = ? OR platform = 'all')`;
                 params.push(platform);
             }
             query += ` ORDER BY release_date DESC LIMIT 1`;
@@ -101,7 +102,7 @@ class VersionController {
     }
     static async releaseVersion(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required for version releases'
@@ -132,7 +133,7 @@ class VersionController {
                 return;
             }
             if (force_update) {
-                await (0, database_1.executeQuery)('UPDATE app_versions SET is_active = 0 WHERE platform = ? OR platform = ?', [platform || 'both', 'both']);
+                await (0, database_1.executeQuery)('UPDATE app_versions SET is_active = 0 WHERE platform = ? OR platform = ?', [platform || 'all', 'all']);
             }
             await (0, database_1.executeQuery)(`
         INSERT INTO app_versions (
@@ -144,14 +145,14 @@ class VersionController {
         ) VALUES (?, ?, ?, ?, 1)
       `, [
                 version,
-                platform || 'both',
+                platform || 'all',
                 force_update || false,
                 release_notes || `Release version ${version}`
             ]);
             const newVersion = await (0, database_1.executeQuerySingle)('SELECT * FROM app_versions WHERE version = ?', [version]);
             logger_1.logger.info('New version released', {
                 version,
-                platform: platform || 'both',
+                platform: platform || 'all',
                 force_update: force_update || false,
                 released_by: req.user.id,
                 admin_name: req.user.first_name || req.user.login_id
@@ -175,7 +176,7 @@ class VersionController {
     }
     static async getVersionHistory(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'
@@ -196,8 +197,8 @@ class VersionController {
       `;
             const params = [];
             const conditions = [];
-            if (platform && platform !== 'both' && platform !== 'all') {
-                conditions.push('(platform = ? OR platform = "both")');
+            if (platform && platform !== 'all') {
+                conditions.push('(platform = ? OR platform = "all")');
                 params.push(platform);
             }
             if (active_only === 'true') {
@@ -246,7 +247,7 @@ class VersionController {
     }
     static async updateVersionStatus(req, res) {
         try {
-            if (req.user?.role !== 'admin') {
+            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
                 res.status(403).json({
                     success: false,
                     message: 'Admin access required'

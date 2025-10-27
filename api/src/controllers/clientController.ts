@@ -135,6 +135,18 @@ export class ClientController {
       const totalClients = countResult?.total || 0;
       const totalPages = Math.ceil(totalClients / limitNum);
 
+      // Get status counts (without filters for dashboard cards)
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count,
+          SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive_count,
+          SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) as suspended_count
+        FROM clients
+        WHERE deleted_at IS NULL
+      `;
+      const statsResult = await executeQuerySingle(statsQuery);
+
       // Get clients with pagination
       const clientsQuery = `
         SELECT 
@@ -180,11 +192,20 @@ export class ClientController {
         has_prev: pageNum > 1
       };
 
+      // Include stats in response
+      const stats = {
+        total: statsResult?.total || 0,
+        active: statsResult?.active_count || 0,
+        inactive: statsResult?.inactive_count || 0,
+        suspended: statsResult?.suspended_count || 0
+      };
+
       res.json({
         success: true,
         data: {
           clients,
           pagination,
+          stats,
           filters: {
             status: status || 'all',
             pco_id: pco_id || 'all',
@@ -416,13 +437,20 @@ export class ClientController {
       const client = await executeQuerySingle(`
         SELECT 
           c.id,
+          c.company_number,
           c.company_name,
           c.address_line1,
           c.address_line2,
           c.city,
           c.state,
           c.postal_code,
+          c.country,
+          c.total_bait_stations_inside,
+          c.total_bait_stations_outside,
+          c.total_insect_monitors_light,
+          c.total_insect_monitors_box,
           c.status,
+          c.service_notes,
           c.created_at,
           c.updated_at,
           -- Current PCO assignment
@@ -524,6 +552,7 @@ export class ClientController {
 
       const { id } = req.params;
       const { 
+        company_number,
         company_name, 
         address_line1, 
         address_line2, 
@@ -531,6 +560,7 @@ export class ClientController {
         state, 
         postal_code,
         country,
+        service_notes,
         total_bait_stations_inside,
         total_bait_stations_outside,
         total_insect_monitors_light,
@@ -571,6 +601,7 @@ export class ClientController {
       const updateQuery = `
         UPDATE clients 
         SET 
+          company_number = ?,
           company_name = ?, 
           address_line1 = ?, 
           address_line2 = ?, 
@@ -578,6 +609,7 @@ export class ClientController {
           state = ?, 
           postal_code = ?,
           country = ?,
+          service_notes = ?,
           total_bait_stations_inside = ?,
           total_bait_stations_outside = ?,
           total_insect_monitors_light = ?,
@@ -587,6 +619,7 @@ export class ClientController {
       `;
 
       await executeQuery(updateQuery, [
+        company_number !== undefined ? company_number : existingClient.company_number,
         company_name || existingClient.company_name,
         address_line1 || existingClient.address_line1,
         address_line2 !== undefined ? address_line2 : existingClient.address_line2,
@@ -594,6 +627,7 @@ export class ClientController {
         state || existingClient.state,
         postal_code || existingClient.postal_code,
         country !== undefined ? country : existingClient.country,
+        service_notes !== undefined ? service_notes : existingClient.service_notes,
         total_bait_stations_inside !== undefined ? total_bait_stations_inside : existingClient.total_bait_stations_inside,
         total_bait_stations_outside !== undefined ? total_bait_stations_outside : existingClient.total_bait_stations_outside,
         total_insect_monitors_light !== undefined ? total_insect_monitors_light : existingClient.total_insect_monitors_light,
@@ -603,7 +637,13 @@ export class ClientController {
 
       // Get updated client
       const updatedClient = await executeQuerySingle(
-        'SELECT id, company_name, address_line1, address_line2, city, state, postal_code, status, created_at, updated_at FROM clients WHERE id = ?',
+        `SELECT 
+          id, company_number, company_name, address_line1, address_line2, 
+          city, state, postal_code, country, 
+          total_bait_stations_inside, total_bait_stations_outside, 
+          total_insect_monitors_light, total_insect_monitors_box, 
+          status, service_notes, created_at, updated_at 
+        FROM clients WHERE id = ?`,
         [id]
       );
 

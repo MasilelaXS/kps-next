@@ -2,13 +2,6 @@
 
 import { useEffect, useState } from 'react';
 
-interface VersionInfo {
-  version: string;
-  minimum_version: string;
-  force_update: boolean;
-  update_message: string | null;
-}
-
 interface UseVersionCheckReturn {
   needsUpdate: boolean;
   forceUpdate: boolean;
@@ -30,7 +23,11 @@ export function useVersionCheck(): UseVersionCheckReturn {
 
   const checkVersion = async () => {
     try {
-      const response = await fetch('http://192.168.1.128:3001/api/version/current');
+      // Add cache-busting parameter to ensure fresh data
+      const timestamp = new Date().getTime();
+      const response = await fetch(`http://192.168.1.128:3001/api/version/current?current_version=${CURRENT_APP_VERSION}&platform=web&_t=${timestamp}`, {
+        cache: 'no-store'
+      });
       
       if (!response.ok) {
         console.warn('Version check failed:', response.statusText);
@@ -40,31 +37,31 @@ export function useVersionCheck(): UseVersionCheckReturn {
       const data = await response.json();
       
       if (data.success && data.data) {
-        const versionInfo: VersionInfo = data.data;
+        const versionData = data.data;
         
         // Safety check for undefined versions
-        if (!versionInfo.version || !versionInfo.minimum_version) {
-          console.warn('Version info incomplete:', versionInfo);
+        if (!versionData.latest_version) {
+          console.warn('Version info incomplete:', versionData);
           return;
         }
         
-        setLatestVersion(versionInfo.version);
-        setUpdateMessage(versionInfo.update_message || 'A new version is available');
+        const latestVer = versionData.latest_version;
+        const updateAvailable = versionData.update_available || false;
+        const forceUpdateRequired = versionData.force_update || false;
+        
+        setLatestVersion(latestVer);
+        setUpdateMessage(versionData.release_notes || 'A new version is available. Please refresh your browser to get the latest features and fixes.');
 
-        // Compare versions
-        const needsUpdateCheck = compareVersions(CURRENT_APP_VERSION, versionInfo.version) < 0;
-        const forceUpdateCheck = compareVersions(CURRENT_APP_VERSION, versionInfo.minimum_version) < 0;
-
-        setNeedsUpdate(needsUpdateCheck && !dismissed);
-        setForceUpdate(forceUpdateCheck);
+        setNeedsUpdate(updateAvailable && !dismissed);
+        setForceUpdate(forceUpdateRequired);
 
         // Log version check
         console.log('Version Check:', {
           current: CURRENT_APP_VERSION,
-          latest: versionInfo.version,
-          minimum: versionInfo.minimum_version,
-          needsUpdate: needsUpdateCheck,
-          forceUpdate: forceUpdateCheck
+          latest: latestVer,
+          updateAvailable,
+          forceUpdate: forceUpdateRequired,
+          message: data.message
         });
       }
     } catch (error) {
@@ -97,23 +94,4 @@ export function useVersionCheck(): UseVersionCheckReturn {
     updateMessage,
     dismissUpdate
   };
-}
-
-/**
- * Compare two semantic version strings
- * Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
- */
-function compareVersions(v1: string, v2: string): number {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const part1 = parts1[i] || 0;
-    const part2 = parts2[i] || 0;
-
-    if (part1 < part2) return -1;
-    if (part1 > part2) return 1;
-  }
-
-  return 0;
 }

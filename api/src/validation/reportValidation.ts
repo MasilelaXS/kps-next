@@ -15,7 +15,7 @@ export const reportListQuerySchema = Joi.object({
   client_id: Joi.number().integer().optional(),
   pco_id: Joi.number().integer().optional(),
   status: Joi.string().valid('draft', 'pending', 'approved', 'declined', 'archived', 'all').optional(),
-  status_group: Joi.string().valid('draft', 'approved', 'emailed', 'archived', 'all').optional(),
+  status_group: Joi.string().valid('draft', 'approved', 'declined', 'emailed', 'archived', 'all').optional(),
   report_type: Joi.string().valid('bait_inspection', 'fumigation', 'both', 'all').optional(),
   search: Joi.string().optional(),
   date_from: Joi.date().optional(),
@@ -110,6 +110,7 @@ export const addBaitStationSchema = Joi.object({
   station_number: Joi.string().max(20).required()
     .messages({
       'any.required': 'Station number is required',
+      'string.base': 'Station number must be a string',
       'string.max': 'Station number must not exceed 20 characters'
     }),
   
@@ -179,7 +180,11 @@ export const addBaitStationSchema = Joi.object({
 });
 
 export const updateBaitStationSchema = Joi.object({
-  station_number: Joi.string().max(20).optional(),
+  station_number: Joi.string().max(20).optional()
+    .messages({
+      'string.base': 'Station number must be a string',
+      'string.max': 'Station number must not exceed 20 characters'
+    }),
   location: Joi.string().valid('inside', 'outside').optional(),
   is_accessible: Joi.boolean().optional(),
   inaccessible_reason: Joi.string().max(255).optional().allow(null, ''),
@@ -279,10 +284,10 @@ export const updateFumigationSchema = Joi.object({
 // ============================================================================
 
 export const addInsectMonitorSchema = Joi.object({
-  monitor_type: Joi.string().valid('box', 'fly_trap').required()
+  monitor_type: Joi.string().valid('box', 'light').required()
     .messages({
       'any.required': 'Monitor type is required',
-      'any.only': 'Monitor type must be either box or fly_trap'
+      'any.only': 'Monitor type must be either box or light'
     }),
   
   monitor_condition: Joi.string().valid('good', 'replaced', 'repaired', 'other').required()
@@ -307,9 +312,9 @@ export const addInsectMonitorSchema = Joi.object({
   
   light_condition: Joi.string().valid('good', 'faulty', 'na').optional().default('na')
     .when('monitor_type', {
-      is: 'fly_trap',
+      is: 'light',
       then: Joi.valid('good', 'faulty').required().messages({
-        'any.required': 'Light condition is required for fly trap monitors'
+        'any.required': 'Light condition is required for light monitors'
       })
     }),
   
@@ -336,9 +341,9 @@ export const addInsectMonitorSchema = Joi.object({
   
   tubes_replaced: Joi.boolean().optional().allow(null)
     .when('monitor_type', {
-      is: 'fly_trap',
+      is: 'light',
       then: Joi.required().messages({
-        'any.required': 'Tubes replacement status is required for fly traps'
+        'any.required': 'Tubes replacement status is required for light monitors'
       })
     }),
   
@@ -349,7 +354,7 @@ export const addInsectMonitorSchema = Joi.object({
 });
 
 export const updateInsectMonitorSchema = Joi.object({
-  monitor_type: Joi.string().valid('box', 'fly_trap').optional(),
+  monitor_type: Joi.string().valid('box', 'light').optional(),
   monitor_condition: Joi.string().valid('good', 'replaced', 'repaired', 'other').optional(),
   monitor_condition_other: Joi.string().max(255).optional().allow(null, ''),
   warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').optional(),

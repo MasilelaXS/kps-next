@@ -11,7 +11,7 @@ const startServer = async () => {
     try {
         logger_1.logger.info('🔄 Testing database connection...');
         await (0, database_1.testConnection)();
-        const server = app_1.default.listen(env_1.config.server.port, () => {
+        const server = app_1.default.listen(env_1.config.server.port, '0.0.0.0', () => {
             logger_1.logger.info('🚀 Server started successfully', {
                 name: env_1.config.server.name,
                 version: env_1.config.server.version,
@@ -23,7 +23,8 @@ const startServer = async () => {
                 apiDocs: `http://localhost:${env_1.config.server.port}/api-docs`
             });
             console.log(`\n🎉 KPS API Server is running!`);
-            console.log(`🔗 URL: http://localhost:${env_1.config.server.port}`);
+            console.log(`🔗 Local: http://localhost:${env_1.config.server.port}`);
+            console.log(`🌐 Network: http://0.0.0.0:${env_1.config.server.port}`);
             console.log(`🩺 Health: http://localhost:${env_1.config.server.port}/health`);
             console.log(`📊 Status: http://localhost:${env_1.config.server.port}/api/status`);
             console.log(`📚 API Docs: http://localhost:${env_1.config.server.port}/api-docs`);

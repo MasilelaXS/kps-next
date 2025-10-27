@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
+import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
 import { 
   FileText,
@@ -102,7 +103,7 @@ interface Report {
   pco_name: string;
   pco_number?: string;
   pco_email?: string;
-  report_type: 'bait_inspection' | 'fumigation' | 'both' | '';
+  report_type: 'bait_inspection' | 'fumigation' | 'both';
   service_date: string;
   next_service_date?: string;
   status: 'draft' | 'pending' | 'approved' | 'declined' | 'archived';
@@ -137,7 +138,7 @@ interface PaginationData {
   has_prev: boolean;
 }
 
-type StatusGroup = 'draft' | 'approved' | 'emailed' | 'archived' | 'all';
+type StatusGroup = 'draft' | 'approved' | 'declined' | 'emailed' | 'archived' | 'all';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -460,6 +461,105 @@ export default function ReportsPage() {
     }
   };
 
+  const handleDownloadPDF = async (reportId: number) => {
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem('kps_token');
+      
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      notification.info('Generating PDF', 'Please wait while we generate your report...');
+      
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${reportId}/download`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to generate PDF');
+      }
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `Report_${reportId}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Download the PDF
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      notification.success('PDF Downloaded', 'Report has been downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      notification.error('Download Failed', error instanceof Error ? error.message : 'Failed to download PDF');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEmailPDF = async (reportId: number) => {
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem('kps_token');
+      
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      notification.info('Sending Email', 'Please wait while we send the report...');
+      
+      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${reportId}/email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to email report');
+      }
+
+      notification.success('Email Sent', data.message || 'Report has been emailed to the client');
+    } catch (error) {
+      console.error('Error emailing PDF:', error);
+      notification.error('Email Failed', error instanceof Error ? error.message : 'Failed to email report');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const openApproveModal = async (report: Report) => {
     try {
       setLoading(true);
@@ -628,7 +728,7 @@ export default function ReportsPage() {
     return (
       <DashboardLayout >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <Loading size="lg" text="Loading reports..." />
         </div>
       </DashboardLayout>
     );
@@ -677,6 +777,19 @@ export default function ReportsPage() {
             }`}
           >
             Approved
+          </button>
+          <button
+            onClick={() => {
+              setStatusGroup('declined');
+              setPagination({ ...pagination, current_page: 1 });
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+              statusGroup === 'declined'
+                ? 'bg-red-100 text-red-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Declined
           </button>
           <button
             onClick={() => {
@@ -872,15 +985,17 @@ export default function ReportsPage() {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         
-                        <button 
-                          onClick={() => router.push(`/admin/reports/${report.id}/edit`)}
-                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Edit Report"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
+                        {(report.status === 'draft' || report.status === 'pending') && (
+                          <button 
+                            onClick={() => router.push(`/admin/reports/${report.id}/edit`)}
+                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            title="Edit Report"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         
-                        {report.status === 'draft' && (
+                        {(report.status === 'draft' || report.status === 'pending') && (
                           <>
                             <button 
                               onClick={() => openApproveModal(report)}
@@ -897,6 +1012,16 @@ export default function ReportsPage() {
                               <XCircle className="w-3.5 h-3.5" />
                             </button>
                           </>
+                        )}
+                        
+                        {report.status === 'approved' && (
+                          <button 
+                            onClick={() => handleDownloadPDF(report.id)}
+                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            title="Download PDF"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
                         )}
                         
                         {report.status !== 'archived' && (
@@ -1466,12 +1591,15 @@ export default function ReportsPage() {
 
             {/* Modal Footer */}
             <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={() => router.push(`/admin/reports/${selectedReport.id}/edit`)}
-                className="px-4 py-2 text-sm border-2 border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium"
-              >
-                Edit Report
-              </button>
+              {(selectedReport.status === 'draft' || selectedReport.status === 'pending') && (
+                <button
+                  onClick={() => router.push(`/admin/reports/${selectedReport.id}/edit`)}
+                  className="px-4 py-2 text-sm border-2 border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors font-medium"
+                >
+                  Edit Report
+                </button>
+              )}
+              {(selectedReport.status !== 'draft' && selectedReport.status !== 'pending') && <div></div>}
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowViewModal(false)}
@@ -1480,16 +1608,20 @@ export default function ReportsPage() {
                   Close
                 </button>
                 <button
-                  className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
+                  onClick={() => handleDownloadPDF(selectedReport.id)}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
-                  Download PDF
+                  {submitting ? 'Generating...' : 'Download PDF'}
                 </button>
                 <button
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
+                  onClick={() => handleEmailPDF(selectedReport.id)}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Mail className="w-4 h-4" />
-                  Email Client
+                  {submitting ? 'Sending...' : 'Email Client'}
                 </button>
               </div>
             </div>

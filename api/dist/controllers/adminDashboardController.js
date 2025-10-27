@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.refreshCache = exports.getPerformance = exports.getStats = exports.getActivity = exports.getMetrics = void 0;
+const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const dashboardCache = new Map();
@@ -22,7 +23,7 @@ const getCachedData = async (cacheKey, ttl, dataFetcher) => {
 };
 const getMetrics = async (req, res) => {
     try {
-        if (req.user?.role !== 'admin') {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
             return res.status(403).json({
                 success: false,
                 message: 'Admin access required'
@@ -155,7 +156,7 @@ const getMetrics = async (req, res) => {
 exports.getMetrics = getMetrics;
 const getActivity = async (req, res) => {
     try {
-        if (req.user?.role !== 'admin') {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
             return res.status(403).json({
                 success: false,
                 message: 'Admin access required'
@@ -288,7 +289,7 @@ const getActivity = async (req, res) => {
 exports.getActivity = getActivity;
 const getStats = async (req, res) => {
     try {
-        if (req.user?.role !== 'admin') {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
             return res.status(403).json({
                 success: false,
                 message: 'Admin access required'
@@ -340,6 +341,7 @@ const getStats = async (req, res) => {
             u.id as pco_id,
             u.name as pco_name,
             u.pco_number,
+            u.role,
             COUNT(r.id) as total_reports,
             SUM(CASE WHEN r.status = 'approved' THEN 1 ELSE 0 END) as approved_reports,
             SUM(CASE WHEN r.status = 'declined' THEN 1 ELSE 0 END) as declined_reports,
@@ -351,10 +353,10 @@ const getStats = async (req, res) => {
             AND r.status IN ('approved', 'declined')
           LEFT JOIN client_pco_assignments cpa ON u.id = cpa.pco_id
             AND cpa.status = 'active'
-          WHERE u.role = 'pco' 
+          WHERE u.role IN ('pco', 'both')
             AND u.status = 'active'
             AND u.deleted_at IS NULL
-          GROUP BY u.id, u.name, u.pco_number
+          GROUP BY u.id, u.name, u.pco_number, u.role
           HAVING total_reports > 0
           ORDER BY total_reports DESC
           LIMIT 10`, [daysBack]);
@@ -418,7 +420,7 @@ const getStats = async (req, res) => {
 exports.getStats = getStats;
 const getPerformance = async (req, res) => {
     try {
-        if (req.user?.role !== 'admin') {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
             return res.status(403).json({
                 success: false,
                 message: 'Admin access required'
@@ -486,7 +488,7 @@ const getPerformance = async (req, res) => {
 exports.getPerformance = getPerformance;
 const refreshCache = async (req, res) => {
     try {
-        if (req.user?.role !== 'admin') {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
             return res.status(403).json({
                 success: false,
                 message: 'Admin access required'

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
+import Loading from './Loading';
 
 interface Notification {
   id: number;
@@ -220,8 +221,7 @@ export default function NotificationBell() {
           <div className="max-h-96 overflow-y-auto">
             {loading ? (
               <div className="px-4 py-8 text-center text-gray-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-sm">Loading...</p>
+                <Loading size="md" text="Loading..." />
               </div>
             ) : notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-gray-500">

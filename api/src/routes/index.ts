@@ -70,6 +70,9 @@ router.use('/', chemicalRoutes);
 // Assignment management routes (Admin only)
 router.use('/admin/assignments', assignmentRoutes);
 
+// PCO assignments route (PCO can view their own)
+router.use('/pco/assignments', assignmentRoutes);
+
 // Report management routes (PCO and Admin)
 router.use('/', reportRoutes);
 

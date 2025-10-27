@@ -113,7 +113,7 @@ export const uploadReportsSchema = Joi.object({
       // Insect monitors (for monitoring reports)
       insect_monitors: Joi.array().items(
         Joi.object({
-          monitor_type: Joi.string().valid('box', 'fly_trap').required(),
+          monitor_type: Joi.string().valid('box', 'light').required(),
           monitor_condition: Joi.string().valid('good', 'replaced', 'repaired', 'other').default('good'),
           monitor_condition_other: Joi.string().max(255).optional().allow(null),
           warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').default('good'),

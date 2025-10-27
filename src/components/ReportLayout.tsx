@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, AlertTriangle } from 'lucide-react';
+import Loading from './Loading';
 
 interface ReportLayoutProps {
   children: React.ReactNode;
@@ -58,7 +59,7 @@ export default function ReportLayout({
   if (!mounted || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <Loading size="lg" />
       </div>
     );
   }

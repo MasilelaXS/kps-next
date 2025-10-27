@@ -568,6 +568,62 @@ export class AssignmentController {
       });
     }
   }
+
+  /**
+   * Get PCO's own assigned clients
+   * GET /api/pco/assignments
+   */
+  static async getPCOAssignments(req: Request, res: Response): Promise<void> {
+    try {
+      const pcoId = req.user!.id;
+
+      // Get PCO's active assignments with client details
+      const query = `
+        SELECT 
+          ca.id as assignment_id,
+          ca.client_id,
+          c.company_name as client_name,
+          c.company_number,
+          c.address_line1,
+          c.address_line2,
+          c.city,
+          c.state,
+          c.postal_code,
+          c.country,
+          c.total_bait_stations_inside,
+          c.total_bait_stations_outside,
+          c.total_insect_monitors_light,
+          c.total_insect_monitors_box,
+          c.status as client_status,
+          ca.assigned_at
+        FROM client_pco_assignments ca
+        JOIN clients c ON ca.client_id = c.id
+        WHERE ca.pco_id = ? AND ca.status = 'active'
+        ORDER BY c.company_name ASC
+      `;
+
+      const assignments = await executeQuery(query, [pcoId]);
+
+      res.json({
+        success: true,
+        data: assignments,
+        total: Array.isArray(assignments) ? assignments.length : 0
+      });
+
+    } catch (error) {
+      logger.error('Get PCO assignments error', { 
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        user_id: req.user?.id 
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve assignments',
+        error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+      });
+    }
+  }
 }
 
 export default AssignmentController;

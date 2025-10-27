@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
 import TextBox from '@/components/TextBox';
 import TextArea from '@/components/TextArea';
+import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
 import { Calendar, Edit, FileText, AlertCircle, Beaker, MapPin } from 'lucide-react';
@@ -145,7 +146,7 @@ export default function ReportSummary() {
     return (
       <ReportLayout currentStep={3} totalSteps={5} title="Summary">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     );
@@ -388,7 +389,18 @@ export default function ReportSummary() {
         {/* Action Buttons */}
         <div className="flex gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              // Navigate back to the last data entry page based on report type
+              if (report.reportType === 'fumigation') {
+                router.push('/pco/report/fumigation');
+              } else if (report.reportType === 'both') {
+                // For 'both', go back to fumigation (last data entry page)
+                router.push('/pco/report/fumigation');
+              } else {
+                // For 'bait', go back to bait inspection
+                router.push('/pco/report/bait-inspection');
+              }
+            }}
             className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium"
           >
             Back

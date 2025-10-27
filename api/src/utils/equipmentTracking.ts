@@ -26,6 +26,8 @@ export async function markNewBaitStations(
   location: 'inside' | 'outside'
 ): Promise<{ newCount: number; totalCount: number }> {
   try {
+    console.log(`[Equipment Tracking] markNewBaitStations called - reportId: ${reportId}, clientId: ${clientId}, location: ${location}`);
+    
     // Get client's expected count
     const field = location === 'inside' ? 'total_bait_stations_inside' : 'total_bait_stations_outside';
     const clientData = await executeQuery<RowDataPacket[]>(
@@ -34,6 +36,7 @@ export async function markNewBaitStations(
     );
 
     const expectedCount = clientData.length > 0 ? (clientData[0] as any).expected_count : 0;
+    console.log(`[Equipment Tracking] Expected ${location} stations: ${expectedCount}`);
 
     // Count actual stations in this report for this location
     const stationCount = await executeQuery<RowDataPacket[]>(
@@ -44,10 +47,11 @@ export async function markNewBaitStations(
 
     const totalCount = (stationCount[0] as any).count;
     const newCount = Math.max(0, totalCount - expectedCount);
+    console.log(`[Equipment Tracking] Actual ${location} stations: ${totalCount}, New: ${newCount}`);
 
     if (newCount > 0) {
       // Mark the last N stations as new (ordered by ID to get recently added ones)
-      await executeQuery(
+      const updateResult = await executeQuery(
         `UPDATE bait_stations 
          SET is_new_addition = 1
          WHERE report_id = ? AND location = ?
@@ -55,6 +59,7 @@ export async function markNewBaitStations(
          LIMIT ?`,
         [reportId, location, newCount]
       );
+      console.log(`[Equipment Tracking] Marked ${newCount} ${location} stations as new. Update result:`, updateResult);
     }
 
     return { newCount, totalCount };
@@ -69,22 +74,25 @@ export async function markNewBaitStations(
  * Call this AFTER all monitors have been added to the report
  * @param reportId - Report ID
  * @param clientId - Client ID
- * @param monitorType - Monitor type (box/fly_trap)
+ * @param monitorType - Monitor type (box/light)
  */
 export async function markNewInsectMonitors(
   reportId: number,
   clientId: number,
-  monitorType: 'box' | 'fly_trap'
+  monitorType: 'box' | 'light'
 ): Promise<{ newCount: number; totalCount: number }> {
   try {
+    console.log(`[Equipment Tracking] markNewInsectMonitors called - reportId: ${reportId}, clientId: ${clientId}, monitorType: ${monitorType}`);
+    
     // Get client's expected count
-    const field = monitorType === 'fly_trap' ? 'total_insect_monitors_light' : 'total_insect_monitors_box';
+    const field = monitorType === 'light' ? 'total_insect_monitors_light' : 'total_insect_monitors_box';
     const clientData = await executeQuery<RowDataPacket[]>(
       `SELECT ${field} as expected_count FROM clients WHERE id = ?`,
       [clientId]
     );
 
     const expectedCount = clientData.length > 0 ? (clientData[0] as any).expected_count : 0;
+    console.log(`[Equipment Tracking] Expected ${monitorType} monitors: ${expectedCount}`);
 
     // Count actual monitors in this report for this type
     const monitorCount = await executeQuery<RowDataPacket[]>(
@@ -95,10 +103,11 @@ export async function markNewInsectMonitors(
 
     const totalCount = (monitorCount[0] as any).count;
     const newCount = Math.max(0, totalCount - expectedCount);
+    console.log(`[Equipment Tracking] Actual ${monitorType} monitors: ${totalCount}, New: ${newCount}`);
 
     if (newCount > 0) {
       // Mark the last N monitors as new (ordered by ID to get recently added ones)
-      await executeQuery(
+      const updateResult = await executeQuery(
         `UPDATE insect_monitors 
          SET is_new_addition = 1
          WHERE report_id = ? AND monitor_type = ?
@@ -106,6 +115,7 @@ export async function markNewInsectMonitors(
          LIMIT ?`,
         [reportId, monitorType, newCount]
       );
+      console.log(`[Equipment Tracking] Marked ${newCount} ${monitorType} monitors as new. Update result:`, updateResult);
     }
 
     return { newCount, totalCount };
@@ -142,7 +152,7 @@ export async function updateClientExpectedCounts(
     // Count insect monitors by type
     const flyTrapCount = await executeQuery<RowDataPacket[]>(
       `SELECT COUNT(*) as count FROM insect_monitors 
-       WHERE report_id = ? AND monitor_type = 'fly_trap'`,
+       WHERE report_id = ? AND monitor_type = 'light'`,
       [reportId]
     );
 
@@ -221,16 +231,22 @@ export async function countNewBaitStations(reportId: number): Promise<number> {
  */
 export async function updateReportNewEquipmentCounts(reportId: number): Promise<void> {
   try {
+    console.log(`[Equipment Tracking] updateReportNewEquipmentCounts called for reportId: ${reportId}`);
+    
     const newStationsCount = await countNewBaitStations(reportId);
     const newMonitorsCount = await countNewInsectMonitors(reportId);
+    
+    console.log(`[Equipment Tracking] New stations count: ${newStationsCount}, New monitors count: ${newMonitorsCount}`);
 
-    await executeQuery(
+    const updateResult = await executeQuery(
       `UPDATE reports 
        SET new_bait_stations_count = ?, 
            new_insect_monitors_count = ?
        WHERE id = ?`,
       [newStationsCount, newMonitorsCount, reportId]
     );
+    
+    console.log(`[Equipment Tracking] Report summary updated. Result:`, updateResult);
   } catch (error) {
     console.error('Error updating report new equipment counts:', error);
   }

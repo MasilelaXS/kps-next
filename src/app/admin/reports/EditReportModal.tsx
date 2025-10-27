@@ -11,6 +11,8 @@ import {
   X,
   Save
 } from 'lucide-react';
+import TextBox from '@/components/TextBox';
+import TextArea from '@/components/TextArea';
 
 // Import types from parent
 interface Chemical {
@@ -85,7 +87,7 @@ interface Report {
   company_name?: string;
   pco_id: number;
   pco_name: string;
-  report_type: 'bait_inspection' | 'fumigation' | 'both' | '';
+  report_type: 'bait_inspection' | 'fumigation' | 'both';
   service_date: string;
   next_service_date?: string;
   status: 'draft' | 'pending' | 'approved' | 'declined' | 'archived';
@@ -371,39 +373,29 @@ export default function EditReportModal({
                 <select
                   value={editedReport.report_type}
                   onChange={(e) => setEditedReport({ ...editedReport, report_type: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                 >
                   <option value="bait_inspection">Bait Inspection</option>
                   <option value="fumigation">Fumigation</option>
                   <option value="both">Both</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Service Date
-                </label>
-                <input
-                  type="date"
-                  value={editedReport.service_date?.split('T')[0] || ''}
-                  onChange={(e) => setEditedReport({ ...editedReport, service_date: e.target.value })}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Cannot be in the future</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Next Service Date
-                </label>
-                <input
-                  type="date"
-                  value={editedReport.next_service_date?.split('T')[0] || ''}
-                  onChange={(e) => setEditedReport({ ...editedReport, next_service_date: e.target.value })}
-                  min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Must be a future date</p>
-              </div>
+              <TextBox
+                label="Service Date"
+                type="date"
+                value={editedReport.service_date?.split('T')[0] || ''}
+                onChange={(e) => setEditedReport({ ...editedReport, service_date: e.target.value })}
+                max={new Date().toISOString().split('T')[0]}
+                helperText="Cannot be in the future"
+              />
+              <TextBox
+                label="Next Service Date"
+                type="date"
+                value={editedReport.next_service_date?.split('T')[0] || ''}
+                onChange={(e) => setEditedReport({ ...editedReport, next_service_date: e.target.value })}
+                min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
+                helperText="Must be a future date"
+              />
             </div>
           </div>
 
@@ -411,32 +403,20 @@ export default function EditReportModal({
           <div className="bg-white border-2 border-green-200 rounded-xl p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Fields</h3>
             <div className="space-y-4">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-green-700 mb-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Admin Recommendations (Admin Only)
-                </label>
-                <textarea
-                  value={editedReport.recommendations || ''}
-                  onChange={(e) => setEditedReport({ ...editedReport, recommendations: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-green-50"
-                  placeholder="Add professional recommendations for the client..."
-                />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-yellow-700 mb-2">
-                  <AlertCircle className="w-4 h-4" />
-                  Admin Notes (Internal)
-                </label>
-                <textarea
-                  value={editedReport.admin_notes || ''}
-                  onChange={(e) => setEditedReport({ ...editedReport, admin_notes: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50"
-                  placeholder="Internal notes for admin team..."
-                />
-              </div>
+              <TextArea
+                label="Admin Recommendations (Admin Only)"
+                value={editedReport.recommendations || ''}
+                onChange={(e) => setEditedReport({ ...editedReport, recommendations: e.target.value })}
+                rows={3}
+                placeholder="Add professional recommendations for the client..."
+              />
+              <TextArea
+                label="Admin Notes (Internal)"
+                value={editedReport.admin_notes || ''}
+                onChange={(e) => setEditedReport({ ...editedReport, admin_notes: e.target.value })}
+                rows={2}
+                placeholder="Internal notes for admin team..."
+              />
               <div className="bg-gray-100 p-3 rounded-lg">
                 <label className="block text-sm font-medium text-gray-500 mb-2">
                   PCO Remarks (Read-Only - Cannot Edit)

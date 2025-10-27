@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
 import TextBox from '@/components/TextBox';
 import TextArea from '@/components/TextArea';
+import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
 import { API_CONFIG, apiCall } from '@/lib/api';
@@ -303,43 +304,32 @@ function FumigationContent() {
 
   const updateClientMonitorCounts = async (lightCount: number, boxCount: number) => {
     try {
-      const response = await apiCall(`/api/pco/clients/${client.id}/update-counts`, {
-        method: 'PATCH',
-        body: JSON.stringify({
+      console.log('=== UPDATING CLIENT MONITOR COUNTS (LOCAL ONLY) ===');
+      console.log('Expected light:', expectedMonitors.light, '→ New:', lightCount);
+      console.log('Expected box:', expectedMonitors.box, '→ New:', boxCount);
+
+      // Update local state
+      setExpectedMonitors({
+        light: lightCount,
+        box: boxCount
+      });
+      
+      // Update report data with new counts in localStorage
+      const updatedReport = {
+        ...reportData,
+        client: {
+          ...reportData.client,
           total_insect_monitors_light: lightCount,
           total_insect_monitors_box: boxCount
-        })
-      });
-
-      if (response.success) {
-        // Update local state
-        setExpectedMonitors({
-          light: lightCount,
-          box: boxCount
-        });
-        
-        // Update report data with new counts
-        const updatedReport = {
-          ...reportData,
-          client: {
-            ...reportData.client,
-            total_insect_monitors_light: lightCount,
-            total_insect_monitors_box: boxCount
-          }
-        };
-        localStorage.setItem('current_report', JSON.stringify(updatedReport));
-        
-        alert.showSuccess('Client monitor counts updated successfully');
-        proceedToSummary();
-      } else {
-        alert.showError(response.message || 'Failed to update client monitor counts');
-        // Proceed anyway
-        checkForMissingMonitors();
-      }
+        }
+      };
+      localStorage.setItem('current_report', JSON.stringify(updatedReport));
+      
+      alert.showSuccess('Client monitor counts updated successfully');
+      proceedToSummary();
     } catch (error) {
       console.error('Error updating client counts:', error);
-      alert.showError('Failed to update client monitor counts. Continuing with report.');
-      checkForMissingMonitors();
+      alert.showError('Failed to update client monitor counts.');
     }
   };
 
@@ -367,7 +357,7 @@ function FumigationContent() {
     return (
       <ReportLayout title="Fumigation">
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     );
@@ -985,7 +975,7 @@ export default function FumigationPage() {
     <Suspense fallback={
       <ReportLayout title="Fumigation">
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <Loading size="lg" />
         </div>
       </ReportLayout>
     }>

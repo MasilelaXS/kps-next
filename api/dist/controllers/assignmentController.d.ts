@@ -5,6 +5,7 @@ export declare class AssignmentController {
     static bulkAssignClients(req: Request, res: Response): Promise<void>;
     static bulkUnassignClients(req: Request, res: Response): Promise<void>;
     static getWorkloadBalance(req: Request, res: Response): Promise<void>;
+    static getPCOAssignments(req: Request, res: Response): Promise<void>;
 }
 export default AssignmentController;
 //# sourceMappingURL=assignmentController.d.ts.map

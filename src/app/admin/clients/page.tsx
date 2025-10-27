@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import Loading from '@/components/Loading';
 import TextBox from '@/components/TextBox';
+import { TextArea } from '@/components/TextArea';
 import { API_CONFIG } from '@/lib/api';
 import { 
   Building2, 
@@ -70,6 +72,7 @@ interface ClientFormData {
   state: string;
   postal_code: string;
   country: string;
+  service_notes: string;
   total_bait_stations_inside: number;
   total_bait_stations_outside: number;
   total_insect_monitors_light: number;
@@ -88,6 +91,12 @@ export default function ClientsPage() {
     totalItems: 0,
     totalPages: 0
   });
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    suspended: 0
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState<ClientFormData>({
     company_name: '',
@@ -97,6 +106,7 @@ export default function ClientsPage() {
     state: '',
     postal_code: '',
     country: 'South Africa',
+    service_notes: '',
     total_bait_stations_inside: 0,
     total_bait_stations_outside: 0,
     total_insect_monitors_light: 0,
@@ -171,6 +181,9 @@ export default function ClientsPage() {
             totalItems: result.data.pagination.total_clients,
             totalPages: result.data.pagination.total_pages
           });
+        }
+        if (result.data.stats) {
+          setStats(result.data.stats);
         }
       }
     } catch (error) {
@@ -296,6 +309,7 @@ export default function ClientsPage() {
           state: '',
           postal_code: '',
           country: 'South Africa',
+          service_notes: '',
           total_bait_stations_inside: 0,
           total_bait_stations_outside: 0,
           total_insect_monitors_light: 0,
@@ -346,6 +360,7 @@ export default function ClientsPage() {
       state: '',
       postal_code: '',
       country: 'South Africa',
+      service_notes: '',
       total_bait_stations_inside: 0,
       total_bait_stations_outside: 0,
       total_insect_monitors_light: 0,
@@ -410,6 +425,7 @@ export default function ClientsPage() {
         state: details.state || '',
         postal_code: details.postal_code || '',
         country: details.country || 'South Africa',
+        service_notes: details.service_notes || '',
         total_bait_stations_inside: details.total_bait_stations_inside || 0,
         total_bait_stations_outside: details.total_bait_stations_outside || 0,
         total_insect_monitors_light: details.total_insect_monitors_light || 0,
@@ -523,7 +539,7 @@ export default function ClientsPage() {
     return (
       <DashboardLayout >
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <Loading size="lg" text="Loading clients..." />
         </div>
       </DashboardLayout>
     );
@@ -592,7 +608,7 @@ export default function ClientsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-600">Total Clients</p>
-              <p className="text-xl font-bold text-gray-900 mt-0.5">{pagination.totalItems}</p>
+              <p className="text-xl font-bold text-gray-900 mt-0.5">{stats.total}</p>
             </div>
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-purple-600" />
@@ -604,9 +620,7 @@ export default function ClientsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-600">Active</p>
-              <p className="text-xl font-bold text-green-600 mt-0.5">
-                {Array.isArray(clients) ? clients.filter(c => c.status === 'active').length : 0}
-              </p>
+              <p className="text-xl font-bold text-green-600 mt-0.5">{stats.active}</p>
             </div>
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-green-600" />
@@ -618,9 +632,7 @@ export default function ClientsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-600">Inactive</p>
-              <p className="text-xl font-bold text-gray-600 mt-0.5">
-                {Array.isArray(clients) ? clients.filter(c => c.status === 'inactive').length : 0}
-              </p>
+              <p className="text-xl font-bold text-gray-600 mt-0.5">{stats.inactive}</p>
             </div>
             <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-gray-600" />
@@ -741,7 +753,7 @@ export default function ClientsPage() {
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{client.total_reports || 0}</div>
-                        {client.pending_reports && client.pending_reports > 0 && (
+                        {(client.pending_reports ?? 0) > 0 && (
                           <div className="text-xs text-orange-600 mt-0.5">
                             {client.pending_reports} pending
                           </div>
@@ -1048,6 +1060,18 @@ export default function ClientsPage() {
                       />
                     </div>
                   </div>
+                  
+                  {/* Service Notes */}
+                  <div className="mt-4">
+                    <TextArea
+                      label="Service Notes"
+                      value={formData.service_notes}
+                      onChange={(e) => handleInputChange("service_notes", e.target.value)}
+                      rows={4}
+                      placeholder="Add any notes about equipment setup, special requirements, or service details..."
+                      helperText="Optional notes about the client's equipment or service requirements"
+                    />
+                  </div>
                 </div>
 
                 {/* Contacts */}
@@ -1307,6 +1331,16 @@ export default function ClientsPage() {
                   )}
 
                   {/* Contacts */}
+
+                  {/* Service Notes */}
+                  {clientDetails.service_notes && (
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-3">Service Notes</h4>
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{clientDetails.service_notes}</p>
+                      </div>
+                    </div>
+                  )}
                   {clientDetails.contacts && clientDetails.contacts.length > 0 && (
                     <div>
                       <h4 className="text-lg font-semibold text-gray-900 mb-3">Contacts</h4>
@@ -1574,6 +1608,18 @@ export default function ClientsPage() {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
+                  </div>
+                  
+                  {/* Service Notes */}
+                  <div className="mt-4">
+                    <TextArea
+                      label="Service Notes"
+                      value={formData.service_notes}
+                      onChange={(e) => handleInputChange("service_notes", e.target.value)}
+                      rows={4}
+                      placeholder="Add any notes about equipment setup, special requirements, or service details..."
+                      helperText="Optional notes about the client's equipment or service requirements"
+                    />
                   </div>
                 </div>
 

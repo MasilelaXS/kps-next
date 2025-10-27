@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
+import Loading from '@/components/Loading';
 import { API_CONFIG, apiCall } from '@/lib/api';
 import { Building2, MapPin, Phone, ChevronRight, AlertCircle } from 'lucide-react';
 
@@ -71,10 +72,7 @@ export default function SchedulePage() {
     return (
       <PcoDashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your schedule...</p>
-          </div>
+          <Loading size="lg" text="Loading your schedule..." />
         </div>
       </PcoDashboardLayout>
     );

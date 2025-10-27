@@ -19,20 +19,32 @@ import {
 const router = Router();
 
 // ==============================================
-// ADMIN ROUTES (requires authentication + admin role)
+// SHARED ROUTE - Role-based response
 // ==============================================
 
 /**
- * Get paginated assignment list with filtering
- * GET /api/admin/assignments
- * Query params: page, limit, pco_id, client_id, status
+ * Get assignments
+ * - PCO: GET /api/pco/assignments (own assignments)
+ * - Admin: GET /api/admin/assignments (all assignments with filters)
  */
 router.get(
   '/',
   authenticateToken,
+  async (req, res, next) => {
+    // If PCO, use PCO-specific handler
+    if (req.user?.role === 'pco') {
+      return AssignmentController.getPCOAssignments(req, res);
+    }
+    // Otherwise continue to admin handler with validation
+    next();
+  },
   validateAssignmentListParams,
   AssignmentController.getAssignmentList
 );
+
+// ==============================================
+// ADMIN ROUTES (requires authentication + admin role)
+// ==============================================
 
 /**
  * Get assignment statistics and workload distribution

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { useNotification } from '@/contexts/NotificationContext';
+import TextBox from '@/components/TextBox';
+import TextArea from '@/components/TextArea';
 import {
   FileText,
   Save,
@@ -447,33 +449,23 @@ export default function EditReportPage() {
               Basic Information
             </h2>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Service Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={serviceDate}
-                  onChange={(e) => setServiceDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">Cannot be in the future</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Next Service Date
-                </label>
-                <input
-                  type="date"
-                  value={nextServiceDate}
-                  onChange={(e) => setNextServiceDate(e.target.value)}
-                  min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Must be a future date</p>
-              </div>
+              <TextBox
+                label="Service Date"
+                type="date"
+                value={serviceDate}
+                onChange={(e) => setServiceDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+                required
+                helperText="Cannot be in the future"
+              />
+              <TextBox
+                label="Next Service Date"
+                type="date"
+                value={nextServiceDate}
+                onChange={(e) => setNextServiceDate(e.target.value)}
+                min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
+                helperText="Must be a future date"
+              />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Report Type <span className="text-red-500">*</span>
@@ -513,30 +505,20 @@ export default function EditReportPage() {
               Admin Notes & Recommendations
             </h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Recommendations (Admin Only)
-                </label>
-                <textarea
-                  value={recommendations}
-                  onChange={(e) => setRecommendations(e.target.value)}
-                  rows={4}
-                  placeholder="Add recommendations for the client..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Admin Notes
-                </label>
-                <textarea
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Internal admin notes (not visible to client)..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                />
-              </div>
+              <TextArea
+                label="Recommendations (Admin Only)"
+                value={recommendations}
+                onChange={(e) => setRecommendations(e.target.value)}
+                rows={4}
+                placeholder="Add recommendations for the client..."
+              />
+              <TextArea
+                label="Admin Notes"
+                value={adminNotes}
+                onChange={(e) => setAdminNotes(e.target.value)}
+                rows={3}
+                placeholder="Internal admin notes (not visible to client)..."
+              />
               {report.general_remarks && (
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
