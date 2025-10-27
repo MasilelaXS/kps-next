@@ -7,10 +7,16 @@ const app_1 = __importDefault(require("./app"));
 const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const database_1 = require("./config/database");
+const reportController_1 = require("./controllers/reportController");
 const startServer = async () => {
     try {
         logger_1.logger.info('🔄 Testing database connection...');
         await (0, database_1.testConnection)();
+        logger_1.logger.info('🧹 Running cleanup of old draft reports...');
+        const cleanupResult = await (0, reportController_1.cleanupOldDrafts)();
+        if (cleanupResult.success && cleanupResult.deletedCount > 0) {
+            logger_1.logger.info(`✅ Cleanup completed: ${cleanupResult.message}`);
+        }
         const server = app_1.default.listen(env_1.config.server.port, '0.0.0.0', () => {
             logger_1.logger.info('🚀 Server started successfully', {
                 name: env_1.config.server.name,
@@ -29,6 +35,15 @@ const startServer = async () => {
             console.log(`📊 Status: http://localhost:${env_1.config.server.port}/api/status`);
             console.log(`📚 API Docs: http://localhost:${env_1.config.server.port}/api-docs`);
             console.log(`\n🛑 Press Ctrl+C to stop the server\n`);
+            const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000;
+            setInterval(async () => {
+                logger_1.logger.info('🧹 Running scheduled cleanup of old draft reports...');
+                const result = await (0, reportController_1.cleanupOldDrafts)();
+                if (result.success && result.deletedCount > 0) {
+                    logger_1.logger.info(`✅ Scheduled cleanup completed: ${result.message}`);
+                }
+            }, CLEANUP_INTERVAL);
+            logger_1.logger.info('⏰ Scheduled daily cleanup task for old draft reports');
         });
         server.on('error', (error) => {
             if (error.code === 'EADDRINUSE') {

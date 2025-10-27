@@ -1332,77 +1332,98 @@ export class PDFService {
     <!-- Monitor Summary Statistics - Split by Type -->
     ${insectMonitors && insectMonitors.length > 0 ? `
     <div class="section">
-        <h3 style="color: #8b2635;">Monitor Summary</h3>
-        
-        <!-- Light Monitors Summary -->
-        ${monitorStats.byType.light > 0 ? `
-        <h4 style="color: #555; margin: 10px 0 5px 0;">Light Monitors (${monitorStats.byType.light})</h4>
-        <div class="stat-grid">
-            <div class="stat-item">
-                <div class="stat-label">Total Light Monitors</div>
-                <div class="stat-value">${monitorStats.byType.light}</div>
+        <h3 style="color: #1f5582;">Monitor Summary</h3>
+        <div class="side-by-side">
+            <!-- Light Monitors Summary -->
+            ${monitorStats.byType.light > 0 ? `
+            <div>
+                <h4 style="margin: 5px 0;">Light Monitors (${monitorStats.byType.light})</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th style="text-align: center;">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Serviced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_serviced).length}</td>
+                        </tr>
+                        <tr>
+                            <td>Good Condition</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'good').length}</td>
+                        </tr>
+                        <tr>
+                            <td>Replaced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'replaced').length}</td>
+                        </tr>
+                        <tr>
+                            <td>Repaired</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'repaired').length}</td>
+                        </tr>
+                        <tr>
+                            <td>Glue Boards Replaced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.glue_board_replaced).length}</td>
+                        </tr>
+                        <tr>
+                            <td>Tubes Replaced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.tubes_replaced).length}</td>
+                        </tr>
+                        <tr>
+                            <td>Faulty Lights</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.light_condition === 'faulty').length}</td>
+                        </tr>
+                        <tr style="background: #e3f2fd; font-weight: bold;">
+                            <td>TOTAL</td>
+                            <td style="text-align: center;">${monitorStats.byType.light}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            <div class="stat-item">
-                <div class="stat-label">Serviced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_serviced).length}</div>
+            ` : ''}
+            
+            <!-- Box Monitors Summary -->
+            ${monitorStats.byType.box > 0 ? `
+            <div>
+                <h4 style="margin: 5px 0;">Box Monitors (${monitorStats.byType.box})</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th style="text-align: center;">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Serviced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_serviced).length}</td>
+                        </tr>
+                        <tr>
+                            <td>Good Condition</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'good').length}</td>
+                        </tr>
+                        <tr>
+                            <td>Replaced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'replaced').length}</td>
+                        </tr>
+                        <tr>
+                            <td>Repaired</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'repaired').length}</td>
+                        </tr>
+                        <tr>
+                            <td>Glue Boards Replaced</td>
+                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.glue_board_replaced).length}</td>
+                        </tr>
+                        <tr style="background: #e3f2fd; font-weight: bold;">
+                            <td>TOTAL</td>
+                            <td style="text-align: center;">${monitorStats.byType.box}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            <div class="stat-item">
-                <div class="stat-label">Good Condition</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'good').length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Replaced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'replaced').length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Repaired</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'repaired').length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Glue Boards Replaced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.glue_board_replaced).length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Tubes Replaced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.tubes_replaced).length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Faulty Lights</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.light_condition === 'faulty').length}</div>
-            </div>
+            ` : ''}
         </div>
-        ` : ''}
-        
-        <!-- Box Monitors Summary -->
-        ${monitorStats.byType.box > 0 ? `
-        <h4 style="color: #555; margin: 15px 0 5px 0;">Box Monitors (${monitorStats.byType.box})</h4>
-        <div class="stat-grid">
-            <div class="stat-item">
-                <div class="stat-label">Total Box Monitors</div>
-                <div class="stat-value">${monitorStats.byType.box}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Serviced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_serviced).length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Good Condition</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'good').length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Replaced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'replaced').length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Repaired</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'repaired').length}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Glue Boards Replaced</div>
-                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.glue_board_replaced).length}</div>
-            </div>
-        </div>
-        ` : ''}
     </div>
     ` : ''}
 

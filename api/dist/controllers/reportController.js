@@ -36,11 +36,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminEmailReportPDF = exports.adminDownloadReportPDF = exports.updateCompleteReport = exports.createCompleteReport = exports.markNewEquipmentBeforeUpdate = exports.importReportFromJSON = exports.exportReportAsJSON = exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.forceDeclineReport = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
+exports.cleanupOldDrafts = exports.adminEmailReportPDF = exports.adminDownloadReportPDF = exports.updateCompleteReport = exports.createCompleteReport = exports.markNewEquipmentBeforeUpdate = exports.importReportFromJSON = exports.exportReportAsJSON = exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.forceDeclineReport = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const notificationController_1 = require("./notificationController");
 const pdfService_1 = require("../services/pdfService");
+const emailService_1 = require("../services/emailService");
 const path_1 = __importDefault(require("path"));
 const getPCOReports = async (req, res) => {
     try {
@@ -157,8 +158,12 @@ const getAdminReports = async (req, res) => {
         if (statusGroup !== 'all') {
             switch (statusGroup) {
                 case 'draft':
-                    whereConditions.push('(r.status = ? OR r.status = ?)');
-                    queryParams.push('draft', 'pending');
+                    whereConditions.push('r.status = ?');
+                    queryParams.push('draft');
+                    break;
+                case 'pending':
+                    whereConditions.push('r.status = ?');
+                    queryParams.push('pending');
                     break;
                 case 'approved':
                     whereConditions.push('r.status = ?');
@@ -600,7 +605,7 @@ const submitReport = async (req, res) => {
             });
         }
         await (0, database_1.executeQuery)(`UPDATE reports 
-       SET status = 'draft', submitted_at = NOW(), updated_at = NOW()
+       SET status = 'pending', submitted_at = NOW(), updated_at = NOW()
        WHERE id = ?`, [reportId]);
         const { markNewBaitStations, markNewInsectMonitors, updateReportNewEquipmentCounts, updateClientExpectedCounts } = await Promise.resolve().then(() => __importStar(require('../utils/equipmentTracking')));
         const alreadyMarked = await (0, database_1.executeQuery)(`SELECT COUNT(*) as count FROM bait_stations 
@@ -2462,6 +2467,7 @@ exports.adminDownloadReportPDF = adminDownloadReportPDF;
 const adminEmailReportPDF = async (req, res) => {
     try {
         const reportId = parseInt(req.params.id);
+        const { recipients, cc, additionalMessage } = req.body;
         if (isNaN(reportId)) {
             return res.status(400).json({
                 success: false,
@@ -2473,8 +2479,10 @@ const adminEmailReportPDF = async (req, res) => {
         r.id,
         r.client_id,
         r.report_type,
+        r.service_date,
         c.company_name,
-        c.email
+        c.email,
+        c.contact_person
       FROM reports r
       INNER JOIN clients c ON r.client_id = c.id
       WHERE r.id = ?
@@ -2485,20 +2493,70 @@ const adminEmailReportPDF = async (req, res) => {
                 message: 'Report not found'
             });
         }
-        if (!report.email) {
+        let emailRecipients;
+        if (recipients) {
+            emailRecipients = recipients;
+        }
+        else if (report.email) {
+            emailRecipients = report.email;
+        }
+        else {
             return res.status(400).json({
                 success: false,
-                message: 'Client has no email address on file'
+                message: 'No recipients specified and client has no email address on file'
             });
         }
-        logger_1.logger.info(`Emailing PDF for report ${reportId} to ${report.email}`);
+        const validateEmail = (email) => {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        };
+        const recipientArray = Array.isArray(emailRecipients) ? emailRecipients : [emailRecipients];
+        const invalidEmails = recipientArray.filter(email => !validateEmail(email));
+        if (invalidEmails.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid email address(es): ${invalidEmails.join(', ')}`
+            });
+        }
+        if (cc) {
+            const ccArray = Array.isArray(cc) ? cc : [cc];
+            const invalidCCEmails = ccArray.filter(email => !validateEmail(email));
+            if (invalidCCEmails.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid CC email address(es): ${invalidCCEmails.join(', ')}`
+                });
+            }
+        }
+        logger_1.logger.info(`Emailing PDF for report ${reportId} to ${JSON.stringify(emailRecipients)}`);
         const pdfPath = await pdfService_1.pdfService.generateReportPDF(reportId);
-        logger_1.logger.info(`PDF generated for email, report ${reportId}`);
+        const emailSent = await (0, emailService_1.sendReportEmail)(emailRecipients, {
+            reportId: report.id,
+            reportType: report.report_type,
+            clientName: report.company_name,
+            serviceDate: new Date(report.service_date).toLocaleDateString('en-ZA'),
+            pdfPath
+        }, {
+            cc,
+            additionalMessage
+        });
+        if (!emailSent) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send email. Please check email configuration.'
+            });
+        }
+        await (0, database_1.executeQuery)('UPDATE reports SET emailed_at = NOW() WHERE id = ?', [reportId]);
+        const adminUsers = await (0, database_1.executeQuery)('SELECT id FROM users WHERE role = ?', ['admin']);
+        for (const admin of adminUsers) {
+            await (0, notificationController_1.createNotification)(admin.id, 'system_update', 'Report Emailed', `Report #${reportId} has been emailed to ${Array.isArray(emailRecipients) ? emailRecipients.join(', ') : emailRecipients}`);
+        }
+        logger_1.logger.info(`PDF emailed successfully for report ${reportId}`);
         return res.json({
             success: true,
-            message: `PDF generated successfully. Email functionality coming soon.`,
-            client_email: report.email,
-            pdf_path: pdfPath
+            message: 'Report emailed successfully',
+            recipients: emailRecipients,
+            cc: cc || null,
+            emailed_at: new Date().toISOString()
         });
     }
     catch (error) {
@@ -2511,4 +2569,33 @@ const adminEmailReportPDF = async (req, res) => {
     }
 };
 exports.adminEmailReportPDF = adminEmailReportPDF;
+const cleanupOldDrafts = async () => {
+    try {
+        logger_1.logger.info('Starting cleanup of old draft reports (older than 30 days)');
+        const result = await (0, database_1.executeQuery)(`DELETE FROM reports 
+       WHERE status = 'draft' 
+       AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)`, []);
+        const deletedCount = result.affectedRows || 0;
+        if (deletedCount > 0) {
+            logger_1.logger.info(`Cleanup completed: Deleted ${deletedCount} old draft reports`);
+        }
+        else {
+            logger_1.logger.info('Cleanup completed: No old draft reports to delete');
+        }
+        return {
+            success: true,
+            deletedCount,
+            message: `Deleted ${deletedCount} draft reports older than 30 days`
+        };
+    }
+    catch (error) {
+        logger_1.logger.error('Error in cleanupOldDrafts:', error);
+        return {
+            success: false,
+            deletedCount: 0,
+            message: 'Failed to cleanup old drafts'
+        };
+    }
+};
+exports.cleanupOldDrafts = cleanupOldDrafts;
 //# sourceMappingURL=reportController.js.map

@@ -27,4 +27,9 @@ export declare const createCompleteReport: (req: Request, res: Response) => Prom
 export declare const updateCompleteReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const adminDownloadReportPDF: (req: Request, res: Response) => Promise<void | Response<any, Record<string, any>>>;
 export declare const adminEmailReportPDF: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const cleanupOldDrafts: () => Promise<{
+    success: boolean;
+    deletedCount: number;
+    message: string;
+}>;
 //# sourceMappingURL=reportController.d.ts.map
