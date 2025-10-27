@@ -83,6 +83,14 @@ function FumigationContent() {
     try {
       setLoading(true);
       
+      // Check authentication first
+      const token = localStorage.getItem('kps_token');
+      if (!token) {
+        console.log('No authentication token found. Redirecting to login...');
+        router.replace('/login');
+        return;
+      }
+      
       // Load report data from localStorage
       const savedReport = localStorage.getItem('current_report');
       if (!savedReport) {
@@ -126,9 +134,16 @@ function FumigationContent() {
         setOtherPestDescription(report.fumigation.otherPestDescription || '');
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
-      alert.showError('Failed to load data. Please try again.');
+      
+      // Check if it's an authentication error
+      if (error.message?.includes('Session expired') || error.message?.includes('login')) {
+        router.replace('/login');
+        return;
+      }
+      
+      alert.showError(error.message || 'Failed to load data. Please try again.');
     } finally {
       setLoading(false);
     }

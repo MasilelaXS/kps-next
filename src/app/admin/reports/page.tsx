@@ -138,7 +138,7 @@ interface PaginationData {
   has_prev: boolean;
 }
 
-type StatusGroup = 'draft' | 'approved' | 'declined' | 'emailed' | 'archived' | 'all';
+type StatusGroup = 'draft' | 'pending' | 'approved' | 'declined' | 'emailed' | 'archived' | 'all';
 
 export default function ReportsPage() {
   const router = useRouter();
@@ -146,7 +146,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [statusGroup, setStatusGroup] = useState<StatusGroup>('draft');
+  const [statusGroup, setStatusGroup] = useState<StatusGroup>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [reportTypeFilter, setReportTypeFilter] = useState<string>('all');
@@ -759,11 +759,24 @@ export default function ReportsPage() {
             }}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'draft'
+                ? 'bg-gray-100 text-gray-700'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Draft
+          </button>
+          <button
+            onClick={() => {
+              setStatusGroup('pending');
+              setPagination({ ...pagination, current_page: 1 });
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+              statusGroup === 'pending'
                 ? 'bg-yellow-100 text-yellow-700'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
-            Draft / Pending
+            Pending
           </button>
           <button
             onClick={() => {
@@ -1651,11 +1664,11 @@ export default function ReportsPage() {
               </p>
               
               {/* Status Warning */}
-              {selectedReport.status !== 'draft' && (
+              {selectedReport.status !== 'pending' && selectedReport.status !== 'draft' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                   <p className="text-xs text-yellow-800 font-medium">
                     ⚠️ Warning: This report has status "<span className="font-semibold">{selectedReport.status}</span>". 
-                    Only reports with status "draft" can be approved.
+                    Only reports with status "pending" (or "draft" for older reports) can be approved.
                   </p>
                 </div>
               )}
@@ -1677,7 +1690,7 @@ export default function ReportsPage() {
               </button>
               <button
                 onClick={handleApproveReport}
-                disabled={submitting || selectedReport.status !== 'draft'}
+                disabled={submitting || (selectedReport.status !== 'draft' && selectedReport.status !== 'pending')}
                 className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {submitting ? (

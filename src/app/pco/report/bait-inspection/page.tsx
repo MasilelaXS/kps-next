@@ -63,6 +63,14 @@ function BaitInspectionContent() {
     try {
       setLoading(true);
 
+      // Check authentication first
+      const token = localStorage.getItem('kps_token');
+      if (!token) {
+        console.log('No authentication token found. Redirecting to login...');
+        router.replace('/login');
+        return;
+      }
+
       // Load existing report data from localStorage
       const savedReport = localStorage.getItem('current_report');
       if (!savedReport) {
@@ -164,9 +172,16 @@ function BaitInspectionContent() {
       }
 
       setLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
-      setError('Failed to load data');
+      
+      // Check if it's an authentication error
+      if (error.message?.includes('Session expired') || error.message?.includes('login')) {
+        router.replace('/login');
+        return;
+      }
+      
+      setError(error.message || 'Failed to load data');
       setLoading(false);
     }
   };

@@ -15,7 +15,7 @@ export const reportListQuerySchema = Joi.object({
   client_id: Joi.number().integer().optional(),
   pco_id: Joi.number().integer().optional(),
   status: Joi.string().valid('draft', 'pending', 'approved', 'declined', 'archived', 'all').optional(),
-  status_group: Joi.string().valid('draft', 'approved', 'declined', 'emailed', 'archived', 'all').optional(),
+  status_group: Joi.string().valid('draft', 'pending', 'approved', 'declined', 'emailed', 'archived', 'all').optional(),
   report_type: Joi.string().valid('bait_inspection', 'fumigation', 'both', 'all').optional(),
   search: Joi.string().optional(),
   date_from: Joi.date().optional(),
@@ -284,6 +284,18 @@ export const updateFumigationSchema = Joi.object({
 // ============================================================================
 
 export const addInsectMonitorSchema = Joi.object({
+  monitor_number: Joi.string().max(20).required()
+    .messages({
+      'any.required': 'Monitor number is required',
+      'string.empty': 'Monitor number cannot be empty'
+    }),
+  
+  location: Joi.string().max(100).required()
+    .messages({
+      'any.required': 'Monitor location is required',
+      'string.empty': 'Monitor location cannot be empty'
+    }),
+  
   monitor_type: Joi.string().valid('box', 'light').required()
     .messages({
       'any.required': 'Monitor type is required',
@@ -354,6 +366,8 @@ export const addInsectMonitorSchema = Joi.object({
 });
 
 export const updateInsectMonitorSchema = Joi.object({
+  monitor_number: Joi.string().max(20).optional(),
+  location: Joi.string().max(100).optional(),
   monitor_type: Joi.string().valid('box', 'light').optional(),
   monitor_condition: Joi.string().valid('good', 'replaced', 'repaired', 'other').optional(),
   monitor_condition_other: Joi.string().max(255).optional().allow(null, ''),
@@ -364,4 +378,68 @@ export const updateInsectMonitorSchema = Joi.object({
   glue_board_replaced: Joi.boolean().optional(),
   tubes_replaced: Joi.boolean().optional().allow(null),
   monitor_serviced: Joi.boolean().optional()
+});
+
+// ============================================================================
+// COMPLETE REPORT SCHEMA (Single-request submission)
+// ============================================================================
+
+export const createCompleteReportSchema = Joi.object({
+  client_id: Joi.number().integer().required(),
+  report_type: Joi.string().valid('bait_inspection', 'fumigation', 'both').required(),
+  service_date: Joi.date().max('now').required(),
+  next_service_date: Joi.date().greater(Joi.ref('service_date')).optional(),
+  pco_signature_data: Joi.string().required(),
+  client_signature_data: Joi.string().required(),
+  client_signature_name: Joi.string().max(100).required(),
+  general_remarks: Joi.string().max(5000).optional().allow(null, ''),
+  
+  bait_stations: Joi.array().items(Joi.object({
+    station_number: Joi.string().max(20).required(),
+    location: Joi.string().valid('inside', 'outside').required(),
+    bait_status: Joi.string().valid('eaten', 'clean', 'wet', 'old').required(),
+    is_accessible: Joi.boolean().required(),
+    inaccessible_reason: Joi.string().max(255).optional().allow(null, ''),
+    quantity_used: Joi.number().min(0).required(),
+    chemicals: Joi.array().items(Joi.object({
+      chemical_id: Joi.number().integer().required(),
+      quantity: Joi.number().min(0).required(),
+      batch_number: Joi.string().max(50).optional().allow(null, '')
+    })).optional()
+  })).optional(),
+  
+  fumigation: Joi.object({
+    areas: Joi.array().items(Joi.object({
+      area_name: Joi.string().max(100).required(),
+      is_other: Joi.boolean().optional(),
+      other_description: Joi.string().max(255).optional().allow(null, '')
+    })).optional(),
+    
+    target_pests: Joi.array().items(Joi.object({
+      pest_name: Joi.string().max(100).required(),
+      is_other: Joi.boolean().optional(),
+      other_description: Joi.string().max(255).optional().allow(null, '')
+    })).optional(),
+    
+    chemicals: Joi.array().items(Joi.object({
+      chemical_id: Joi.number().integer().required(),
+      quantity: Joi.number().min(0).required(),
+      batch_number: Joi.string().max(50).optional().allow(null, '')
+    })).optional(),
+    
+    monitors: Joi.array().items(Joi.object({
+      monitor_number: Joi.string().max(20).required(),
+      location: Joi.string().max(100).required(),
+      monitor_type: Joi.string().valid('box', 'light').required(),
+      monitor_condition: Joi.string().valid('good', 'replaced', 'repaired', 'other').required(),
+      monitor_condition_other: Joi.string().max(255).optional().allow(null, ''),
+      warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').required(),
+      light_condition: Joi.string().valid('good', 'faulty', 'na').optional(),
+      light_faulty_type: Joi.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional(),
+      light_faulty_other: Joi.string().max(255).optional().allow(null, ''),
+      glue_board_replaced: Joi.boolean().required(),
+      tubes_replaced: Joi.boolean().optional().allow(null),
+      monitor_serviced: Joi.boolean().optional()
+    })).optional()
+  }).optional()
 });

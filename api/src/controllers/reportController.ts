@@ -5,6 +5,7 @@ import { logger } from '../config/logger';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { createNotification } from './notificationController';
 import { pdfService } from '../services/pdfService';
+import { sendReportEmail } from '../services/emailService';
 import path from 'path';
 
 /**
@@ -182,9 +183,14 @@ export const getAdminReports = async (req: Request, res: Response) => {
     if (statusGroup !== 'all') {
       switch (statusGroup) {
         case 'draft':
-          // Draft group includes both draft and pending
-          whereConditions.push('(r.status = ? OR r.status = ?)');
-          queryParams.push('draft', 'pending');
+          // Draft group shows only draft reports (work in progress)
+          whereConditions.push('r.status = ?');
+          queryParams.push('draft');
+          break;
+        case 'pending':
+          // Pending group shows submitted reports awaiting approval
+          whereConditions.push('r.status = ?');
+          queryParams.push('pending');
           break;
         case 'approved':
           whereConditions.push('r.status = ?');
@@ -742,12 +748,12 @@ export const deleteReport = async (req: Request, res: Response) => {
 
 /**
  * POST /api/pco/reports/:id/submit
- * Submit report (mark as submitted but keep as draft)
+ * Submit report for admin review
  * 
  * Business Rules:
  * - Validates all required data complete
- * - Status remains 'draft' (no pending status)
- * - PCO remains assigned to client
+ * - Changes status from 'draft' to 'pending'
+ * - PCO remains assigned to client until approval
  * - Records submission timestamp
  * - Sends notification to admin
  */
@@ -786,10 +792,10 @@ export const submitReport = async (req: Request, res: Response) => {
       });
     }
 
-    // Update report - keep as draft but record submission timestamp
+    // Update report - change status to pending and record submission timestamp
     await executeQuery(
       `UPDATE reports 
-       SET status = 'draft', submitted_at = NOW(), updated_at = NOW()
+       SET status = 'pending', submitted_at = NOW(), updated_at = NOW()
        WHERE id = ?`,
       [reportId]
     );
@@ -897,8 +903,10 @@ export const submitReport = async (req: Request, res: Response) => {
  * 
  * Business Rules:
  * - Admin only
- * - Report must be in pending status
+ * - Report must be in pending status (draft also supported for backward compatibility)
+ * - Deletes PCO-client assignment (service complete)
  * - Records reviewer and timestamp
+ * - Sends notification to PCO
  */
 export const approveReport = async (req: Request, res: Response) => {
   try {
@@ -906,7 +914,7 @@ export const approveReport = async (req: Request, res: Response) => {
     const adminId = req.user!.id;
     const { admin_notes, recommendations } = req.body;
 
-    // Verify report exists and is in draft or pending status (can be approved from either state)
+    // Verify report exists and is in pending or draft status (draft for backward compatibility)
     const reportCheck = await executeQuery<RowDataPacket[]>(
       `SELECT r.id, r.pco_id, r.client_id, c.company_name 
        FROM reports r
@@ -3322,13 +3330,14 @@ export const createCompleteReport = async (req: Request, res: Response) => {
 
           await connection.query(
             `INSERT INTO insect_monitors (
-              report_id, monitor_type, monitor_condition, monitor_condition_other,
+              report_id, monitor_number, location, monitor_type, monitor_condition, monitor_condition_other,
               warning_sign_condition, glue_board_replaced, light_condition,
               light_faulty_type, light_faulty_other, tubes_replaced, monitor_serviced,
               is_new_addition
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              reportId, monitor.monitor_type, monitor.monitor_condition, monitor.monitor_condition_other,
+              reportId, monitor.monitor_number, monitor.location, monitor.monitor_type, 
+              monitor.monitor_condition, monitor.monitor_condition_other,
               monitor.warning_sign_condition, monitor.glue_board_replaced, monitor.light_condition,
               monitor.light_faulty_type, monitor.light_faulty_other, monitor.tubes_replaced, true,
               isNew
@@ -3772,16 +3781,24 @@ export const adminDownloadReportPDF = async (req: Request, res: Response) => {
 
 /**
  * POST /api/admin/reports/:id/email
- * Generate PDF and email to client
+ * Generate PDF and email to client with optional CC and additional message
+ * 
+ * Body:
+ * - recipients: string | string[] (primary recipients, defaults to client email)
+ * - cc?: string | string[] (optional CC recipients)
+ * - additionalMessage?: string (optional additional information to include)
  * 
  * Business Rules:
  * - Admin only
- * - Emails PDF to client's registered email
+ * - Emails PDF to specified recipients or client's registered email
+ * - Updates emailed_at timestamp when sent
+ * - Can be sent multiple times (emailed_at tracks last send)
  * - Creates notification for client
  */
 export const adminEmailReportPDF = async (req: Request, res: Response) => {
   try {
     const reportId = parseInt(req.params.id);
+    const { recipients, cc, additionalMessage } = req.body;
 
     if (isNaN(reportId)) {
       return res.status(400).json({
@@ -3790,14 +3807,16 @@ export const adminEmailReportPDF = async (req: Request, res: Response) => {
       });
     }
 
-    // Get report and client email
+    // Get report and client details
     const report = await executeQuerySingle(`
       SELECT 
         r.id,
         r.client_id,
         r.report_type,
+        r.service_date,
         c.company_name,
-        c.email
+        c.email,
+        c.contact_person
       FROM reports r
       INNER JOIN clients c ON r.client_id = c.id
       WHERE r.id = ?
@@ -3810,28 +3829,101 @@ export const adminEmailReportPDF = async (req: Request, res: Response) => {
       });
     }
 
-    if (!report.email) {
+    // Determine recipients
+    let emailRecipients: string | string[];
+    if (recipients) {
+      emailRecipients = recipients;
+    } else if (report.email) {
+      emailRecipients = report.email;
+    } else {
       return res.status(400).json({
         success: false,
-        message: 'Client has no email address on file'
+        message: 'No recipients specified and client has no email address on file'
       });
     }
 
-    logger.info(`Emailing PDF for report ${reportId} to ${report.email}`);
+    // Validate email format
+    const validateEmail = (email: string) => {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    };
+
+    const recipientArray = Array.isArray(emailRecipients) ? emailRecipients : [emailRecipients];
+    const invalidEmails = recipientArray.filter(email => !validateEmail(email));
+    if (invalidEmails.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid email address(es): ${invalidEmails.join(', ')}`
+      });
+    }
+
+    if (cc) {
+      const ccArray = Array.isArray(cc) ? cc : [cc];
+      const invalidCCEmails = ccArray.filter(email => !validateEmail(email));
+      if (invalidCCEmails.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid CC email address(es): ${invalidCCEmails.join(', ')}`
+        });
+      }
+    }
+
+    logger.info(`Emailing PDF for report ${reportId} to ${JSON.stringify(emailRecipients)}`);
 
     // Generate PDF
     const pdfPath = await pdfService.generateReportPDF(reportId);
 
-    // TODO: Implement email sending with nodemailer
-    // For now, return success with instructions
+    // Send email with PDF attachment
+    const emailSent = await sendReportEmail(
+      emailRecipients,
+      {
+        reportId: report.id,
+        reportType: report.report_type,
+        clientName: report.company_name,
+        serviceDate: new Date(report.service_date).toLocaleDateString('en-ZA'),
+        pdfPath
+      },
+      {
+        cc,
+        additionalMessage
+      }
+    );
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send email. Please check email configuration.'
+      });
+    }
+
+    // Update emailed_at timestamp
+    await executeQuery(
+      'UPDATE reports SET emailed_at = NOW() WHERE id = ?',
+      [reportId]
+    );
+
+    // Create notification for admin
+    const adminUsers = await executeQuery(
+      'SELECT id FROM users WHERE role = ?',
+      ['admin']
+    );
     
-    logger.info(`PDF generated for email, report ${reportId}`);
+    for (const admin of adminUsers as any[]) {
+      await createNotification(
+        admin.id,
+        'system_update',
+        'Report Emailed',
+        `Report #${reportId} has been emailed to ${Array.isArray(emailRecipients) ? emailRecipients.join(', ') : emailRecipients}`
+      );
+    }
+
+    logger.info(`PDF emailed successfully for report ${reportId}`);
 
     return res.json({
       success: true,
-      message: `PDF generated successfully. Email functionality coming soon.`,
-      client_email: report.email,
-      pdf_path: pdfPath
+      message: 'Report emailed successfully',
+      recipients: emailRecipients,
+      cc: cc || null,
+      emailed_at: new Date().toISOString()
     });
 
   } catch (error) {
@@ -3843,4 +3935,51 @@ export const adminEmailReportPDF = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * Cleanup old draft reports
+ * Deletes draft reports that are older than 30 days
+ * This keeps the database clean and removes abandoned reports
+ * 
+ * Should be called:
+ * - On server startup
+ * - Daily via cron job or scheduler
+ */
+export const cleanupOldDrafts = async (): Promise<{ success: boolean; deletedCount: number; message: string }> => {
+  try {
+    logger.info('Starting cleanup of old draft reports (older than 30 days)');
+
+    // Delete draft reports older than 30 days
+    const result = await executeQuery<ResultSetHeader>(
+      `DELETE FROM reports 
+       WHERE status = 'draft' 
+       AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+      []
+    );
+
+    const deletedCount = (result as any).affectedRows || 0;
+
+    if (deletedCount > 0) {
+      logger.info(`Cleanup completed: Deleted ${deletedCount} old draft reports`);
+    } else {
+      logger.info('Cleanup completed: No old draft reports to delete');
+    }
+
+    return {
+      success: true,
+      deletedCount,
+      message: `Deleted ${deletedCount} draft reports older than 30 days`
+    };
+
+  } catch (error) {
+    logger.error('Error in cleanupOldDrafts:', error);
+    return {
+      success: false,
+      deletedCount: 0,
+      message: 'Failed to cleanup old drafts'
+    };
+  }
+};
+
+
 

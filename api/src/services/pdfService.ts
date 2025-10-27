@@ -78,13 +78,19 @@ export class PDFService {
     try {
       logger.info('Starting PDF generation', { reportId });
       const data = await this.getCompleteReportData(reportId);
-      logger.info('Report data retrieved', { reportId, reportType: data.report.report_type });
+      logger.info('Report data retrieved', { 
+        reportId, 
+        reportType: data.report.report_type,
+        fumigationAreas: data.fumigationAreas?.length || 0,
+        fumigationPests: data.fumigationPests?.length || 0,
+        insectMonitors: data.insectMonitors?.length || 0
+      });
       
       let html = '';
       let filename = '';
 
       // Generate appropriate report based on type
-      if (data.report.report_type === 'bait_inspection' || data.report.report_type === 'both') {
+      if (data.report.report_type === 'bait_inspection') {
         logger.info('Generating bait inspection HTML', { reportId });
         html = await this.generateBaitInspectionHTML(data);
         filename = `Bait_Inspection_Report_${reportId}_${Date.now()}.pdf`;
@@ -92,6 +98,10 @@ export class PDFService {
         logger.info('Generating fumigation HTML', { reportId });
         html = await this.generateFumigationHTML(data);
         filename = `Fumigation_Report_${reportId}_${Date.now()}.pdf`;
+      } else if (data.report.report_type === 'both') {
+        logger.info('Generating combined report HTML', { reportId });
+        html = await this.generateCombinedReportHTML(data);
+        filename = `Complete_Report_${reportId}_${Date.now()}.pdf`;
       } else {
         throw new Error('Invalid report type');
       }
@@ -344,6 +354,7 @@ export class PDFService {
 
   private formatAreaName(name: string) {
     // Convert underscore separated names to properly formatted text
+    if (!name) return 'Unknown Area';
     return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   }
 
@@ -461,7 +472,7 @@ export class PDFService {
         .logo-section h2 { margin: 3px 0 0 0; font-size: 11pt; color: #666; font-weight: normal; }
         .address-section { text-align: right; font-size: 8pt; color: #666; }
         .address-section p { margin: 1px 0; }
-        .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; border-left: 3px solid #1f5582; }
+        .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; }
         .info-row { margin: 3px 0; font-size: 8pt; }
         .label { font-weight: bold; display: inline-block; width: 130px; }
         .value { display: inline-block; }
@@ -483,7 +494,7 @@ export class PDFService {
         .status-declined { background: #dc3545; }
         .inaccessible-row { background: #ffebee !important; }
         .location-group { margin-top: 12px; page-break-inside: avoid; }
-        .location-header { background: #e3f2fd; padding: 5px 8px; font-weight: bold; color: #1f5582; border-left: 3px solid #1f5582; font-size: 9pt; }
+        .location-header { background: #e3f2fd; padding: 5px 8px; font-weight: bold; color: #1f5582; font-size: 9pt; }
         .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #999; font-size: 7pt; text-align: center; color: #666; }
         .signature-section { margin: 15px 0; page-break-inside: avoid; }
         .signature-box { text-align: center; }
@@ -905,14 +916,14 @@ export class PDFService {
     <div class="section">
         ${report.general_remarks ? `
         <h3 style="color: #1f5582;">Technician Remarks</h3>
-        <p style="padding: 10px; background: #f9f9f9; border-left: 4px solid #1f5582; margin-bottom: 15px;">
+        <p style="padding: 10px; background: #f9f9f9; margin-bottom: 15px;">
             ${this.escape(report.general_remarks)}
         </p>
         ` : ''}
         
         ${report.recommendations ? `
         <h3 style="color: #1f5582;">Recommendations</h3>
-        <p style="padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; margin-bottom: 15px;">
+        <p style="padding: 10px; background: #fff3cd; margin-bottom: 15px;">
             ${this.escape(report.recommendations)}
         </p>
         ` : ''}
@@ -952,8 +963,16 @@ export class PDFService {
   }
 
   private async generateFumigationHTML(data: ReportData): Promise<string> {
-    const { report, fumigationTreatments, insectMonitors } = data;
+    const { report, fumigationTreatments, fumigationAreas, fumigationPests, insectMonitors } = data;
     const logoBase64 = await this.getLogoBase64();
+    
+    logger.info('Fumigation data destructured', {
+      areasCount: fumigationAreas?.length,
+      pestsCount: fumigationPests?.length,
+      treatmentsCount: fumigationTreatments?.length,
+      monitorsCount: insectMonitors?.length,
+      firstArea: fumigationAreas?.[0]
+    });
     
     const clientAddress = [
       report.address_line1,
@@ -963,27 +982,41 @@ export class PDFService {
       report.postal_code
     ].filter(Boolean).join(', ');
 
-    // Group treatments by areas and pests
+    // Group treatments by areas and pests (using new structure)
     const treatmentsByArea = new Map();
-    fumigationTreatments.forEach(treatment => {
-      const area = treatment.area_treated;
-      if (!treatmentsByArea.has(area)) {
-        treatmentsByArea.set(area, {
-          area: area,
+    
+    // Build treatments from separate areas, pests, and chemicals tables
+    fumigationAreas.forEach(area => {
+      const areaName = area.is_other ? area.other_description : area.area_name;
+      if (!treatmentsByArea.has(areaName)) {
+        treatmentsByArea.set(areaName, {
+          area: areaName,
           pests: new Set(),
           chemicals: []
         });
       }
-      const areaData = treatmentsByArea.get(area);
-      if (treatment.target_pest) areaData.pests.add(treatment.target_pest);
+    });
+    
+    // Add all pests to each area (pests are not area-specific in new structure)
+    fumigationPests.forEach(pest => {
+      const pestName = pest.is_other ? pest.other_description : pest.pest_name;
+      treatmentsByArea.forEach(areaData => {
+        areaData.pests.add(pestName);
+      });
+    });
+    
+    // Add all chemicals to each area (chemicals are not area-specific in new structure)
+    fumigationTreatments.forEach(treatment => {
       if (treatment.chemical_name) {
-        areaData.chemicals.push({
-          name: treatment.chemical_name,
-          l_number: treatment.l_number || 'N/A',
-          batch_number: treatment.batch_number || 'N/A',
-          quantity: treatment.quantity_used,
-          unit: treatment.quantity_unit,
-          method: treatment.application_method
+        treatmentsByArea.forEach(areaData => {
+          areaData.chemicals.push({
+            name: treatment.chemical_name,
+            l_number: treatment.l_number || 'N/A',
+            batch_number: treatment.batch_number || 'N/A',
+            quantity: treatment.quantity,
+            unit: treatment.quantity_unit || 'L',
+            method: null // application_method not stored in new structure
+          });
         });
       }
     });
@@ -1016,13 +1049,15 @@ export class PDFService {
       byType: {
         box: insectMonitors?.filter(m => m.monitor_type?.toLowerCase() === 'box').length || 0,
         light: insectMonitors?.filter(m => m.monitor_type?.toLowerCase() === 'light').length || 0,
-        tube: insectMonitors?.filter(m => m.monitor_type?.toLowerCase() === 'tube').length || 0
+        tube: 0 // No tube type in current schema
       },
-      serviced: insectMonitors?.filter(m => m.serviced).length || 0,
+      serviced: insectMonitors?.filter(m => m.monitor_serviced).length || 0,
       glueBoardsReplaced: insectMonitors?.filter(m => m.glue_board_replaced).length || 0,
-      goodCondition: insectMonitors?.filter(m => m.condition?.toLowerCase() === 'good').length || 0,
-      damaged: insectMonitors?.filter(m => m.condition?.toLowerCase() === 'damaged').length || 0,
-      activityDetected: insectMonitors?.filter(m => m.activity_detected).length || 0
+      tubesReplaced: insectMonitors?.filter(m => m.tubes_replaced).length || 0,
+      goodCondition: insectMonitors?.filter(m => m.monitor_condition?.toLowerCase() === 'good').length || 0,
+      replaced: insectMonitors?.filter(m => m.monitor_condition?.toLowerCase() === 'replaced').length || 0,
+      repaired: insectMonitors?.filter(m => m.monitor_condition?.toLowerCase() === 'repaired').length || 0,
+      lightsFaulty: insectMonitors?.filter(m => m.light_condition?.toLowerCase() === 'faulty').length || 0
     };
 
     return `
@@ -1032,37 +1067,44 @@ export class PDFService {
     <meta charset="UTF-8">
     <title>Fumigation Report #${report.id}</title>
     <style>
-        body { font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.4; margin: 0; padding: 0; color: #333; }
-        .header-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; border-bottom: 3px solid #8b2635; margin-bottom: 20px; }
-        .logo-section h1 { margin: 0; font-size: 20pt; color: #8b2635; }
-        .logo-section h2 { margin: 5px 0 0 0; font-size: 14pt; color: #666; }
-        .address-section { text-align: right; font-size: 9pt; color: #666; }
-        .address-section p { margin: 2px 0; }
-        .report-info { background: #f5f5f5; padding: 15px; margin-bottom: 20px; border-left: 4px solid #8b2635; }
-        .info-row { margin: 5px 0; }
-        .label { font-weight: bold; display: inline-block; width: 150px; }
+        body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
+        .header-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
+        .logo-section h1 { margin: 0; font-size: 16pt; color: #1f5582; font-weight: bold; }
+        .logo-section h2 { margin: 3px 0 0 0; font-size: 11pt; color: #666; font-weight: normal; }
+        .address-section { text-align: right; font-size: 8pt; color: #666; }
+        .address-section p { margin: 1px 0; }
+        .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; }
+        .info-row { margin: 3px 0; font-size: 8pt; }
+        .label { font-weight: bold; display: inline-block; width: 130px; }
         .value { display: inline-block; }
-        .section { margin: 20px 0; page-break-inside: avoid; }
-        .section-title { background: #8b2635; color: white; padding: 10px; margin: 15px 0 10px 0; font-size: 12pt; font-weight: bold; }
-        .treatment-card { background: #fff3cd; padding: 15px; margin: 15px 0; border-left: 4px solid #ffc107; page-break-inside: avoid; }
-        .treatment-header { font-size: 11pt; font-weight: bold; color: #8b2635; margin-bottom: 10px; }
-        .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 10px 0; }
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f9f9f9; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
-        .stat-item { padding: 8px; }
-        .stat-label { font-size: 9pt; color: #666; }
-        .stat-value { font-size: 14pt; font-weight: bold; color: #8b2635; }
-        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 9pt; }
-        th { background: #8b2635; color: white; padding: 8px; text-align: left; font-weight: bold; }
-        td { padding: 6px 8px; border: 1px solid #ddd; }
+        .section { margin: 12px 0; page-break-inside: avoid; }
+        .section-title { background: #1f5582; color: white; padding: 6px 10px; margin: 10px 0 8px 0; font-size: 10pt; font-weight: bold; }
+        .treatment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+        .treatment-card { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; page-break-inside: avoid; }
+        .treatment-header { font-size: 9pt; font-weight: bold; color: #1f5582; margin-bottom: 5px; }
+        .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0; }
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #f9f9f9; padding: 10px; border: 1px solid #ddd; }
+        .stat-item { padding: 4px; text-align: center; }
+        .stat-label { font-size: 6.5pt; color: #666; }
+        .stat-value { font-size: 11pt; font-weight: bold; color: #1f5582; }
+        table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 8pt; }
+        th { background: #1f5582; color: white; padding: 5px 6px; text-align: left; font-weight: bold; font-size: 8pt; }
+        td { padding: 4px 6px; border: 1px solid #ddd; }
         tr:nth-child(even) { background: #f9f9f9; }
-        .status-badge { padding: 4px 8px; border-radius: 3px; font-size: 8pt; font-weight: bold; color: white; }
+        .status-badge { padding: 2px 6px; border-radius: 2px; font-size: 7pt; font-weight: bold; color: white; }
         .status-approved { background: #28a745; }
         .status-pending { background: #ffc107; color: #333; }
         .status-draft { background: #6c757d; }
-        .footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #8b2635; font-size: 8pt; text-align: center; color: #666; }
-        .signature-section { margin-top: 40px; }
-        .signature-box { text-align: center; margin-top: 50px; }
-        .signature-line { border-top: 1px solid #333; margin: 0 auto; width: 300px; }
+        .status-declined { background: #dc3545; }
+        .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #999; font-size: 7pt; text-align: center; color: #666; }
+        .signature-section { margin: 15px 0; page-break-inside: avoid; }
+        .signature-box { text-align: center; }
+        .signature-line { border-top: 1px solid #333; margin: 5px auto; width: 250px; }
+        h3 { font-size: 10pt; margin: 8px 0 5px 0; color: #1f5582; }
+        h4 { font-size: 9pt; margin: 5px 0; }
+        p { margin: 3px 0; font-size: 8pt; }
+        ul { margin: 3px 0; padding-left: 18px; }
+        li { margin: 2px 0; font-size: 8pt; }
     </style>
 </head>
 <body>
@@ -1108,45 +1150,60 @@ export class PDFService {
         </div>
     </div>
 
-    <!-- PCO and Client Details Side-by-Side -->
-    <div class="side-by-side">
-        <div>
-            <h3 style="color: #8b2635; margin: 0 0 10px 0;">Client Details</h3>
-            <p style="margin: 5px 0;"><strong>${this.escape(report.client_name)}</strong></p>
-            <p style="margin: 5px 0;">${this.escape(clientAddress)}</p>
-        </div>
-        <div>
-            <h3 style="color: #8b2635; margin: 0 0 10px 0;">PCO Details</h3>
-            <p style="margin: 5px 0;"><strong>${this.escape(report.pco_name)}</strong></p>
-            <p style="margin: 5px 0;">PCO Number: ${this.escape(report.pco_number)}</p>
-            <p style="margin: 5px 0;">${this.escape(report.pco_phone || '')}</p>
+    <!-- PCO Signature at Top -->
+    <div class="signature-section" style="margin-bottom: 20px;">
+        <div style="display: inline-block; width: 45%; vertical-align: top;">
+            <p style="margin-bottom: 5px; font-weight: bold; font-size: 8pt;">PCO Signature:</p>
+            ${report.pco_signature_data ? `
+                <div style="border: 1px solid #ddd; padding: 5px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                    <img src="${report.pco_signature_data}" alt="PCO Signature" style="max-width: 100%; max-height: 50px; object-fit: contain;" />
+                </div>
+                <p style="font-size: 7pt; margin-top: 3px;">${this.escape(report.pco_name)}</p>
+                <p style="font-size: 7pt;">Date: ${new Date(report.service_date).toLocaleDateString('en-ZA')}</p>
+            ` : '<p style="font-size: 7pt;">No signature</p>'}
         </div>
     </div>
 
-    <!-- Treatment Cards by Area -->
+    <!-- PCO and Client Details Side-by-Side -->
+    <div class="side-by-side">
+        <div>
+            <h3>Client Details</h3>
+            <p><strong>${this.escape(report.client_name)}</strong></p>
+            <p>${this.escape(clientAddress)}</p>
+        </div>
+        <div>
+            <h3>PCO Details</h3>
+            <p><strong>${this.escape(report.pco_name)}</strong></p>
+            <p>PCO Number: ${this.escape(report.pco_number)}</p>
+            <p>${this.escape(report.pco_phone || '')}</p>
+        </div>
+    </div>
+
+    <!-- Treatment Cards by Area (2 per row) -->
     ${treatmentsByArea.size > 0 ? `
     <div class="section">
         <div class="section-title">FUMIGATION TREATMENTS</div>
+        <div class="treatment-grid">
         ${Array.from(treatmentsByArea.values()).map(areaData => `
-        <div class="treatment-card">
-            <div class="treatment-header">${this.formatAreaName(areaData.area)}</div>
-            <p style="margin: 5px 0;">
-                <strong>Target Pests:</strong> ${Array.from(areaData.pests).join(', ') || 'Not specified'}
-            </p>
-            ${areaData.chemicals.length > 0 ? `
-            <p style="margin: 5px 0;"><strong>Chemicals Applied:</strong></p>
-            <ul style="margin: 5px 0; padding-left: 20px;">
-                ${areaData.chemicals.map((chem: any) => `
-                <li>
-                    ${this.escape(chem.name)}${chem.l_number !== 'N/A' ? ` (L${chem.l_number})` : ''}
-                    - ${chem.quantity} ${chem.unit}
-                    ${chem.method ? ` via ${this.escape(chem.method)}` : ''}
-                </li>
-                `).join('')}
-            </ul>
-            ` : ''}
-        </div>
+            <div class="treatment-card">
+                <div class="treatment-header">${this.formatAreaName(areaData.area)}</div>
+                <p style="margin: 3px 0; font-size: 7pt;">
+                    <strong>Target Pests:</strong> ${Array.from(areaData.pests).join(', ') || 'Not specified'}
+                </p>
+                ${areaData.chemicals.length > 0 ? `
+                <p style="margin: 3px 0; font-size: 7pt;"><strong>Chemicals Applied:</strong></p>
+                <ul style="margin: 3px 0; padding-left: 15px; font-size: 7pt;">
+                    ${areaData.chemicals.map((chem: any) => `
+                    <li>
+                        ${this.escape(chem.name)}${chem.l_number !== 'N/A' ? ` (L${chem.l_number})` : ''}
+                        - ${chem.quantity} ${chem.unit}
+                    </li>
+                    `).join('')}
+                </ul>
+                ` : ''}
+            </div>
         `).join('')}
+        </div>
     </div>
     ` : ''}
 
@@ -1177,81 +1234,175 @@ export class PDFService {
     </div>
     ` : ''}
 
-    <!-- Insect Monitors Table -->
-    ${insectMonitors && insectMonitors.length > 0 ? `
+    <!-- Insect Monitors - Light Type -->
+    ${insectMonitors && insectMonitors.filter(m => m.monitor_type === 'light').length > 0 ? `
     <div class="section">
-        <div class="section-title">INSECT MONITORS</div>
-        <table>
+        <div class="section-title">LIGHT MONITORS</div>
+        <table style="font-size: 9px;">
             <thead>
                 <tr>
                     <th>Monitor #</th>
-                    <th>Type</th>
                     <th>Location</th>
-                    <th style="text-align: center;">Serviced</th>
-                    <th style="text-align: center;">Glue Board</th>
-                    <th>Condition</th>
-                    <th style="text-align: center;">Activity</th>
-                    <th>Remarks</th>
+                    <th>Monitor<br/>Condition</th>
+                    <th>Warning<br/>Sign</th>
+                    <th>Light<br/>Condition</th>
+                    <th>Glue Board<br/>Replaced</th>
+                    <th>Tubes<br/>Replaced</th>
+                    <th>Serviced</th>
                 </tr>
             </thead>
             <tbody>
-                ${insectMonitors.map(monitor => `
+                ${insectMonitors
+                  .filter(m => m.monitor_type === 'light')
+                  .sort((a, b) => {
+                    const numA = a.monitor_number || '';
+                    const numB = b.monitor_number || '';
+                    return numA.localeCompare(numB, undefined, { numeric: true });
+                  })
+                  .map(monitor => {
+                  const monitorCond = monitor.monitor_condition === 'other' && monitor.monitor_condition_other 
+                    ? monitor.monitor_condition_other 
+                    : monitor.monitor_condition || '-';
+                  const lightCond = monitor.light_condition === 'faulty' && monitor.light_faulty_type
+                    ? `Faulty (${monitor.light_faulty_type}${monitor.light_faulty_type === 'other' && monitor.light_faulty_other ? ': ' + monitor.light_faulty_other : ''})`
+                    : (monitor.light_condition || '-');
+                  
+                  return `
                 <tr>
-                    <td>${this.escape(monitor.monitor_number || '-')}</td>
-                    <td>${this.escape(monitor.monitor_type || '-')}</td>
+                    <td><strong>${this.escape(monitor.monitor_number || '-')}</strong></td>
                     <td>${this.escape(monitor.location || '-')}</td>
-                    <td style="text-align: center;">${monitor.serviced ? '✓' : '-'}</td>
-                    <td style="text-align: center;">${monitor.glue_board_replaced ? 'Replaced' : '-'}</td>
-                    <td>${this.escape(monitor.condition || '-')}</td>
-                    <td style="text-align: center;">${monitor.activity_detected ? '✓' : '-'}</td>
-                    <td>${this.escape(monitor.remarks || '-')}</td>
+                    <td style="text-align: center;">${this.escape(monitorCond)}</td>
+                    <td style="text-align: center;">${this.escape(monitor.warning_sign_condition || '-')}</td>
+                    <td style="text-align: center;">${this.escape(lightCond)}</td>
+                    <td style="text-align: center;">${monitor.glue_board_replaced ? '✓' : '-'}</td>
+                    <td style="text-align: center;">${monitor.tubes_replaced ? '✓' : '-'}</td>
+                    <td style="text-align: center;">${monitor.monitor_serviced ? '✓' : '-'}</td>
                 </tr>
-                `).join('')}
+                `;
+                }).join('')}
             </tbody>
         </table>
     </div>
+    ` : ''}
 
-    <!-- Monitor Summary Statistics -->
+    <!-- Insect Monitors - Box Type -->
+    ${insectMonitors && insectMonitors.filter(m => m.monitor_type === 'box').length > 0 ? `
     <div class="section">
-        <h3 style="color: #8b2635;">Insect Monitor Summary</h3>
+        <div class="section-title">BOX MONITORS</div>
+        <table style="font-size: 9px;">
+            <thead>
+                <tr>
+                    <th>Monitor #</th>
+                    <th>Location</th>
+                    <th>Monitor<br/>Condition</th>
+                    <th>Warning<br/>Sign</th>
+                    <th>Glue Board<br/>Replaced</th>
+                    <th>Serviced</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${insectMonitors
+                  .filter(m => m.monitor_type === 'box')
+                  .sort((a, b) => {
+                    const numA = a.monitor_number || '';
+                    const numB = b.monitor_number || '';
+                    return numA.localeCompare(numB, undefined, { numeric: true });
+                  })
+                  .map(monitor => {
+                  const monitorCond = monitor.monitor_condition === 'other' && monitor.monitor_condition_other 
+                    ? monitor.monitor_condition_other 
+                    : monitor.monitor_condition || '-';
+                  
+                  return `
+                <tr>
+                    <td><strong>${this.escape(monitor.monitor_number || '-')}</strong></td>
+                    <td>${this.escape(monitor.location || '-')}</td>
+                    <td style="text-align: center;">${this.escape(monitorCond)}</td>
+                    <td style="text-align: center;">${this.escape(monitor.warning_sign_condition || '-')}</td>
+                    <td style="text-align: center;">${monitor.glue_board_replaced ? '✓' : '-'}</td>
+                    <td style="text-align: center;">${monitor.monitor_serviced ? '✓' : '-'}</td>
+                </tr>
+                `;
+                }).join('')}
+            </tbody>
+        </table>
+    </div>
+    ` : ''}
+
+    <!-- Monitor Summary Statistics - Split by Type -->
+    ${insectMonitors && insectMonitors.length > 0 ? `
+    <div class="section">
+        <h3 style="color: #8b2635;">Monitor Summary</h3>
+        
+        <!-- Light Monitors Summary -->
+        ${monitorStats.byType.light > 0 ? `
+        <h4 style="color: #555; margin: 10px 0 5px 0;">Light Monitors (${monitorStats.byType.light})</h4>
         <div class="stat-grid">
             <div class="stat-item">
-                <div class="stat-label">Total Monitors</div>
-                <div class="stat-value">${monitorStats.total}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Serviced</div>
-                <div class="stat-value">${monitorStats.serviced}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Box Monitors</div>
-                <div class="stat-value">${monitorStats.byType.box}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Light Monitors</div>
+                <div class="stat-label">Total Light Monitors</div>
                 <div class="stat-value">${monitorStats.byType.light}</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">Tube Monitors</div>
-                <div class="stat-value">${monitorStats.byType.tube}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Glue Boards Replaced</div>
-                <div class="stat-value">${monitorStats.glueBoardsReplaced}</div>
+                <div class="stat-label">Serviced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_serviced).length}</div>
             </div>
             <div class="stat-item">
                 <div class="stat-label">Good Condition</div>
-                <div class="stat-value">${monitorStats.goodCondition}</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'good').length}</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">Damaged</div>
-                <div class="stat-value">${monitorStats.damaged}</div>
+                <div class="stat-label">Replaced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'replaced').length}</div>
             </div>
             <div class="stat-item">
-                <div class="stat-label">Activity Detected</div>
-                <div class="stat-value">${monitorStats.activityDetected}</div>
+                <div class="stat-label">Repaired</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'repaired').length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Glue Boards Replaced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.glue_board_replaced).length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Tubes Replaced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.tubes_replaced).length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Faulty Lights</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'light' && m.light_condition === 'faulty').length}</div>
             </div>
         </div>
+        ` : ''}
+        
+        <!-- Box Monitors Summary -->
+        ${monitorStats.byType.box > 0 ? `
+        <h4 style="color: #555; margin: 15px 0 5px 0;">Box Monitors (${monitorStats.byType.box})</h4>
+        <div class="stat-grid">
+            <div class="stat-item">
+                <div class="stat-label">Total Box Monitors</div>
+                <div class="stat-value">${monitorStats.byType.box}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Serviced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_serviced).length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Good Condition</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'good').length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Replaced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'replaced').length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Repaired</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'repaired').length}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Glue Boards Replaced</div>
+                <div class="stat-value">${insectMonitors.filter(m => m.monitor_type === 'box' && m.glue_board_replaced).length}</div>
+            </div>
+        </div>
+        ` : ''}
     </div>
     ` : ''}
 
@@ -1259,62 +1410,78 @@ export class PDFService {
     ${report.general_remarks || report.recommendations ? `
     <div class="section">
         ${report.general_remarks ? `
-        <h3 style="color: #8b2635;">Technician Remarks</h3>
-        <p style="padding: 10px; background: #f9f9f9; border-left: 4px solid #8b2635; margin-bottom: 15px;">
+        <h3 style="color: #1f5582;">Technician Remarks</h3>
+        <p style="padding: 10px; background: #f9f9f9; margin-bottom: 15px;">
             ${this.escape(report.general_remarks)}
         </p>
         ` : ''}
         
         ${report.recommendations ? `
-        <h3 style="color: #8b2635;">Recommendations</h3>
-        <p style="padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; margin-bottom: 15px;">
+        <h3 style="color: #1f5582;">Recommendations</h3>
+        <p style="padding: 10px; background: #fff3cd; margin-bottom: 15px;">
             ${this.escape(report.recommendations)}
         </p>
         ` : ''}
         
         ${report.next_service_date ? `
-        <p style="font-weight: bold; color: #8b2635;">
+        <p style="font-weight: bold; color: #1f5582; font-size: 8pt;">
             Next Service Scheduled: ${new Date(report.next_service_date).toLocaleDateString('en-ZA')}
         </p>
         ` : ''}
     </div>
     ` : ''}
 
-    <!-- Signatures Section -->
-    <div class="signature-section">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px;">
-            <div class="signature-box">
-                <p style="margin-bottom: 10px;"><strong>PCO Signature:</strong></p>
-                ${report.pco_signature_data ? `
-                    <div style="border: 1px solid #ddd; padding: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center;">
-                        <img src="${report.pco_signature_data}" alt="PCO Signature" style="max-width: 100%; max-height: 80px; object-fit: contain;" />
-                    </div>
-                ` : `
-                    <div class="signature-line"></div>
-                `}
-                <p style="margin-top: 10px;">${this.escape(report.pco_first_name + ' ' + report.pco_last_name)}</p>
-                <p style="margin-top: 5px; font-size: 9pt; color: #666;">Date: ${new Date(report.service_date).toLocaleDateString('en-ZA')}</p>
-            </div>
-            <div class="signature-box">
-                <p style="margin-bottom: 10px;"><strong>Client Signature:</strong></p>
-                ${report.client_signature_data ? `
-                    <div style="border: 1px solid #ddd; padding: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center;">
-                        <img src="${report.client_signature_data}" alt="Client Signature" style="max-width: 100%; max-height: 80px; object-fit: contain;" />
-                    </div>
-                ` : `
-                    <div class="signature-line"></div>
-                `}
-                <p style="margin-top: 10px;">${this.escape(report.client_signature_name || 'Name: ___________________________')}</p>
-                <p style="margin-top: 5px; font-size: 9pt; color: #666;">Date: ${new Date().toLocaleDateString('en-ZA')}</p>
-            </div>
+    <!-- Client Signature Section -->
+    <div class="signature-section" style="margin-top: 25px;">
+        <div style="display: inline-block; width: 45%; vertical-align: top;">
+            <p style="margin-bottom: 5px; font-weight: bold; font-size: 8pt;">Client Signature:</p>
+            ${report.client_signature_data ? `
+                <div style="border: 1px solid #ddd; padding: 5px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                    <img src="${report.client_signature_data}" alt="Client Signature" style="max-width: 100%; max-height: 50px; object-fit: contain;" />
+                </div>
+            ` : `
+                <div class="signature-line" style="width: 200px; margin: 0;"></div>
+            `}
+            <p style="margin-top: 3px; font-size: 8pt;">${this.escape(report.client_signature_name || 'Name: ___________________________')}</p>
+            <p style="margin-top: 2px; font-size: 7pt; color: #666;">Date: ${new Date().toLocaleDateString('en-ZA')}</p>
         </div>
     </div>
 
+    <!-- Footer -->
     <div class="footer">
         <p><strong>KPS Pest Control</strong> | 3B Hamman Street, Groblersdal, 0470</p>
         <p>Tel: +27 11 123 4567 | Email: info@kpspestcontrol.co.za</p>
         <p>Generated on ${new Date().toLocaleString('en-ZA')}</p>
     </div>
+</body>
+</html>
+`;
+  }
+
+  // Combined report for report_type = 'both'
+  private async generateCombinedReportHTML(data: ReportData): Promise<string> {
+    const baitHTML = await this.generateBaitInspectionHTML(data);
+    const fumigationHTML = await this.generateFumigationHTML(data);
+    
+    // Extract body content from each (remove DOCTYPE, html, head, body tags)
+    const baitBody = baitHTML.match(/<body>([\s\S]*)<\/body>/)?.[1] || '';
+    const fumigationBody = fumigationHTML.match(/<body>([\s\S]*)<\/body>/)?.[1] || '';
+    
+    // Get style from bait inspection (they should be the same now)
+    const style = baitHTML.match(/<style>([\s\S]*)<\/style>/)?.[1] || '';
+    
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Complete Report #${data.report.id}</title>
+    <style>${style}</style>
+</head>
+<body>
+    ${baitBody}
+    <div style="page-break-before: always;"></div>
+    ${fumigationBody}
 </body>
 </html>
 `;

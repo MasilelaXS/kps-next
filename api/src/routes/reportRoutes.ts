@@ -69,7 +69,8 @@ import {
   updateFumigationSchema,
   addInsectMonitorSchema,
   updateInsectMonitorSchema,
-  reportListQuerySchema
+  reportListQuerySchema,
+  createCompleteReportSchema
 } from '../validation/reportValidation';
 
 const router = Router();
@@ -130,6 +131,7 @@ router.post(
 router.post(
   '/pco/reports/complete',
   authenticateToken,
+  validateRequest(createCompleteReportSchema),
   createCompleteReport
 );
 

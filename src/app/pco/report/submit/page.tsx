@@ -32,6 +32,14 @@ export default function SubmitReport() {
 
   const loadReportData = () => {
     try {
+      // Check authentication first
+      const token = localStorage.getItem('kps_token');
+      if (!token) {
+        console.log('No authentication token found. Redirecting to login...');
+        router.replace('/login');
+        return;
+      }
+
       const savedReport = localStorage.getItem('current_report');
       if (!savedReport) {
         setError('No report data found. Please start from the beginning.');

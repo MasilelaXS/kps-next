@@ -296,6 +296,168 @@ export const sendWelcomeEmail = async (
 };
 
 /**
+ * Send report email with PDF attachment
+ */
+export const sendReportEmail = async (
+  to: string | string[],
+  reportData: {
+    reportId: number;
+    reportType: string;
+    clientName: string;
+    serviceDate: string;
+    pdfPath: string;
+  },
+  options?: {
+    cc?: string | string[];
+    additionalMessage?: string;
+  }
+): Promise<boolean> => {
+  try {
+    const recipients = Array.isArray(to) ? to.join(', ') : to;
+    const ccRecipients = options?.cc ? (Array.isArray(options.cc) ? options.cc.join(', ') : options.cc) : undefined;
+    
+    const reportTypeDisplay = reportData.reportType === 'bait_inspection' 
+      ? 'Bait Inspection Report' 
+      : reportData.reportType === 'fumigation'
+      ? 'Fumigation Report'
+      : 'Service Report';
+
+    const mailOptions = {
+      from: config.email.from,
+      to: recipients,
+      cc: ccRecipients,
+      subject: `KPS Pest Control - ${reportTypeDisplay} #${reportData.reportId}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+              }
+              .container {
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+              }
+              .header {
+                background-color: #1f5582;
+                color: white;
+                padding: 20px;
+                text-align: center;
+                border-radius: 5px 5px 0 0;
+              }
+              .content {
+                background-color: #f9fafb;
+                padding: 30px;
+                border-radius: 0 0 5px 5px;
+              }
+              .info-box {
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 15px;
+                margin: 20px 0;
+              }
+              .info-row {
+                display: flex;
+                justify-content: space-between;
+                padding: 8px 0;
+                border-bottom: 1px solid #eee;
+              }
+              .info-row:last-child {
+                border-bottom: none;
+              }
+              .label {
+                font-weight: bold;
+                color: #666;
+              }
+              .value {
+                color: #333;
+              }
+              .additional-message {
+                background-color: #e3f2fd;
+                border-left: 4px solid #1f5582;
+                padding: 15px;
+                margin: 20px 0;
+              }
+              .footer {
+                text-align: center;
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+                font-size: 12px;
+                color: #6b7280;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1 style="margin: 0;">KPS PEST CONTROL</h1>
+                <p style="margin: 10px 0 0 0;">${reportTypeDisplay}</p>
+              </div>
+              <div class="content">
+                <p>Dear ${reportData.clientName},</p>
+                
+                <p>Please find attached your ${reportTypeDisplay.toLowerCase()} from KPS Pest Control.</p>
+                
+                <div class="info-box">
+                  <div class="info-row">
+                    <span class="label">Report ID:</span>
+                    <span class="value">#${reportData.reportId}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Service Date:</span>
+                    <span class="value">${reportData.serviceDate}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Report Type:</span>
+                    <span class="value">${reportTypeDisplay}</span>
+                  </div>
+                </div>
+                
+                ${options?.additionalMessage ? `
+                  <div class="additional-message">
+                    <p style="margin: 0;"><strong>Additional Information:</strong></p>
+                    <p style="margin: 10px 0 0 0;">${options.additionalMessage.replace(/\n/g, '<br>')}</p>
+                  </div>
+                ` : ''}
+                
+                <p>If you have any questions or concerns about this report, please don't hesitate to contact us.</p>
+                
+                <p style="margin-top: 30px;">Best regards,<br>
+                <strong>KPS Pest Control Team</strong></p>
+              </div>
+              <div class="footer">
+                <p><strong>KPS Pest Control</strong></p>
+                <p>3B Hamman Street, Groblersdal, 0470, South Africa</p>
+                <p>This is an automated email. Please do not reply directly to this message.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+      attachments: [
+        {
+          filename: `${reportTypeDisplay.replace(/\s+/g, '_')}_${reportData.reportId}.pdf`,
+          path: reportData.pdfPath
+        }
+      ]
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info(`Report email sent to ${recipients}${ccRecipients ? ` (CC: ${ccRecipients})` : ''}`);
+    return true;
+  } catch (error) {
+    logger.error('Failed to send report email:', error);
+    return false;
+  }
+};
+
+/**
  * Test email configuration
  */
 export const sendTestEmail = async (to: string): Promise<boolean> => {
@@ -326,3 +488,4 @@ export const sendTestEmail = async (to: string): Promise<boolean> => {
     return false;
   }
 };
+
