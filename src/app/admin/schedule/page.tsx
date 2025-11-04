@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -93,7 +94,7 @@ export default function SchedulePage() {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/users?role=pco&status=${statusFilter}&limit=100`, {
+      const response = await fetch(buildApiUrl(`/api/admin/users?role=pco&status=${statusFilter}&limit=100`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -121,7 +122,7 @@ export default function SchedulePage() {
     try {
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments?pco_id=${pcoId}&status=active&limit=100`, {
+      const response = await fetch(buildApiUrl(`/api/admin/assignments?pco_id=${pcoId}&status=active&limit=100`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -146,7 +147,7 @@ export default function SchedulePage() {
       const token = localStorage.getItem('kps_token');
       
       // Fetch ALL active clients (not just unassigned) to show assignment status
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/clients?status=active&limit=100`, {
+      const response = await fetch(buildApiUrl(`/api/admin/clients?status=active&limit=100`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -180,7 +181,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments/bulk-assign`, {
+      const response = await fetch(buildApiUrl(`/api/admin/assignments/bulk-assign`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -221,7 +222,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments/bulk-unassign`, {
+      const response = await fetch(buildApiUrl(`/api/admin/assignments/bulk-unassign`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -262,7 +263,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/assignments/bulk-unassign`, {
+      const response = await fetch(buildApiUrl(`/api/admin/assignments/bulk-unassign`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -605,7 +606,7 @@ export default function SchedulePage() {
 
       {/* Assign Clients Modal */}
       {showAssignModal && selectedPco && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -775,7 +776,7 @@ export default function SchedulePage() {
 
       {/* Unassign Confirmation Modal */}
       {showUnassignModal && selectedAssignment && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">

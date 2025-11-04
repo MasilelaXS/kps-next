@@ -79,6 +79,8 @@ export default function SchedulePage() {
   }
 
   if (error) {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    
     return (
       <PcoDashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -87,13 +89,20 @@ export default function SchedulePage() {
               <AlertCircle className="w-8 h-8 text-red-600" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Failed to Load Schedule</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={fetchAssignedClients}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition-all"
-            >
-              Try Again
-            </button>
+            <p className="text-gray-600 mb-4">
+              {isOffline 
+                ? 'You are currently offline. Please connect to the internet to load your schedule.'
+                : error
+              }
+            </p>
+            {!isOffline && (
+              <button
+                onClick={fetchAssignedClients}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition-all"
+              >
+                Try Again
+              </button>
+            )}
           </div>
         </div>
       </PcoDashboardLayout>

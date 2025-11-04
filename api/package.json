@@ -6,11 +6,13 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:prod": "NODE_ENV=production node dist/server.js",
     "dev": "nodemon src/server.ts",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "clean": "rimraf dist",
-    "prebuild": "npm run clean"
+    "prebuild": "npm run clean",
+    "deploy": "npm run build && npm run start:prod"
   },
   "keywords": [
     "pest-control",

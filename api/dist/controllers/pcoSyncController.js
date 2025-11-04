@@ -608,6 +608,7 @@ const getLastReportForClient = async (req, res) => {
         }
         const reportId = lastReports[0].id;
         const baitStations = await (0, database_1.executeQuery)(`SELECT 
+        id,
         station_number,
         location,
         is_accessible,

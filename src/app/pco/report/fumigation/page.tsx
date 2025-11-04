@@ -86,7 +86,6 @@ function FumigationContent() {
       // Check authentication first
       const token = localStorage.getItem('kps_token');
       if (!token) {
-        console.log('No authentication token found. Redirecting to login...');
         router.replace('/login');
         return;
       }
@@ -319,10 +318,6 @@ function FumigationContent() {
 
   const updateClientMonitorCounts = async (lightCount: number, boxCount: number) => {
     try {
-      console.log('=== UPDATING CLIENT MONITOR COUNTS (LOCAL ONLY) ===');
-      console.log('Expected light:', expectedMonitors.light, '→ New:', lightCount);
-      console.log('Expected box:', expectedMonitors.box, '→ New:', boxCount);
-
       // Update local state
       setExpectedMonitors({
         light: lightCount,

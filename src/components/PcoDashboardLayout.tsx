@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import Loading from './Loading';
+import OfflineSyncStatus from './OfflineSyncStatus';
 import { requireAuth, logout } from '@/lib/auth';
+import { preloadCache } from '@/lib/preloadCache';
 
 interface PcoDashboardLayoutProps {
   children: React.ReactNode;
@@ -52,6 +54,11 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
           logout();
         }
       }
+
+      // Preload critical data for offline access
+      setTimeout(() => {
+        preloadCache.preloadForRole('pco');
+      }, 1000);
     }
   }, [router]);
 
@@ -93,6 +100,7 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
           <h1 className="text-lg font-semibold text-gray-900">PCO Portal</h1>
         </div>
         <div className="flex items-center gap-2">
+          <OfflineSyncStatus />
           <NotificationBell />
         </div>
       </header>
@@ -112,10 +120,10 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all ${
+                className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all active:scale-95 ${
                   isActive
                     ? 'text-purple-600'
-                    : 'text-gray-500 active:scale-95'
+                    : 'text-gray-500'
                 }`}
               >
                 <Icon className={`w-6 h-6 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />

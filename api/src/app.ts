@@ -33,8 +33,11 @@ app.use(helmet({
 // Allow multiple origins for development (localhost and network IPs)
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3002', // Production build
   'http://127.0.0.1:3000',
+  'http://127.0.0.1:3002',
   'http://192.168.1.128:3000',
+  'http://192.168.1.128:3002', // Production build on network
   config.security.corsOrigin // Also include env variable
 ].filter(Boolean);
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import { useRouter, useParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -194,7 +195,7 @@ export default function EditReportPage() {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
 
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${reportId}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${reportId}`), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -272,7 +273,7 @@ export default function EditReportPage() {
         return;
       }
       
-      const response = await fetch('http://192.168.1.128:3001/api/admin/chemicals?status=active&limit=100', {
+      const response = await fetch(buildApiUrl('/api/admin/chemicals?status=active&limit=100'), {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -334,7 +335,7 @@ export default function EditReportPage() {
         insect_monitors: insectMonitors
       };
 
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${reportId}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${reportId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
-import { Users, Building2, FileText, CheckCircle, TrendingUp, Clock, Hand } from 'lucide-react';
-import { API_CONFIG } from '@/lib/api';
+import { Users, Building2, FileText, CheckCircle, TrendingUp, Clock } from 'lucide-react';
+import { buildApiUrl } from '@/lib/api';
 
 interface DashboardStats {
   totalClients: number;
   activePCOs: number;
   pendingReports: number;
-  completedReports: number;
+  completedReportsThisMonth: number;
+  totalReports: number;
 }
 
 interface MetricsResponse {
@@ -45,10 +46,10 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       const token = localStorage.getItem('kps_token');
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/admin/dashboard/metrics`, {
+      const response = await fetch(buildApiUrl('/api/admin/dashboard/metrics'), {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -62,12 +63,36 @@ export default function AdminDashboard() {
       const data = await response.json();
       if (data.success) {
         const metrics: MetricsResponse = data.data;
+        
+        // Calculate this month's completed reports
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const firstDayStr = firstDayOfMonth.toISOString().split('T')[0];
+        
+        // Fetch monthly reports
+        const monthlyResponse = await fetch(
+          buildApiUrl(`/api/admin/reports?status=approved&date_from=${firstDayStr}`),
+          {
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+          }
+        );
+        
+        let monthlyCount = 0;
+        if (monthlyResponse.ok) {
+          const monthlyData = await monthlyResponse.json();
+          monthlyCount = monthlyData.data?.reports?.length || 0;
+        }
+        
         // Map backend data to frontend stats
         setStats({
           totalClients: metrics.clients.total,
           activePCOs: metrics.users.pco.active,
           pendingReports: metrics.reports.pending,
-          completedReports: metrics.reports.approved
+          completedReportsThisMonth: monthlyCount,
+          totalReports: metrics.reports.approved
         });
       }
     } catch (error) {
@@ -75,7 +100,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -146,39 +171,8 @@ export default function AdminDashboard() {
             </div>
             <span className="text-sm font-medium text-green-600">This month</span>
           </div>
-          <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats?.completedReports || 0}</h3>
-          <p className="text-gray-600 text-sm">Completed Reports</p>
-        </div>
-      </div>
-
-      {/* Recent Activity & Upcoming */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Recent Activity
-          </h3>
-          <div className="space-y-4">
-            <div className="text-center py-8 text-gray-500">
-              <Clock className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-              <p>No recent activity</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Upcoming Assignments */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Upcoming Assignments
-          </h3>
-          <div className="space-y-4">
-            <div className="text-center py-8 text-gray-500">
-              <Clock className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-              <p>No upcoming assignments</p>
-            </div>
-          </div>
+          <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats?.completedReportsThisMonth || 0}</h3>
+          <p className="text-gray-600 text-sm">Completed This Month</p>
         </div>
       </div>
 

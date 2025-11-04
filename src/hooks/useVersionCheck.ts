@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { buildApiUrl } from '@/lib/api';
 
 interface UseVersionCheckReturn {
   needsUpdate: boolean;
@@ -25,7 +26,7 @@ export function useVersionCheck(): UseVersionCheckReturn {
     try {
       // Add cache-busting parameter to ensure fresh data
       const timestamp = new Date().getTime();
-      const response = await fetch(`http://192.168.1.128:3001/api/version/current?current_version=${CURRENT_APP_VERSION}&platform=web&_t=${timestamp}`, {
+      const response = await fetch(buildApiUrl(`/api/version/current?current_version=${CURRENT_APP_VERSION}&platform=web&_t=${timestamp}`), {
         cache: 'no-store'
       });
       

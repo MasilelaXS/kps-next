@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
 import Loading from '@/components/Loading';
 import { User, Mail, Phone, MapPin, Calendar, LogOut, Lock, Eye, EyeOff } from 'lucide-react';
@@ -55,7 +56,7 @@ export default function PCOProfile() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
 
-      const response = await fetch('http://192.168.1.128:3001/api/auth/change-password', {
+      const response = await fetch(buildApiUrl('/api/auth/change-password'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

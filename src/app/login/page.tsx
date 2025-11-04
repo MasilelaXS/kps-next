@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { buildApiUrl } from '@/lib/api';
 import TextBox from '@/components/TextBox';
 import { Eye, EyeOff, User, Lock } from 'lucide-react';
 
@@ -21,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://192.168.1.128:3001/api/auth/login', {
+      const response = await fetch(buildApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

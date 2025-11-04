@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TextBox from '@/components/TextBox';
 import Loading from '@/components/Loading';
 import { Lock, CheckCircle, AlertCircle } from 'lucide-react';
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -32,7 +33,7 @@ export default function ResetPasswordPage() {
       }
 
       try {
-        const response = await fetch(`http://192.168.1.128:3001/api/auth/verify-reset-token?token=${token}`);
+        const response = await fetch(buildApiUrl(`/api/auth/verify-reset-token?token=${token}`));
         const data = await response.json();
 
         if (response.ok && data.success) {
@@ -87,7 +88,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://192.168.1.128:3001/api/auth/reset-password', {
+      const response = await fetch(buildApiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -267,5 +268,17 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-700 flex items-center justify-center">
+        <Loading size="lg" text="Loading..." />
+      </div>
+    }>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

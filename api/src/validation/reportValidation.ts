@@ -400,7 +400,17 @@ export const createCompleteReportSchema = Joi.object({
     bait_status: Joi.string().valid('eaten', 'clean', 'wet', 'old').required(),
     is_accessible: Joi.boolean().required(),
     inaccessible_reason: Joi.string().max(255).optional().allow(null, ''),
-    quantity_used: Joi.number().min(0).required(),
+    activity_detected: Joi.boolean().required(),
+    activity_droppings: Joi.boolean().optional(),
+    activity_gnawing: Joi.boolean().optional(),
+    activity_tracks: Joi.boolean().optional(),
+    activity_other: Joi.boolean().optional(),
+    activity_other_description: Joi.string().max(255).optional().allow(null, ''),
+    station_condition: Joi.string().valid('good', 'damaged', 'needs_repair', 'missing').required(),
+    action_taken: Joi.string().valid('none', 'refilled', 'replaced', 'repaired').optional().allow(null, ''),
+    warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted', 'missing').required(),
+    rodent_box_replaced: Joi.boolean().optional(),
+    station_remarks: Joi.string().max(500).optional().allow(null, ''),
     chemicals: Joi.array().items(Joi.object({
       chemical_id: Joi.number().integer().required(),
       quantity: Joi.number().min(0).required(),
@@ -428,18 +438,26 @@ export const createCompleteReportSchema = Joi.object({
     })).optional(),
     
     monitors: Joi.array().items(Joi.object({
-      monitor_number: Joi.string().max(20).required(),
-      location: Joi.string().max(100).required(),
+      monitor_number: Joi.string().max(20).required()
+        .messages({
+          'any.required': 'Monitor number is required',
+          'string.empty': 'Monitor number cannot be empty'
+        }),
+      location: Joi.string().max(100).required()
+        .messages({
+          'any.required': 'Monitor location is required',
+          'string.empty': 'Monitor location cannot be empty'
+        }),
       monitor_type: Joi.string().valid('box', 'light').required(),
       monitor_condition: Joi.string().valid('good', 'replaced', 'repaired', 'other').required(),
       monitor_condition_other: Joi.string().max(255).optional().allow(null, ''),
-      warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').required(),
-      light_condition: Joi.string().valid('good', 'faulty', 'na').optional(),
-      light_faulty_type: Joi.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional(),
+      warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted', 'missing').required(),
+      light_condition: Joi.string().valid('good', 'faulty', 'na').optional().allow(null, ''),
+      light_faulty_type: Joi.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional().allow(null, ''),
       light_faulty_other: Joi.string().max(255).optional().allow(null, ''),
-      glue_board_replaced: Joi.boolean().required(),
+      glue_board_replaced: Joi.boolean().optional().allow(null),
       tubes_replaced: Joi.boolean().optional().allow(null),
-      monitor_serviced: Joi.boolean().optional()
+      monitor_serviced: Joi.boolean().optional().allow(null)
     })).optional()
   }).optional()
 });

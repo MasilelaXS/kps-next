@@ -885,6 +885,7 @@ export const getLastReportForClient = async (req: Request, res: Response) => {
     // Get complete bait station data
     const baitStations = await executeQuery<RowDataPacket[]>(
       `SELECT 
+        id,
         station_number,
         location,
         is_accessible,

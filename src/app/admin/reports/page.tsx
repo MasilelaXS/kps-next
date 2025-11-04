@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
+import { buildApiUrl } from '@/lib/api';
 import { 
   FileText,
   Search,
@@ -166,8 +167,15 @@ export default function ReportsPage() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [declineNotes, setDeclineNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  
+  // Email modal state
+  const [clientContacts, setClientContacts] = useState<any[]>([]);
+  const [emailRecipients, setEmailRecipients] = useState<string>('');
+  const [emailCC, setEmailCC] = useState<string>('');
+  const [emailMessage, setEmailMessage] = useState<string>('');
 
   // Helper function to handle 401 Unauthorized errors
   const handleUnauthorized = () => {
@@ -218,9 +226,7 @@ export default function ReportsPage() {
         params.append('date_to', dateTo);
       }
 
-      console.log('Fetching reports with params:', params.toString());
-
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports?${params}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports?${params}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -240,10 +246,7 @@ export default function ReportsPage() {
 
       const data = await response.json();
 
-      console.log('API Response:', data);
-
       if (data.success && Array.isArray(data.data?.reports)) {
-        console.log(`Setting ${data.data.reports.length} reports`);
         setReports(data.data.reports);
         if (data.data.pagination) {
           setPagination(data.data.pagination);
@@ -261,12 +264,12 @@ export default function ReportsPage() {
     }
   };
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     setActiveSearchQuery(searchQuery);
     setPagination({ ...pagination, current_page: 1 });
-  };
+  }, [searchQuery, pagination]);
 
-  const handleViewReport = async (report: Report) => {
+  const handleViewReport = useCallback(async (report: Report) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
@@ -276,7 +279,7 @@ export default function ReportsPage() {
         return;
       }
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${report.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${report.id}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -301,9 +304,9 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notification]);
 
-  const handleApproveReport = async () => {
+  const handleApproveReport = useCallback(async () => {
     if (!selectedReport) return;
     
     try {
@@ -315,12 +318,7 @@ export default function ReportsPage() {
         return;
       }
       
-      console.log('Approving report:', {
-        reportId: selectedReport.id,
-        status: selectedReport.status
-      });
-      
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${selectedReport.id}/approve`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${selectedReport.id}/approve`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -354,9 +352,9 @@ export default function ReportsPage() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [selectedReport, notification, setShowApproveModal, fetchReports]);
 
-  const handleDeclineReport = async () => {
+  const handleDeclineReport = useCallback(async () => {
     if (!selectedReport || !declineNotes.trim()) {
       notification.error('Validation Error', 'Please provide notes for declining the report');
       return;
@@ -376,13 +374,7 @@ export default function ReportsPage() {
         return;
       }
       
-      console.log('Declining report:', {
-        reportId: selectedReport.id,
-        status: selectedReport.status,
-        declineNotesLength: declineNotes.trim().length
-      });
-      
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${selectedReport.id}/decline`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${selectedReport.id}/decline`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -416,9 +408,9 @@ export default function ReportsPage() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [selectedReport, declineNotes, notification, setShowDeclineModal, setDeclineNotes, fetchReports]);
 
-  const handleArchiveReport = async () => {
+  const handleArchiveReport = useCallback(async () => {
     if (!selectedReport) return;
     
     try {
@@ -430,7 +422,7 @@ export default function ReportsPage() {
         return;
       }
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${selectedReport.id}/archive`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${selectedReport.id}/archive`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -459,9 +451,9 @@ export default function ReportsPage() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [selectedReport, notification, setShowArchiveModal, fetchReports]);
 
-  const handleDownloadPDF = async (reportId: number) => {
+  const handleDownloadPDF = useCallback(async (reportId: number) => {
     try {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
@@ -473,7 +465,7 @@ export default function ReportsPage() {
 
       notification.info('Generating PDF', 'Please wait while we generate your report...');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${reportId}/download`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${reportId}/download`), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -518,11 +510,11 @@ export default function ReportsPage() {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [notification]);
 
-  const handleEmailPDF = async (reportId: number) => {
+  const openEmailModal = useCallback(async (report: Report) => {
     try {
-      setSubmitting(true);
+      setLoading(true);
       const token = localStorage.getItem('kps_token');
       
       if (!token) {
@@ -530,13 +522,10 @@ export default function ReportsPage() {
         return;
       }
 
-      notification.info('Sending Email', 'Please wait while we send the report...');
-      
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${reportId}/email`, {
-        method: 'POST',
+      // Fetch client contacts
+      const response = await fetch(buildApiUrl(`/api/admin/clients/${report.client_id}`), {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -547,20 +536,91 @@ export default function ReportsPage() {
 
       const data = await response.json();
 
+      if (response.ok && data.success && data.data?.contacts) {
+        setClientContacts(data.data.contacts);
+        
+        // Set primary contact as default recipient
+        const primaryContact = data.data.contacts.find((c: any) => c.is_primary);
+        if (primaryContact?.email) {
+          setEmailRecipients(primaryContact.email);
+        }
+      }
+
+      setSelectedReport(report);
+      setShowEmailModal(true);
+    } catch (error) {
+      console.error('Error loading client contacts:', error);
+      notification.error('Failed to Load', 'Could not load client contact information');
+    } finally {
+      setLoading(false);
+    }
+  }, [notification, handleUnauthorized]);
+
+  const handleSendEmail = useCallback(async () => {
+    if (!selectedReport) return;
+
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem('kps_token');
+      
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      // Validate recipients
+      if (!emailRecipients.trim()) {
+        notification.error('Validation Error', 'Please specify at least one recipient');
+        return;
+      }
+
+      notification.info('Sending Email', 'Please wait while we send the report...');
+      
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${selectedReport.id}/email`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          recipients: emailRecipients.split(',').map(e => e.trim()).filter(Boolean),
+          cc: emailCC ? emailCC.split(',').map(e => e.trim()).filter(Boolean) : undefined,
+          additionalMessage: emailMessage.trim() || undefined
+        })
+      });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await response.json();
+
       if (!response.ok) {
+        console.error('Email API error response:', data);
         throw new Error(data.message || 'Failed to email report');
       }
 
-      notification.success('Email Sent', data.message || 'Report has been emailed to the client');
+      notification.success('Email Sent', data.message || 'Report has been emailed successfully');
+      
+      // Close modal and reset form
+      setShowEmailModal(false);
+      setEmailRecipients('');
+      setEmailCC('');
+      setEmailMessage('');
+      setClientContacts([]);
+      
+      // Refresh reports to update emailed_at timestamp
+      fetchReports();
     } catch (error) {
       console.error('Error emailing PDF:', error);
       notification.error('Email Failed', error instanceof Error ? error.message : 'Failed to email report');
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [selectedReport, emailRecipients, emailCC, emailMessage, notification, handleUnauthorized, fetchReports]);
 
-  const openApproveModal = async (report: Report) => {
+  const openApproveModal = useCallback(async (report: Report) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
@@ -570,7 +630,7 @@ export default function ReportsPage() {
         return;
       }
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${report.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${report.id}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -584,11 +644,6 @@ export default function ReportsPage() {
       const data = await response.json();
 
       if (data.success && data.data) {
-        console.log('Report fetched for approve modal:', {
-          id: data.data.id,
-          status: data.data.status,
-          client: data.data.company_name || data.data.client_name
-        });
         setSelectedReport(data.data);
         setShowApproveModal(true);
       } else {
@@ -600,9 +655,9 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notification]);
 
-  const openDeclineModal = async (report: Report) => {
+  const openDeclineModal = useCallback(async (report: Report) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
@@ -612,7 +667,7 @@ export default function ReportsPage() {
         return;
       }
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${report.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${report.id}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -626,11 +681,6 @@ export default function ReportsPage() {
       const data = await response.json();
 
       if (data.success && data.data) {
-        console.log('Report fetched for decline modal:', {
-          id: data.data.id,
-          status: data.data.status,
-          client: data.data.company_name || data.data.client_name
-        });
         setSelectedReport(data.data);
         setDeclineNotes('');
         setShowDeclineModal(true);
@@ -643,9 +693,9 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notification]);
 
-  const openArchiveModal = async (report: Report) => {
+  const openArchiveModal = useCallback(async (report: Report) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
@@ -655,7 +705,7 @@ export default function ReportsPage() {
         return;
       }
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/reports/${report.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${report.id}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -680,9 +730,9 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notification]);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case 'draft':
       case 'pending':
@@ -696,9 +746,9 @@ export default function ReportsPage() {
       default:
         return 'bg-gray-100 text-gray-700';
     }
-  };
+  }, []);
 
-  const getReportTypeLabel = (type: string) => {
+  const getReportTypeLabel = useCallback((type: string) => {
     switch (type) {
       case 'bait_inspection':
         return 'Bait Inspection';
@@ -709,9 +759,9 @@ export default function ReportsPage() {
       default:
         return 'Unknown';
     }
-  };
+  }, []);
 
-  const getReportTypeBadge = (type: string) => {
+  const getReportTypeBadge = useCallback((type: string) => {
     switch (type) {
       case 'bait_inspection':
         return 'bg-blue-100 text-blue-700';
@@ -722,7 +772,7 @@ export default function ReportsPage() {
       default:
         return 'bg-gray-100 text-gray-700';
     }
-  };
+  }, []);
 
   if (loading && reports.length === 0) {
     return (
@@ -1028,13 +1078,22 @@ export default function ReportsPage() {
                         )}
                         
                         {report.status === 'approved' && (
-                          <button 
-                            onClick={() => handleDownloadPDF(report.id)}
-                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                            title="Download PDF"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => handleDownloadPDF(report.id)}
+                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                              title="Download PDF"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => openEmailModal(report)}
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Email Report to Client"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         )}
                         
                         {report.status !== 'archived' && (
@@ -1117,7 +1176,7 @@ export default function ReportsPage() {
 
       {/* View Report Modal */}
       {showViewModal && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full my-8">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
@@ -1629,12 +1688,12 @@ export default function ReportsPage() {
                   {submitting ? 'Generating...' : 'Download PDF'}
                 </button>
                 <button
-                  onClick={() => handleEmailPDF(selectedReport.id)}
+                  onClick={() => openEmailModal(selectedReport)}
                   disabled={submitting}
                   className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Mail className="w-4 h-4" />
-                  {submitting ? 'Sending...' : 'Email Client'}
+                  Email Client
                 </button>
               </div>
             </div>
@@ -1644,7 +1703,7 @@ export default function ReportsPage() {
 
       {/* Approve Modal */}
       {showApproveModal && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -1712,7 +1771,7 @@ export default function ReportsPage() {
 
       {/* Decline Modal */}
       {showDeclineModal && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -1782,7 +1841,7 @@ export default function ReportsPage() {
 
       {/* Archive Modal */}
       {showArchiveModal && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -1829,6 +1888,175 @@ export default function ReportsPage() {
                   <>
                     <Archive className="w-4 h-4" />
                     Archive Report
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Report Modal */}
+      {showEmailModal && selectedReport && (
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Email Report to Client</h2>
+                  <p className="text-xs text-gray-500">Report #{selectedReport.id} - {selectedReport.client_name}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Client Contacts Section */}
+              {clientContacts.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Client Contacts
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {clientContacts.map((contact) => (
+                      <button
+                        key={contact.id}
+                        onClick={() => {
+                          if (contact.email) {
+                            const currentRecipients = emailRecipients.split(',').map(e => e.trim()).filter(Boolean);
+                            if (!currentRecipients.includes(contact.email)) {
+                              setEmailRecipients(prev => prev ? `${prev}, ${contact.email}` : contact.email);
+                            }
+                          }
+                        }}
+                        disabled={!contact.email}
+                        className={`text-left p-3 rounded-lg border transition-colors ${
+                          contact.email 
+                            ? 'border-gray-200 hover:border-green-500 hover:bg-green-50 cursor-pointer' 
+                            : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {contact.name}
+                              {contact.is_primary && (
+                                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Primary</span>
+                              )}
+                            </p>
+                            {contact.email ? (
+                              <p className="text-xs text-gray-600 truncate">{contact.email}</p>
+                            ) : (
+                              <p className="text-xs text-red-500">No email</p>
+                            )}
+                            {contact.role && (
+                              <p className="text-xs text-gray-500 capitalize">{contact.role.replace('_', ' ')}</p>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    💡 Click on a contact to add their email to recipients
+                  </p>
+                </div>
+              )}
+
+              {/* Recipients Field */}
+              <div>
+                <label htmlFor="recipients" className="block text-sm font-medium text-gray-700 mb-1">
+                  Recipients <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="recipients"
+                  type="text"
+                  value={emailRecipients}
+                  onChange={(e) => setEmailRecipients(e.target.value)}
+                  placeholder="email1@example.com, email2@example.com"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Separate multiple email addresses with commas
+                </p>
+              </div>
+
+              {/* CC Field */}
+              <div>
+                <label htmlFor="cc" className="block text-sm font-medium text-gray-700 mb-1">
+                  CC (Optional)
+                </label>
+                <input
+                  id="cc"
+                  type="text"
+                  value={emailCC}
+                  onChange={(e) => setEmailCC(e.target.value)}
+                  placeholder="cc1@example.com, cc2@example.com"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              {/* Additional Message */}
+              <div>
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
+                  Additional Message (Optional)
+                </label>
+                <textarea
+                  id="message"
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  placeholder="Add any additional information or notes for the client..."
+                  rows={4}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                />
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex gap-2">
+                  <Mail className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-blue-800">
+                    <p className="font-medium mb-1">What will be sent:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>Professional PDF report attached</li>
+                      <li>Service details and report summary</li>
+                      <li>Your additional message (if provided)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 sticky bottom-0 bg-white">
+              <button
+                onClick={() => {
+                  setShowEmailModal(false);
+                  setEmailRecipients('');
+                  setEmailCC('');
+                  setEmailMessage('');
+                  setClientContacts([]);
+                }}
+                disabled={submitting}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendEmail}
+                disabled={submitting || !emailRecipients.trim()}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Sending Email...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4" />
+                    Send Email
                   </>
                 )}
               </button>

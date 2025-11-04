@@ -5,6 +5,8 @@ import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import TextBox from '@/components/TextBox';
 import { TextArea } from '@/components/TextArea';
+import AlertModal from '@/components/AlertModal';
+import { useAlert } from '@/hooks/useAlert';
 import { API_CONFIG } from '@/lib/api';
 import { 
   Building2, 
@@ -81,6 +83,7 @@ interface ClientFormData {
 }
 
 export default function ClientsPage() {
+  const alert = useAlert();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -524,12 +527,13 @@ export default function ClientsPage() {
         setShowDeleteModal(false);
         setSelectedClient(null);
         fetchClients();
+        alert.showSuccess('Client deleted successfully');
       } else {
-        alert(data.message || 'Failed to delete client');
+        alert.showError(data.message || 'Failed to delete client');
       }
     } catch (error) {
       console.error('Error deleting client:', error);
-      alert('Network error. Please try again.');
+      alert.showError('Network error. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -865,7 +869,7 @@ export default function ClientsPage() {
 
       {/* Create Client Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-4xl my-8">
             <form onSubmit={handleSubmit}>
               {/* Modal Header */}
@@ -1240,7 +1244,7 @@ export default function ClientsPage() {
 
       {/* View Client Modal */}
       {showViewModal && selectedClient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-3xl my-8">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -1408,7 +1412,7 @@ export default function ClientsPage() {
 
       {/* Edit Client Modal */}
       {showEditModal && selectedClient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-4xl my-8">
             <form onSubmit={handleUpdateClient}>
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -1791,7 +1795,7 @@ export default function ClientsPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedClient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-md">
             <div className="p-6">
               <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mx-auto mb-4">
@@ -1835,6 +1839,12 @@ export default function ClientsPage() {
           </div>
         </div>
       )}
+
+      <AlertModal
+        isOpen={alert.isOpen}
+        {...alert.config}
+        onClose={alert.hideAlert}
+      />
     </DashboardLayout>
   );
 }

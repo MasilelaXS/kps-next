@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -121,7 +122,7 @@ export default function UsersPage() {
         params.append('status', statusFilter);
       }
 
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/users?${params}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/users?${params}`), {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -186,7 +187,7 @@ export default function UsersPage() {
       setFormErrors({});
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch('http://192.168.1.128:3001/api/admin/users', {
+      const response = await fetch(buildApiUrl('/api/admin/users'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -247,7 +248,7 @@ export default function UsersPage() {
         delete updateData.password;
       }
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/users/${selectedUser.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/users/${selectedUser.id}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -304,7 +305,7 @@ export default function UsersPage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/users/${selectedUser.id}/reset-password`, {
+      const response = await fetch(buildApiUrl(`/api/admin/users/${selectedUser.id}/reset-password`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -337,7 +338,7 @@ export default function UsersPage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/users/${selectedUser.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/users/${selectedUser.id}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -754,7 +755,7 @@ export default function UsersPage() {
 
       {/* Create User Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl">
             <form onSubmit={handleSubmit}>
               {/* Modal Header */}
@@ -917,7 +918,7 @@ export default function UsersPage() {
 
       {/* Edit User Modal */}
       {showEditModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl">
             <form onSubmit={handleUpdate}>
               {/* Modal Header */}
@@ -1070,7 +1071,7 @@ export default function UsersPage() {
 
       {/* View User Modal */}
       {showViewModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -1158,7 +1159,7 @@ export default function UsersPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-md">
             <div className="p-4">
               <div className="flex items-center gap-3 mb-4">
@@ -1204,7 +1205,7 @@ export default function UsersPage() {
 
       {/* Reset Password Modal */}
       {showResetPasswordModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-md">
             <div className="p-4">
               <div className="flex items-center gap-3 mb-4">

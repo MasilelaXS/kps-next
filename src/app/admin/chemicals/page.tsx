@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
@@ -117,7 +118,7 @@ export default function ChemicalsPage() {
         params.append('status', statusFilter);
       }
 
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals?${params}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/chemicals?${params}`), {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -173,7 +174,7 @@ export default function ChemicalsPage() {
       setFormErrors({});
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch('http://192.168.1.128:3001/api/admin/chemicals', {
+      const response = await fetch(buildApiUrl('/api/admin/chemicals'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -229,7 +230,7 @@ export default function ChemicalsPage() {
       setFormErrors({});
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals/${selectedChemical.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/chemicals/${selectedChemical.id}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -281,7 +282,7 @@ export default function ChemicalsPage() {
       const token = localStorage.getItem('kps_token');
       const newStatus = chemical.status === 'active' ? 'inactive' : 'active';
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals/${chemical.id}/status`, {
+      const response = await fetch(buildApiUrl(`/api/admin/chemicals/${chemical.id}/status`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -310,7 +311,7 @@ export default function ChemicalsPage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(`http://192.168.1.128:3001/api/admin/chemicals/${selectedChemical.id}`, {
+      const response = await fetch(buildApiUrl(`/api/admin/chemicals/${selectedChemical.id}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -732,7 +733,7 @@ export default function ChemicalsPage() {
 
       {/* Create Chemical Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl">
             <form onSubmit={handleSubmit}>
               {/* Modal Header */}
@@ -904,7 +905,7 @@ export default function ChemicalsPage() {
 
       {/* Edit Chemical Modal */}
       {showEditModal && selectedChemical && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl">
             <form onSubmit={handleUpdate}>
               {/* Modal Header */}
@@ -1071,7 +1072,7 @@ export default function ChemicalsPage() {
 
       {/* View Chemical Modal */}
       {showViewModal && selectedChemical && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -1169,7 +1170,7 @@ export default function ChemicalsPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedChemical && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">

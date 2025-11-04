@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
 import Loading from '@/components/Loading';
-import { apiCall } from '@/lib/api';
+import { apiCall, offlineAwareApiCall } from '@/lib/api';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { 
   CheckCircle, 
   AlertCircle,
@@ -14,11 +15,13 @@ import {
   Calendar,
   User,
   MapPin,
-  Beaker
+  Beaker,
+  WifiOff
 } from 'lucide-react';
 
 export default function SubmitReport() {
   const router = useRouter();
+  const isOnline = useOnlineStatus();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export default function SubmitReport() {
       // Check authentication first
       const token = localStorage.getItem('kps_token');
       if (!token) {
-        console.log('No authentication token found. Redirecting to login...');
+        // Keep loading state true while redirecting
         router.replace('/login');
         return;
       }
@@ -71,7 +74,7 @@ export default function SubmitReport() {
     }
   };
 
-  const downloadJSON = () => {
+  const downloadJSON = useCallback(() => {
     const dataStr = JSON.stringify(report, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
@@ -84,16 +87,16 @@ export default function SubmitReport() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [report]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     try {
       setSubmitting(true);
       setError(null);
 
       // Map frontend report type to backend format
       const reportTypeMap: { [key: string]: string } = {
-        'bait': 'general',
+        'bait': 'bait_inspection',
         'fumigation': 'fumigation',
         'both': 'both'
       };
@@ -112,16 +115,12 @@ export default function SubmitReport() {
 
       // Add bait stations if report type includes bait
       if ((report.reportType === 'bait' || report.reportType === 'both') && report.baitStations?.length > 0) {
-        console.log('=== BAIT STATIONS BEFORE MAPPING ===');
-        console.log('First station:', JSON.stringify(report.baitStations[0], null, 2));
-        console.log('Total stations:', report.baitStations.length);
-        
         completeReportPayload.bait_stations = report.baitStations.map((station: any) => ({
             station_number: station.stationNumber,
             location: station.location, // 'inside' or 'outside'
-            is_accessible: station.accessible,
+            is_accessible: Boolean(station.accessible),
             inaccessible_reason: station.accessReason || null,
-            activity_detected: station.activityDetected,
+            activity_detected: Boolean(station.activityDetected),
             activity_droppings: station.activityTypes?.includes('droppings') || false,
             activity_gnawing: station.activityTypes?.includes('gnawing') || false,
             activity_tracks: station.activityTypes?.includes('tracks') || false,
@@ -188,6 +187,8 @@ export default function SubmitReport() {
             }
             
             const monitorPayload: any = {
+              monitor_number: monitor.monitorNumber,
+              location: monitor.location,
               monitor_type: isFlyTrap ? 'light' : 'box',
               monitor_condition: backendCondition,
               monitor_condition_other: monitor.conditionOther || null,
@@ -221,11 +222,6 @@ export default function SubmitReport() {
         }
       }
 
-      console.log('=== SUBMITTING COMPLETE REPORT ===');
-      console.log('Payload:', JSON.stringify(completeReportPayload, null, 2));
-      console.log('Edit Mode:', isEditMode);
-      console.log('Report ID:', reportId);
-
       // Submit complete report - use PUT for edit mode, POST for new reports
       const endpoint = isEditMode && reportId 
         ? `/api/pco/reports/${reportId}/complete` 
@@ -233,14 +229,37 @@ export default function SubmitReport() {
       
       const method = isEditMode && reportId ? 'PUT' : 'POST';
 
-      const submitResponse = await apiCall(endpoint, {
+      console.log('=== SUBMITTING TO API ===');
+      console.log('Endpoint:', endpoint);
+      console.log('Payload:', JSON.stringify(completeReportPayload, null, 2));
+
+      const submitResponse = await offlineAwareApiCall(endpoint, {
         method,
-        body: JSON.stringify(completeReportPayload)
+        body: JSON.stringify(completeReportPayload),
+        queueIfOffline: true,
+        priority: 'high',
+        type: 'report'
       });
 
-      console.log('Submit response:', submitResponse);
+      // Handle queued response (offline mode)
+      if (submitResponse.queued) {
+        // Clear current report from localStorage
+        localStorage.removeItem('current_report');
+        
+        // Show offline success message
+        setSubmitting(false);
+        setReportId(-1); // Use -1 to indicate queued state
+        
+        setTimeout(() => {
+          router.push('/pco/schedule?queued=true');
+        }, 2000);
+        return;
+      }
 
       if (!submitResponse.success) {
+        console.error('=== VALIDATION ERROR ===');
+        console.error('Response:', submitResponse);
+        console.error('Errors:', submitResponse.errors);
         throw new Error(submitResponse.message || 'Failed to submit report');
       }
 
@@ -263,7 +282,7 @@ export default function SubmitReport() {
       setError(error.message || 'Failed to submit report. Please try again.');
       setSubmitting(false);
     }
-  };
+  }, [report, isEditMode, reportId, router]);
 
   if (loading) {
     return (
@@ -309,20 +328,35 @@ export default function SubmitReport() {
 
   // Success state
   if (submitting && reportId && !error) {
+    const isQueued = reportId === -1;
+    
     return (
-      <ReportLayout currentStep={5} totalSteps={5} title={isEditMode ? "Report Resubmitted" : "Report Submitted"}>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
-          <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-green-900 mb-2">
-            {isEditMode ? 'Report Resubmitted Successfully!' : 'Report Submitted Successfully!'}
+      <ReportLayout currentStep={5} totalSteps={5} title={isQueued ? "Report Queued" : (isEditMode ? "Report Resubmitted" : "Report Submitted")}>
+        <div className={`border rounded-xl p-8 text-center ${isQueued ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+          <CheckCircle className={`w-16 h-16 mx-auto mb-4 ${isQueued ? 'text-orange-600' : 'text-green-600'}`} />
+          <h2 className={`text-2xl font-bold mb-2 ${isQueued ? 'text-orange-900' : 'text-green-900'}`}>
+            {isQueued 
+              ? 'Report Queued Successfully!' 
+              : (isEditMode ? 'Report Resubmitted Successfully!' : 'Report Submitted Successfully!')
+            }
           </h2>
-          <p className="text-green-700 mb-4">
-            {isEditMode 
-              ? 'Your updated report has been resubmitted for admin review. The status has been changed to draft.'
-              : 'Your report has been submitted for admin review. You will be notified once it\'s approved.'
+          <p className={`mb-4 ${isQueued ? 'text-orange-700' : 'text-green-700'}`}>
+            {isQueued 
+              ? 'You are currently offline. Your report has been saved locally and will be automatically submitted when you reconnect to the internet. You can safely close this page.'
+              : (isEditMode 
+                ? 'Your updated report has been resubmitted for admin review.'
+                : 'Your report has been submitted for admin review. You will be notified once it\'s approved.'
+              )
             }
           </p>
-          <p className="text-sm text-gray-600">
+          {isQueued && (
+            <div className="mt-4 p-3 bg-orange-100 rounded-lg">
+              <p className="text-sm text-orange-800">
+                <strong>Tip:</strong> Keep the app open when you reconnect to ensure automatic submission.
+              </p>
+            </div>
+          )}
+          <p className="text-sm text-gray-600 mt-4">
             Redirecting to schedule...
           </p>
         </div>
@@ -333,6 +367,22 @@ export default function SubmitReport() {
   return (
     <ReportLayout currentStep={5} totalSteps={5} title="Submit Report">
       <div className="space-y-6">
+        {/* Offline Warning Banner */}
+        {!isOnline && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <WifiOff className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-orange-900 mb-1">You are offline</h3>
+                <p className="text-orange-700 text-sm">
+                  Don't worry! You can still submit your report. It will be saved locally and automatically 
+                  submitted when you reconnect to the internet.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Final Review */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -468,12 +518,15 @@ export default function SubmitReport() {
             {submitting ? (
               <>
                 <Loading size="sm" />
-                {isEditMode ? 'Resubmitting...' : 'Submitting...'}
+                {!isOnline ? 'Queueing...' : (isEditMode ? 'Resubmitting...' : 'Submitting...')}
               </>
             ) : (
               <>
                 <Send className="w-5 h-5" />
-                {isEditMode ? 'Resubmit Report' : 'Submit Report'}
+                {!isOnline 
+                  ? 'Queue' 
+                  : (isEditMode ? 'Resubmit' : 'Submit')
+                }
               </>
             )}
           </button>

@@ -13,10 +13,13 @@ import {
   Calendar,
   Menu,
   Bell,
-  LogOut
+  LogOut,
+  User
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import Loading from './Loading';
+import Button from './Button';
+import { preloadCache } from '@/lib/preloadCache';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -28,6 +31,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [user, setUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false); // Default to closed
   const [mounted, setMounted] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('...');
 
   useEffect(() => {
     setMounted(true);
@@ -55,6 +59,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         router.push('/login');
       }
     }
+
+    // Preload critical data for offline access
+    setTimeout(() => {
+      preloadCache.preloadForRole('admin');
+    }, 1000);
+
+    // Fetch app version
+    fetch('/api/version')
+      .then((res) => res.json())
+      .then((data) => setAppVersion(data.version || 'dev'))
+      .catch(() => setAppVersion('dev'));
   }, [router]);
 
   const handleLogout = () => {
@@ -106,9 +121,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg mx-auto"></div>
             )}
             {sidebarOpen && (
-              <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                <Menu className="w-5 h-5 text-gray-600" />
-              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(false)}
+                icon={<Menu className="w-5 h-5" />}
+                className="!p-2"
+              />
             )}
           </div>
 
@@ -121,7 +140,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div key={item.href} className="relative group">
                   <Link 
                     href={item.href} 
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all active:scale-95 ${
                       isActive 
                         ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md' 
                         : 'text-gray-700 hover:bg-purple-50 hover:text-purple-600'
@@ -146,59 +165,90 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {/* Expand button when collapsed */}
           {!sidebarOpen && (
             <div className="p-4 border-t border-gray-200">
-              <button 
-                onClick={() => setSidebarOpen(true)} 
-                className="w-full p-2 hover:bg-gray-100 rounded-lg flex items-center justify-center group relative"
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(true)}
+                icon={<Menu className="w-5 h-5" />}
+                className="!p-2 w-full group relative"
+                title="Expand Menu"
               >
-                <Menu className="w-5 h-5 text-gray-600" />
                 {/* Tooltip */}
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                   Expand Menu
                   <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
                 </div>
-              </button>
+              </Button>
             </div>
           )}
 
           {/* User Profile */}
           <div className="p-4 border-t border-gray-200">
-            <button
+            <Button
+              variant="ghost"
               onClick={() => router.push('/admin/profile')}
-              className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center'} w-full hover:bg-gray-50 rounded-lg p-2 transition-colors cursor-pointer`}
+              className={`!justify-start w-full !p-2 ${!sidebarOpen && '!justify-center'}`}
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
-                {user.name?.charAt(0) || 'U'}
-              </div>
-              {sidebarOpen && (
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {user.role === 'both' ? 'Administrator / PCO' : 'Administrator'}
-                  </p>
+              {sidebarOpen ? (
+                <div className="flex items-center gap-3 w-full min-w-0">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                    {user.name?.charAt(0) || 'U'}
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {user.role === 'both' ? 'Administrator / PCO' : 'Administrator'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                  {user.name?.charAt(0) || 'U'}
                 </div>
               )}
-            </button>
+            </Button>
             {sidebarOpen ? (
-              <button 
-                onClick={handleLogout} 
-                className="w-full mt-3 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              <Button
+                variant="danger"
+                size="md"
+                onClick={handleLogout}
+                icon={<LogOut className="w-4 h-4" />}
+                fullWidth
+                className="mt-3 !bg-red-50 !text-red-600 hover:!bg-red-100 !shadow-none"
               >
-                <LogOut className="w-4 h-4" />
                 Logout
-              </button>
+              </Button>
             ) : (
-              <button 
-                onClick={handleLogout} 
-                className="w-full mt-3 p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors flex items-center justify-center group relative"
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                icon={<LogOut className="w-5 h-5" />}
+                className="!p-2 w-full mt-3 text-red-600 hover:!bg-red-50 group relative"
+                title="Logout"
               >
-                <LogOut className="w-5 h-5" />
                 {/* Tooltip */}
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
                   Logout
                   <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
                 </div>
-              </button>
+              </Button>
             )}
+
+            {/* Version Display */}
+            <div className={`mt-4 pt-4 border-t border-gray-200 ${sidebarOpen ? 'text-center' : 'flex justify-center'}`}>
+              {sidebarOpen ? (
+                <div className="text-xs text-gray-500">
+                  <p className="font-medium">Powered By</p>
+                  <p className="font-semibold text-gray-700">Dannel Web Design</p>
+                  <p className="text-gray-400 mt-1">v{appVersion}</p>
+                </div>
+              ) : (
+                <div className="text-[10px] text-gray-400 font-medium">
+                  v{appVersion}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </aside>

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateInsectMonitorSchema = exports.addInsectMonitorSchema = exports.updateFumigationSchema = exports.updateBaitStationSchema = exports.addBaitStationSchema = exports.declineReportSchema = exports.approveReportSchema = exports.submitReportSchema = exports.updateReportSchema = exports.createReportSchema = exports.reportListQuerySchema = void 0;
+exports.createCompleteReportSchema = exports.updateInsectMonitorSchema = exports.addInsectMonitorSchema = exports.updateFumigationSchema = exports.updateBaitStationSchema = exports.addBaitStationSchema = exports.declineReportSchema = exports.approveReportSchema = exports.submitReportSchema = exports.updateReportSchema = exports.createReportSchema = exports.reportListQuerySchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.reportListQuerySchema = joi_1.default.object({
     page: joi_1.default.number().integer().min(1).default(1),
@@ -223,6 +223,16 @@ exports.updateFumigationSchema = joi_1.default.object({
     })
 });
 exports.addInsectMonitorSchema = joi_1.default.object({
+    monitor_number: joi_1.default.string().max(20).required()
+        .messages({
+        'any.required': 'Monitor number is required',
+        'string.empty': 'Monitor number cannot be empty'
+    }),
+    location: joi_1.default.string().max(100).required()
+        .messages({
+        'any.required': 'Monitor location is required',
+        'string.empty': 'Monitor location cannot be empty'
+    }),
     monitor_type: joi_1.default.string().valid('box', 'light').required()
         .messages({
         'any.required': 'Monitor type is required',
@@ -283,6 +293,8 @@ exports.addInsectMonitorSchema = joi_1.default.object({
     })
 });
 exports.updateInsectMonitorSchema = joi_1.default.object({
+    monitor_number: joi_1.default.string().max(20).optional(),
+    location: joi_1.default.string().max(100).optional(),
     monitor_type: joi_1.default.string().valid('box', 'light').optional(),
     monitor_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'other').optional(),
     monitor_condition_other: joi_1.default.string().max(255).optional().allow(null, ''),
@@ -293,5 +305,77 @@ exports.updateInsectMonitorSchema = joi_1.default.object({
     glue_board_replaced: joi_1.default.boolean().optional(),
     tubes_replaced: joi_1.default.boolean().optional().allow(null),
     monitor_serviced: joi_1.default.boolean().optional()
+});
+exports.createCompleteReportSchema = joi_1.default.object({
+    client_id: joi_1.default.number().integer().required(),
+    report_type: joi_1.default.string().valid('bait_inspection', 'fumigation', 'both').required(),
+    service_date: joi_1.default.date().max('now').required(),
+    next_service_date: joi_1.default.date().greater(joi_1.default.ref('service_date')).optional(),
+    pco_signature_data: joi_1.default.string().required(),
+    client_signature_data: joi_1.default.string().required(),
+    client_signature_name: joi_1.default.string().max(100).required(),
+    general_remarks: joi_1.default.string().max(5000).optional().allow(null, ''),
+    bait_stations: joi_1.default.array().items(joi_1.default.object({
+        station_number: joi_1.default.string().max(20).required(),
+        location: joi_1.default.string().valid('inside', 'outside').required(),
+        bait_status: joi_1.default.string().valid('eaten', 'clean', 'wet', 'old').required(),
+        is_accessible: joi_1.default.boolean().required(),
+        inaccessible_reason: joi_1.default.string().max(255).optional().allow(null, ''),
+        activity_detected: joi_1.default.boolean().required(),
+        activity_droppings: joi_1.default.boolean().optional(),
+        activity_gnawing: joi_1.default.boolean().optional(),
+        activity_tracks: joi_1.default.boolean().optional(),
+        activity_other: joi_1.default.boolean().optional(),
+        activity_other_description: joi_1.default.string().max(255).optional().allow(null, ''),
+        station_condition: joi_1.default.string().valid('good', 'damaged', 'needs_repair', 'missing').required(),
+        action_taken: joi_1.default.string().valid('none', 'refilled', 'replaced', 'repaired').optional().allow(null, ''),
+        warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted', 'missing').required(),
+        rodent_box_replaced: joi_1.default.boolean().optional(),
+        station_remarks: joi_1.default.string().max(500).optional().allow(null, ''),
+        chemicals: joi_1.default.array().items(joi_1.default.object({
+            chemical_id: joi_1.default.number().integer().required(),
+            quantity: joi_1.default.number().min(0).required(),
+            batch_number: joi_1.default.string().max(50).optional().allow(null, '')
+        })).optional()
+    })).optional(),
+    fumigation: joi_1.default.object({
+        areas: joi_1.default.array().items(joi_1.default.object({
+            area_name: joi_1.default.string().max(100).required(),
+            is_other: joi_1.default.boolean().optional(),
+            other_description: joi_1.default.string().max(255).optional().allow(null, '')
+        })).optional(),
+        target_pests: joi_1.default.array().items(joi_1.default.object({
+            pest_name: joi_1.default.string().max(100).required(),
+            is_other: joi_1.default.boolean().optional(),
+            other_description: joi_1.default.string().max(255).optional().allow(null, '')
+        })).optional(),
+        chemicals: joi_1.default.array().items(joi_1.default.object({
+            chemical_id: joi_1.default.number().integer().required(),
+            quantity: joi_1.default.number().min(0).required(),
+            batch_number: joi_1.default.string().max(50).optional().allow(null, '')
+        })).optional(),
+        monitors: joi_1.default.array().items(joi_1.default.object({
+            monitor_number: joi_1.default.string().max(20).required()
+                .messages({
+                'any.required': 'Monitor number is required',
+                'string.empty': 'Monitor number cannot be empty'
+            }),
+            location: joi_1.default.string().max(100).required()
+                .messages({
+                'any.required': 'Monitor location is required',
+                'string.empty': 'Monitor location cannot be empty'
+            }),
+            monitor_type: joi_1.default.string().valid('box', 'light').required(),
+            monitor_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'other').required(),
+            monitor_condition_other: joi_1.default.string().max(255).optional().allow(null, ''),
+            warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted', 'missing').required(),
+            light_condition: joi_1.default.string().valid('good', 'faulty', 'na').optional().allow(null, ''),
+            light_faulty_type: joi_1.default.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional().allow(null, ''),
+            light_faulty_other: joi_1.default.string().max(255).optional().allow(null, ''),
+            glue_board_replaced: joi_1.default.boolean().optional().allow(null),
+            tubes_replaced: joi_1.default.boolean().optional().allow(null),
+            monitor_serviced: joi_1.default.boolean().optional().allow(null)
+        })).optional()
+    }).optional()
 });
 //# sourceMappingURL=reportValidation.js.map

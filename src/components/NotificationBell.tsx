@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import { Bell } from 'lucide-react';
 import Loading from './Loading';
 
@@ -30,9 +31,14 @@ export default function NotificationBell() {
 
   // Fetch unread count
   const fetchUnreadCount = async () => {
+    // Skip if offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return;
+    }
+    
     try {
       const token = localStorage.getItem('kps_token');
-      const response = await fetch('http://192.168.1.128:3001/api/notifications?unread_only=true&limit=1', {
+      const response = await fetch(buildApiUrl('/api/notifications?unread_only=true&limit=1'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -43,16 +49,24 @@ export default function NotificationBell() {
         setUnreadCount(result.data.unread || 0);
       }
     } catch (error) {
-      console.error('Failed to fetch unread count:', error);
+      // Silently fail when offline - don't spam console
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        console.error('Failed to fetch unread count:', error);
+      }
     }
   };
 
   // Fetch notifications
   const fetchNotifications = async () => {
+    // Skip if offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return;
+    }
+    
     setLoading(true);
     try {
       const token = localStorage.getItem('kps_token');
-      const response = await fetch('http://192.168.1.128:3001/api/notifications?limit=15', {
+      const response = await fetch(buildApiUrl('/api/notifications?limit=15'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -64,7 +78,10 @@ export default function NotificationBell() {
         setUnreadCount(result.data.unread || 0);
       }
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      // Silently fail when offline
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        console.error('Failed to fetch notifications:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -74,7 +91,7 @@ export default function NotificationBell() {
   const markAsRead = async (notificationId: number) => {
     try {
       const token = localStorage.getItem('kps_token');
-      const response = await fetch(`http://192.168.1.128:3001/api/notifications/${notificationId}/read`, {
+      const response = await fetch(buildApiUrl(`/api/notifications/${notificationId}/read`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -101,7 +118,7 @@ export default function NotificationBell() {
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('kps_token');
-      const response = await fetch('http://192.168.1.128:3001/api/notifications/mark-all-read', {
+      const response = await fetch(buildApiUrl('/api/notifications/mark-all-read'), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -144,11 +161,78 @@ export default function NotificationBell() {
     };
   }, [isOpen]);
 
-  // Poll for unread count every 30 seconds
+  // Poll for unread count every 30 seconds when online
+  // Check connectivity every 5 seconds when offline
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
+    let pollInterval: NodeJS.Timeout | null = null;
+    let connectivityCheckInterval: NodeJS.Timeout | null = null;
+
+    const startPolling = () => {
+      // Initial fetch
+      fetchUnreadCount();
+      
+      // Poll every 30 seconds
+      pollInterval = setInterval(() => {
+        if (navigator.onLine) {
+          fetchUnreadCount();
+        }
+      }, 30000);
+    };
+
+    const stopPolling = () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    };
+
+    const checkConnectivity = () => {
+      connectivityCheckInterval = setInterval(() => {
+        if (navigator.onLine) {
+          console.log('[NotificationBell] Back online - resuming polling');
+          startPolling();
+          if (connectivityCheckInterval) {
+            clearInterval(connectivityCheckInterval);
+            connectivityCheckInterval = null;
+          }
+        }
+      }, 5000); // Check every 5 seconds when offline
+    };
+
+    const handleOnline = () => {
+      console.log('[NotificationBell] Online - starting notification polling');
+      startPolling();
+      if (connectivityCheckInterval) {
+        clearInterval(connectivityCheckInterval);
+        connectivityCheckInterval = null;
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('[NotificationBell] Offline - stopping notification polling');
+      stopPolling();
+      checkConnectivity();
+    };
+
+    // Set up online/offline listeners
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Start based on current status
+    if (navigator.onLine) {
+      startPolling();
+    } else {
+      checkConnectivity();
+    }
+
+    return () => {
+      stopPolling();
+      if (connectivityCheckInterval) {
+        clearInterval(connectivityCheckInterval);
+      }
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Format date

@@ -10,7 +10,7 @@ router.get('/pco/reports', auth_1.authenticateToken, (0, validation_1.validateRe
 router.get('/pco/reports/pre-fill/:clientId', auth_1.authenticateToken, reportController_1.getPreFillData);
 router.get('/pco/reports/:id', auth_1.authenticateToken, reportController_1.getReportById);
 router.post('/pco/reports', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.createReportSchema), reportController_1.createReport);
-router.post('/pco/reports/complete', auth_1.authenticateToken, reportController_1.createCompleteReport);
+router.post('/pco/reports/complete', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.createCompleteReportSchema), reportController_1.createCompleteReport);
 router.put('/pco/reports/:id', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.updateReportSchema), reportController_1.updateReport);
 router.put('/pco/reports/:id/complete', auth_1.authenticateToken, reportController_1.updateCompleteReport);
 router.delete('/pco/reports/:id', auth_1.authenticateToken, reportController_1.deleteReport);

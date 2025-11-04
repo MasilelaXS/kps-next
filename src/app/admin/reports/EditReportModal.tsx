@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import TextBox from '@/components/TextBox';
 import TextArea from '@/components/TextArea';
+import AlertModal from '@/components/AlertModal';
+import { useAlert } from '@/hooks/useAlert';
 
 // Import types from parent
 interface Chemical {
@@ -129,6 +131,7 @@ export default function EditReportModal({
   onCancel,
   submitting
 }: EditReportModalProps) {
+  const alert = useAlert();
   const [editedReport, setEditedReport] = useState<Report>(JSON.parse(JSON.stringify(report)));
   const [editingStationId, setEditingStationId] = useState<number | null>(null);
   const [editingMonitorId, setEditingMonitorId] = useState<number | null>(null);
@@ -159,10 +162,15 @@ export default function EditReportModal({
   };
 
   const deleteBaitStation = (index: number) => {
-    if (confirm('Are you sure you want to delete this station?')) {
-      const newStations = editedReport.bait_stations?.filter((_, i) => i !== index) || [];
-      setEditedReport({ ...editedReport, bait_stations: newStations });
-    }
+    alert.showConfirm(
+      'Are you sure you want to delete this station?',
+      () => {
+        const newStations = editedReport.bait_stations?.filter((_, i) => i !== index) || [];
+        setEditedReport({ ...editedReport, bait_stations: newStations });
+      },
+      'Delete Station',
+      'warning'
+    );
   };
 
   const addChemicalToStation = (stationIndex: number) => {
@@ -301,10 +309,15 @@ export default function EditReportModal({
   };
 
   const deleteInsectMonitor = (index: number) => {
-    if (confirm('Are you sure you want to delete this monitor?')) {
-      const newMonitors = editedReport.insect_monitors?.filter((_, i) => i !== index) || [];
-      setEditedReport({ ...editedReport, insect_monitors: newMonitors });
-    }
+    alert.showConfirm(
+      'Are you sure you want to delete this monitor?',
+      () => {
+        const newMonitors = editedReport.insect_monitors?.filter((_, i) => i !== index) || [];
+        setEditedReport({ ...editedReport, insect_monitors: newMonitors });
+      },
+      'Delete Monitor',
+      'warning'
+    );
   };
 
   return (
@@ -461,6 +474,12 @@ export default function EditReportModal({
           </button>
         </div>
       </div>
+
+      <AlertModal
+        isOpen={alert.isOpen}
+        {...alert.config}
+        onClose={alert.hideAlert}
+      />
     </div>
   );
 }

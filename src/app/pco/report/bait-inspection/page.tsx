@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReportLayout from '@/components/ReportLayout';
 import StationForm from '@/components/StationForm';
@@ -66,7 +66,6 @@ function BaitInspectionContent() {
       // Check authentication first
       const token = localStorage.getItem('kps_token');
       if (!token) {
-        console.log('No authentication token found. Redirecting to login...');
         router.replace('/login');
         return;
       }
@@ -167,7 +166,7 @@ function BaitInspectionContent() {
             setPreviousStations(previousReportResponse.data.bait_stations);
           }
         } catch (err) {
-          console.log('No previous report data available or offline');
+          // Previous report data not available
         }
       }
 
@@ -209,7 +208,7 @@ function BaitInspectionContent() {
     };
   };
 
-  const saveStationToList = (station: BaitStation) => {
+  const saveStationToList = useCallback((station: BaitStation) => {
     setStations(prev => {
       const existing = prev.find(s => s.id === station.id);
       if (existing) {
@@ -219,9 +218,9 @@ function BaitInspectionContent() {
     });
     setShowStationForm(false);
     setEditingStation(null);
-  };
+  }, []);
 
-  const handleSaveStation = (station: BaitStation) => {
+  const handleSaveStation = useCallback((station: BaitStation) => {
     if (!station.stationNumber) {
       alert.showWarning('Station number is required', 'Missing Information');
       return;
@@ -241,7 +240,7 @@ function BaitInspectionContent() {
 
     // Check if this matches a previous report station and it wasn't already pre-filled
     const matchingPrevious = previousStations.find(
-      (prev: any) => prev.location === station.location && prev.station_number === station.stationNumber
+      (prev: any) => String(prev.location) === String(station.location) && String(prev.station_number) === String(station.stationNumber)
     );
 
     // If we found matching previous data and this is a new station (not editing), offer to pre-fill
@@ -265,9 +264,9 @@ function BaitInspectionContent() {
 
     // No previous data or user already made a choice, save normally
     saveStationToList(station);
-  };
+  }, [alert, stations, previousStations, saveStationToList, mapPreviousStationToForm]);
 
-  const handleAddStation = (location: 'inside' | 'outside') => {
+  const handleAddStation = useCallback((location: 'inside' | 'outside') => {
     const newStation: BaitStation = {
       id: Date.now().toString(),
       location,
@@ -281,14 +280,14 @@ function BaitInspectionContent() {
     };
     setEditingStation(newStation);
     setShowStationForm(true);
-  };
+  }, []);
 
-  const handleEditStation = (station: BaitStation) => {
+  const handleEditStation = useCallback((station: BaitStation) => {
     setEditingStation(station);
     setShowStationForm(true);
-  };
+  }, []);
 
-  const handleDeleteStation = (stationId: string) => {
+  const handleDeleteStation = useCallback((stationId: string) => {
     alert.showConfirm(
       'Are you sure you want to delete this station?',
       () => {
@@ -297,7 +296,7 @@ function BaitInspectionContent() {
       'Delete Station',
       'warning'
     );
-  };
+  }, [alert]);
 
   const checkForMissingStations = () => {
     const insideStations = stations.filter(s => s.location === 'inside');
@@ -332,10 +331,6 @@ function BaitInspectionContent() {
 
   const updateClientStationCounts = async (insideCount: number, outsideCount: number) => {
     try {
-      console.log('=== UPDATING CLIENT STATION COUNTS (LOCAL ONLY) ===');
-      console.log('Expected inside:', client?.total_bait_stations_inside, '→ New:', insideCount);
-      console.log('Expected outside:', client?.total_bait_stations_outside, '→ New:', outsideCount);
-
       // Store old expected counts for missing check
       const oldExpectedInside = client?.total_bait_stations_inside || 0;
       const oldExpectedOutside = client?.total_bait_stations_outside || 0;
@@ -354,23 +349,16 @@ function BaitInspectionContent() {
         reportData.client.total_bait_stations_inside = insideCount;
         reportData.client.total_bait_stations_outside = outsideCount;
         localStorage.setItem('current_report', JSON.stringify(reportData));
-        console.log('Updated localStorage with new counts');
       }
 
       // Don't show success alert here - it conflicts with missing stations check
       
-      console.log('Checking for missing stations using OLD expected counts...');
       // Check for missing stations using OLD expected counts (before update)
       const insideStations = stations.filter(s => s.location === 'inside');
       const outsideStations = stations.filter(s => s.location === 'outside');
       
-      console.log('Inside stations:', insideStations.length, 'Expected (old):', oldExpectedInside);
-      console.log('Outside stations:', outsideStations.length, 'Expected (old):', oldExpectedOutside);
-      
       const missingInside = oldExpectedInside - insideStations.length;
       const missingOutside = oldExpectedOutside - outsideStations.length;
-
-      console.log('Missing inside:', missingInside, 'Missing outside:', missingOutside);
 
       if (missingInside > 0 || missingOutside > 0) {
         let message = 'Expected stations:\n';
@@ -381,15 +369,12 @@ function BaitInspectionContent() {
           message += `\n• ${missingOutside} Outside stations missing`;
         }
         message += '\n\nDo you want to continue anyway?';
-
-        console.log('Showing missing stations confirmation...');
         
         // Small delay to let the first alert fully close
         setTimeout(() => {
           alert.showConfirm(
             message,
             () => {
-              console.log('Missing stations confirmed - proceeding to next step');
               proceedToNextStep();
             },
             'Missing Stations',
@@ -399,12 +384,10 @@ function BaitInspectionContent() {
         return;
       }
       
-      console.log('No missing stations - proceeding to next step...');
       proceedToNextStep();
     } catch (error) {
-      console.error('=== ERROR IN updateClientStationCounts ===');
-      console.error('Error details:', error);
-      alert.showError('Failed to update station counts. Check console for details.');
+      console.error('Error updating station counts:', error);
+      alert.showError('Failed to update station counts.');
     }
   };
 

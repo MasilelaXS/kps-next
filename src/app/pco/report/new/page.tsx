@@ -148,6 +148,9 @@ function NewReportContent() {
     try {
       setLoading(true);
       
+      // Check if offline
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      
       // Fetch assigned clients from sync endpoint
       const response = await apiCall('/api/pco/sync/clients?include_contacts=true');
       
@@ -184,9 +187,16 @@ function NewReportContent() {
       } else {
         setError('Failed to load client data');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching client:', error);
-      setError('Failed to load client information');
+      
+      // Check if it's an offline error
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      if (!isOnline || error.message?.includes('cached data')) {
+        setError('You are currently offline. Please connect to the internet to create a new report, or continue with an existing draft from your schedule.');
+      } else {
+        setError('Failed to load client information. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -285,21 +295,46 @@ function NewReportContent() {
   }
 
   if (error || !client) {
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOfflineError = !isOnline || error?.includes('offline') || error?.includes('cached data');
+    
     return (
       <ReportLayout title={isEditMode ? "Edit & Resubmit Report" : "New Report"} showCancelWarning={false}>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-red-600" />
+          <div className="text-center max-w-md">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              isOfflineError ? 'bg-orange-100' : 'bg-red-100'
+            }`}>
+              <AlertCircle className={`w-8 h-8 ${isOfflineError ? 'text-orange-600' : 'text-red-600'}`} />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Cannot Create Report</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={() => router.push('/pco/schedule')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition-all"
-            >
-              Back to Schedule
-            </button>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {isOfflineError ? 'Offline Mode' : 'Cannot Create Report'}
+            </h3>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <div className="space-y-3">
+              {!isOfflineError && (
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setLoading(true);
+                    if (reportId) {
+                      fetchExistingReport();
+                    } else if (clientId) {
+                      fetchClientData();
+                    }
+                  }}
+                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition-all"
+                >
+                  Try Again
+                </button>
+              )}
+              <button
+                onClick={() => router.push('/pco/schedule')}
+                className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 active:scale-95 transition-all"
+              >
+                Back to Schedule
+              </button>
+            </div>
           </div>
         </div>
       </ReportLayout>

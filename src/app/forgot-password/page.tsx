@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { buildApiUrl } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import TextBox from '@/components/TextBox';
 import { User, Mail } from 'lucide-react';
@@ -18,7 +19,7 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://192.168.1.128:3001/api/auth/forgot-password', {
+      const response = await fetch(buildApiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

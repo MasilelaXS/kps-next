@@ -2,6 +2,7 @@ export declare const config: {
     server: {
         env: string;
         port: number;
+        host: string;
         name: string;
         version: string;
     };
@@ -22,17 +23,23 @@ export declare const config: {
     };
     security: {
         bcryptRounds: number;
+        sessionSecret: string;
         sessionTimeout: string;
         corsOrigin: string;
+        corsCredentials: boolean;
         rateLimitWindowMs: number;
         rateLimitMaxRequests: number;
+        maxLoginAttempts: number;
+        accountLockoutDuration: number;
     };
     logging: {
         level: string;
         format: string;
+        file: string;
     };
     upload: {
         maxSize: number;
+        uploadDir: string;
         allowedTypes: string[];
     };
     email: {
@@ -44,6 +51,10 @@ export declare const config: {
         from: string;
         replyTo: string;
     };
+    frontend: {
+        url: string;
+    };
+    timezone: string;
 };
 export declare const isDevelopment: () => boolean;
 export declare const isProduction: () => boolean;

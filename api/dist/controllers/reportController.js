@@ -2179,12 +2179,13 @@ const createCompleteReport = async (req, res) => {
                         isNew = boxCount > expectedMonitorBox;
                     }
                     await connection.query(`INSERT INTO insect_monitors (
-              report_id, monitor_type, monitor_condition, monitor_condition_other,
+              report_id, monitor_number, location, monitor_type, monitor_condition, monitor_condition_other,
               warning_sign_condition, glue_board_replaced, light_condition,
               light_faulty_type, light_faulty_other, tubes_replaced, monitor_serviced,
               is_new_addition
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-                        reportId, monitor.monitor_type, monitor.monitor_condition, monitor.monitor_condition_other,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                        reportId, monitor.monitor_number, monitor.location, monitor.monitor_type,
+                        monitor.monitor_condition, monitor.monitor_condition_other,
                         monitor.warning_sign_condition, monitor.glue_board_replaced, monitor.light_condition,
                         monitor.light_faulty_type, monitor.light_faulty_other, monitor.tubes_replaced, true,
                         isNew
