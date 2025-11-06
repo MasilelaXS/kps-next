@@ -17,6 +17,7 @@ import {
   User
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import BottomNav from './BottomNav';
 import Loading from './Loading';
 import Button from './Button';
 import { preloadCache } from '@/lib/preloadCache';
@@ -107,8 +108,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+      {/* Sidebar - Hidden on mobile, visible on desktop */}
+      <aside className={`hidden lg:block fixed top-0 left-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="h-full flex flex-col">
           {/* Logo */}
           <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
@@ -254,9 +255,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
+      <div className={`transition-all duration-300 lg:ml-20 ${sidebarOpen ? 'lg:ml-64' : ''}`}>
         {/* Fixed Header */}
-        <header className="fixed top-0 right-0 left-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-30 transition-all duration-300" style={{ marginLeft: sidebarOpen ? '16rem' : '5rem' }}>
+        <header className="fixed top-0 right-0 left-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-30 transition-all duration-300 lg:ml-20" style={{ marginLeft: sidebarOpen ? '16rem' : '' }}>
           <h1 className="text-lg font-semibold text-gray-900">
             Admin Portal
           </h1>
@@ -265,11 +266,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </header>
 
-        {/* Page Content with top padding for fixed header */}
-        <main className="p-4 mt-14">
+        {/* Page Content with padding for header and bottom nav on mobile */}
+        <main className="p-4 mt-14 pb-20 lg:pb-4">
           {children}
         </main>
       </div>
+
+      {/* Bottom Navigation - Visible on mobile, hidden on desktop */}
+      <BottomNav />
     </div>
   );
 }

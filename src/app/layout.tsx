@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import DeviceDetection from "@/components/DeviceDetection";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -64,6 +65,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/180.png" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <DeviceDetection />
         <ServiceWorkerRegistration />
         <NotificationProvider>
           {children}

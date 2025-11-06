@@ -115,69 +115,69 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout >
       {/* Welcome Section */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="mb-6">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
           Welcome back!
         </h2>
-        <p className="text-gray-600 mt-1">Here's what's happening with your business today</p>
+        <p className="text-sm md:text-base text-gray-600 mt-1">Here's what's happening with your business today</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* Stats Grid - 2 columns on mobile, 4 on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
         {/* Total Clients */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-purple-600" />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6 hover:shadow-md transition-shadow active:scale-95">
+          <div className="flex items-center justify-between mb-3 lg:mb-4">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
             </div>
-            <span className="text-sm font-medium text-green-600 flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" />
-              12%
+            <span className="text-xs lg:text-sm font-medium text-green-600 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 lg:w-4 lg:h-4" />
+              <span className="hidden sm:inline">12%</span>
             </span>
           </div>
-          <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats?.totalClients || 0}</h3>
-          <p className="text-gray-600 text-sm">Total Clients</p>
+          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">{stats?.totalClients || 0}</h3>
+          <p className="text-gray-600 text-xs lg:text-sm">Total Clients</p>
         </div>
 
         {/* Active PCOs */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-blue-600" />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6 hover:shadow-md transition-shadow active:scale-95">
+          <div className="flex items-center justify-between mb-3 lg:mb-4">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 lg:w-6 lg:h-6 text-blue-600" />
             </div>
-            <span className="text-sm font-medium text-blue-600">Active</span>
+            <span className="text-xs lg:text-sm font-medium text-blue-600">Active</span>
           </div>
-          <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats?.activePCOs || 0}</h3>
-          <p className="text-gray-600 text-sm">Active PCO Users</p>
+          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">{stats?.activePCOs || 0}</h3>
+          <p className="text-gray-600 text-xs lg:text-sm">Active PCO Users</p>
         </div>
 
         {/* Pending Reports */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-6 h-6 text-orange-600" />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6 hover:shadow-md transition-shadow active:scale-95">
+          <div className="flex items-center justify-between mb-3 lg:mb-4">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 lg:w-6 lg:h-6 text-orange-600" />
             </div>
-            <span className="text-sm font-medium text-orange-600">Review</span>
+            <span className="text-xs lg:text-sm font-medium text-orange-600">Review</span>
           </div>
-          <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats?.pendingReports || 0}</h3>
-          <p className="text-gray-600 text-sm">Pending Reports</p>
+          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">{stats?.pendingReports || 0}</h3>
+          <p className="text-gray-600 text-xs lg:text-sm">Pending Reports</p>
         </div>
 
         {/* Completed Reports */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6 hover:shadow-md transition-shadow active:scale-95">
+          <div className="flex items-center justify-between mb-3 lg:mb-4">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 lg:w-6 lg:h-6 text-green-600" />
             </div>
-            <span className="text-sm font-medium text-green-600">This month</span>
+            <span className="text-xs lg:text-sm font-medium text-green-600 hidden sm:inline">This month</span>
           </div>
-          <h3 className="text-3xl font-bold text-gray-900 mb-1">{stats?.completedReportsThisMonth || 0}</h3>
-          <p className="text-gray-600 text-sm">Completed This Month</p>
+          <h3 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">{stats?.completedReportsThisMonth || 0}</h3>
+          <p className="text-gray-600 text-xs lg:text-sm">Completed This Month</p>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+      <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg shadow-lg p-4 lg:p-6 text-white">
         <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <button className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg p-4 transition-all text-center">

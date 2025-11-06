@@ -107,7 +107,7 @@ CREATE TABLE `station_chemicals` (
 );
 ```
 
-### fumigation_chemicals table (fumigation reports)
+### fumigation_chemicals table (SERVICE REPORT - FUMIGATIONs)
 ```sql
 CREATE TABLE `fumigation_chemicals` (
   `id` int(11) NOT NULL,

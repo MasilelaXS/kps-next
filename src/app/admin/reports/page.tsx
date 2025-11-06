@@ -173,6 +173,7 @@ export default function ReportsPage() {
   const [declineNotes, setDeclineNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [cleaningUp, setCleaningUp] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   
   // Email modal state
   const [clientContacts, setClientContacts] = useState<any[]>([]);
@@ -532,6 +533,7 @@ export default function ReportsPage() {
 
   const handleDownloadPDF = useCallback(async (reportId: number) => {
     try {
+      setDownloadingId(reportId);
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
@@ -586,6 +588,7 @@ export default function ReportsPage() {
       notification.error('Download Failed', error instanceof Error ? error.message : 'Failed to download PDF');
     } finally {
       setSubmitting(false);
+      setDownloadingId(null);
     }
   }, [notification]);
 
@@ -863,15 +866,16 @@ export default function ReportsPage() {
 
   return (
     <DashboardLayout >
-      {/* Header */}
-      <div className="mb-4">
+      {/* Header - Fixed */}
+      <div className="sticky top-14 z-30 bg-gray-50 -mx-4 px-4 py-3 lg:relative lg:top-0 lg:mx-0 lg:px-0 lg:py-0 mb-3 lg:mb-4 border-b lg:border-0 border-gray-200">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <FileText className="w-6 h-6 text-purple-600" />
-              Reports Management
+            <h2 className="text-xl lg:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
+              <span className="hidden sm:inline">Reports Management</span>
+              <span className="sm:hidden">Reports</span>
             </h2>
-            <p className="text-sm text-gray-600 mt-0.5">Review, approve, and manage service reports</p>
+            <p className="text-xs lg:text-sm text-gray-600 mt-0.5 hidden sm:block">Review, approve, and manage service reports</p>
           </div>
           <div>
             <Button
@@ -881,22 +885,25 @@ export default function ReportsPage() {
               onClick={handleCleanupDrafts}
               loading={cleaningUp}
               disabled={cleaningUp}
+              className="text-xs lg:text-sm"
             >
-              {cleaningUp ? 'Cleaning...' : 'Cleanup Old Drafts'}
+              <span className="hidden sm:inline">{cleaningUp ? 'Cleaning...' : 'Cleanup Old Drafts'}</span>
+              <span className="sm:hidden">Cleanup</span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Status Group Tabs */}
-      <div className="bg-white rounded-lg shadow-sm p-3 mb-4">
-        <div className="flex items-center gap-2 overflow-x-auto">
+      {/* Status Group Tabs - Fixed on mobile */}
+      <div className="sticky top-[calc(3.5rem+3.25rem)] lg:top-0 z-20 bg-gray-50 -mx-4 px-4 py-2 lg:relative lg:mx-0 lg:px-0 lg:py-0 mb-3 lg:mb-4 border-b lg:border-0 border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm p-2 lg:p-3">
+          <div className="flex items-center gap-2 overflow-x-auto">
           <button
             onClick={() => {
               setStatusGroup('draft');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'draft'
                 ? 'bg-gray-100 text-gray-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -909,7 +916,7 @@ export default function ReportsPage() {
               setStatusGroup('pending');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'pending'
                 ? 'bg-yellow-100 text-yellow-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -922,7 +929,7 @@ export default function ReportsPage() {
               setStatusGroup('approved');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'approved'
                 ? 'bg-green-100 text-green-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -935,7 +942,7 @@ export default function ReportsPage() {
               setStatusGroup('declined');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'declined'
                 ? 'bg-red-100 text-red-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -948,7 +955,7 @@ export default function ReportsPage() {
               setStatusGroup('emailed');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'emailed'
                 ? 'bg-blue-100 text-blue-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -961,7 +968,7 @@ export default function ReportsPage() {
               setStatusGroup('archived');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'archived'
                 ? 'bg-gray-100 text-gray-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -974,7 +981,7 @@ export default function ReportsPage() {
               setStatusGroup('all');
               setPagination({ ...pagination, current_page: 1 });
             }}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               statusGroup === 'all'
                 ? 'bg-purple-100 text-purple-700'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -983,40 +990,43 @@ export default function ReportsPage() {
             All Reports
           </button>
         </div>
+        </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-sm p-3 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-          {/* Search */}
-          <div className="lg:col-span-2 relative">
-            <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search client or PCO name..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                // Clear search when input is empty
-                if (e.target.value === '') {
-                  setActiveSearchQuery('');
-                }
-              }}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
+      <div className="bg-white rounded-lg shadow-sm p-2 lg:p-3 mb-3 lg:mb-4">
+        {/* Search - Full width */}
+        <div className="relative mb-2 lg:mb-0">
+          <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search client or PCO name..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              // Clear search when input is empty
+              if (e.target.value === '') {
+                setActiveSearchQuery('');
+              }
+            }}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
 
+        {/* Filters - Icons only on mobile, full on desktop */}
+        <div className="flex gap-2 lg:grid lg:grid-cols-3 lg:gap-2">
           {/* Report Type Filter */}
           <div className="relative">
-            <Filter className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Filter className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
             <select
               value={reportTypeFilter}
               onChange={(e) => {
                 setReportTypeFilter(e.target.value);
                 setPagination({ ...pagination, current_page: 1 });
               }}
-              className="w-full pl-9 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none bg-white"
+              className="w-10 h-10 lg:w-full pl-9 lg:pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none bg-white lg:bg-white text-transparent lg:text-gray-900"
+              title="Report Type"
             >
               <option value="all">All Types</option>
               <option value="bait_inspection">Bait Inspection</option>
@@ -1026,7 +1036,8 @@ export default function ReportsPage() {
           </div>
 
           {/* Date From */}
-          <div>
+          <div className="relative">
+            <Calendar className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
             <input
               type="date"
               value={dateFrom}
@@ -1034,13 +1045,14 @@ export default function ReportsPage() {
                 setDateFrom(e.target.value);
                 setPagination({ ...pagination, current_page: 1 });
               }}
-              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="From Date"
+              className="w-10 h-10 lg:w-full pl-9 lg:pl-3 pr-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-transparent lg:text-gray-900"
+              title="From Date"
             />
           </div>
 
           {/* Date To */}
-          <div>
+          <div className="relative">
+            <Calendar className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
             <input
               type="date"
               value={dateTo}
@@ -1048,15 +1060,137 @@ export default function ReportsPage() {
                 setDateTo(e.target.value);
                 setPagination({ ...pagination, current_page: 1 });
               }}
-              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="To Date"
+              className="w-10 h-10 lg:w-full pl-9 lg:pl-3 pr-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-transparent lg:text-gray-900"
+              title="To Date"
             />
           </div>
         </div>
       </div>
 
-      {/* Reports Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      {/* Mobile List View - WhatsApp Style */}
+      <div className="lg:hidden space-y-2 mb-4">
+        {!Array.isArray(reports) || reports.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No reports found</p>
+            <p className="text-xs text-gray-400 mt-0.5">Try adjusting your filters</p>
+          </div>
+        ) : (
+          reports.map((report) => (
+            <div 
+              key={report.id} 
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 active:scale-98 transition-transform"
+            >
+              {/* Top Section - Report Info & Status */}
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 text-sm">#{report.id}</h3>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getReportTypeBadge(report.report_type)}`}>
+                        {getReportTypeLabel(report.report_type)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                      <Building2 className="w-3 h-3" />
+                      <span className="truncate">{report.client_name}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ml-2 ${getStatusBadge(report.status)}`}>
+                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                </span>
+              </div>
+
+              {/* Middle Section - PCO & Date */}
+              <div className="flex items-center justify-between text-xs py-2 border-t border-gray-100">
+                <div className="flex items-center gap-1 text-gray-600">
+                  <User className="w-3.5 h-3.5" />
+                  <span className="truncate">{report.pco_name}</span>
+                </div>
+                <div className="flex items-center gap-1 text-gray-600">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>{new Date(report.service_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                </div>
+              </div>
+
+              {/* Bottom Section - Action Buttons */}
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                <button 
+                  onClick={() => handleViewReport(report)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 active:scale-95 transition-all"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  View
+                </button>
+                
+                {(report.status === 'draft' || report.status === 'pending') && (
+                  <>
+                    <button 
+                      onClick={() => router.push(`/admin/reports/${report.id}/edit`)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 active:scale-95 transition-all"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => openApproveModal(report)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 active:scale-95 transition-all"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Approve
+                    </button>
+                  </>
+                )}
+                
+                {report.status === 'approved' && (
+                  <>
+                    <button 
+                      onClick={() => handleDownloadPDF(report.id)}
+                      disabled={downloadingId === report.id}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {downloadingId === report.id ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                          Downloading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          PDF
+                        </>
+                      )}
+                    </button>
+                    <button 
+                      onClick={() => openEmailModal(report)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 active:scale-95 transition-all"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      Email
+                    </button>
+                  </>
+                )}
+                
+                {report.status !== 'archived' && (
+                  <button 
+                    onClick={() => openArchiveModal(report)}
+                    className="px-2 py-1.5 text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 active:scale-95 transition-all"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -1170,10 +1304,15 @@ export default function ReportsPage() {
                           <>
                             <button 
                               onClick={() => handleDownloadPDF(report.id)}
-                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                              title="Download PDF"
+                              disabled={downloadingId === report.id}
+                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={downloadingId === report.id ? 'Downloading...' : 'Download PDF'}
                             >
-                              <Download className="w-3.5 h-3.5" />
+                              {downloadingId === report.id ? (
+                                <div className="w-3.5 h-3.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5" />
+                              )}
                             </button>
                             <button 
                               onClick={() => openEmailModal(report)}
@@ -1770,11 +1909,20 @@ export default function ReportsPage() {
                 </button>
                 <button
                   onClick={() => handleDownloadPDF(selectedReport.id)}
-                  disabled={submitting}
+                  disabled={downloadingId === selectedReport.id}
                   className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Download className="w-4 h-4" />
-                  {submitting ? 'Generating...' : 'Download PDF'}
+                  {downloadingId === selectedReport.id ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Download PDF
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={() => openEmailModal(selectedReport)}

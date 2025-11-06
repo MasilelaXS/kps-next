@@ -464,7 +464,7 @@ export class PDFService {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Bait Inspection Report #${report.id}</title>
+    <title>SERVICE REPORT - BAIT INSPECTION #${report.id}</title>
     <style>
         body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
         .header-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
@@ -509,7 +509,7 @@ export class PDFService {
     <div class="header-section">
         <div class="logo-section">
             ${logoBase64 ? `<img src="${logoBase64}" alt="KPS Logo" style="height: 60px; width: auto; margin-bottom: 8px;" />` : ''}
-            <h2>BAIT INSPECTION REPORT</h2>
+            <h2>SERVICE REPORT - BAIT INSPECTION</h2>
         </div>
         <div class="address-section">
             <p><strong>KPS Pest Control</strong></p>
@@ -1065,7 +1065,7 @@ export class PDFService {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Fumigation Report #${report.id}</title>
+    <title>SERVICE REPORT - FUMIGATION #${report.id}</title>
     <style>
         body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
         .header-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
@@ -1112,7 +1112,7 @@ export class PDFService {
     <div class="header-section">
         <div class="logo-section">
             ${logoBase64 ? `<img src="${logoBase64}" alt="KPS Logo" style="height: 60px; width: auto; margin-bottom: 8px;" />` : ''}
-            <h2>FUMIGATION REPORT</h2>
+            <h2>SERVICE REPORT - FUMIGATION</h2>
         </div>
         <div class="address-section">
             <p><strong>KPS Pest Control</strong></p>

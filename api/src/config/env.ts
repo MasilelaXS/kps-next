@@ -72,7 +72,7 @@ export const config = useProductionConfig ? productionConfig : {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
     sessionSecret: process.env.SESSION_SECRET || 'dev-session-secret',
     sessionTimeout: process.env.SESSION_TIMEOUT || '24h',
-    corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3002',
+    corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3002,http://192.168.1.128:3000,http://192.168.1.128:3002',
     corsCredentials: process.env.CORS_CREDENTIALS === 'true',
     rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
     rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),

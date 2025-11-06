@@ -317,9 +317,9 @@ export const sendReportEmail = async (
     const ccRecipients = options?.cc ? (Array.isArray(options.cc) ? options.cc.join(', ') : options.cc) : undefined;
     
     const reportTypeDisplay = reportData.reportType === 'bait_inspection' 
-      ? 'Bait Inspection Report' 
+      ? 'SERVICE REPORT - BAIT INSPECTION' 
       : reportData.reportType === 'fumigation'
-      ? 'Fumigation Report'
+      ? 'SERVICE REPORT - FUMIGATION'
       : 'Service Report';
 
     const mailOptions = {

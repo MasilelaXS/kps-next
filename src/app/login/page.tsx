@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildApiUrl } from '@/lib/api';
 import TextBox from '@/components/TextBox';
 import { Eye, EyeOff, User, Lock } from 'lucide-react';
+import { useDeviceStore } from '@/store/deviceStore';
 
 export default function LoginPage() {
   const router = useRouter();
+  const initializeDevice = useDeviceStore((state: any) => state.initializeDevice);
   const [formData, setFormData] = useState({
     login_id: '',
     password: ''
@@ -15,6 +17,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Initialize device detection on mount
+  useEffect(() => {
+    const cleanup = initializeDevice();
+    return cleanup;
+  }, [initializeDevice]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

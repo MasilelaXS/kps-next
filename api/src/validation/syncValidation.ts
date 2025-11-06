@@ -83,7 +83,7 @@ export const uploadReportsSchema = Joi.object({
         })
       ).optional(),
       
-      // Fumigation data (for fumigation reports)
+      // Fumigation data (for SERVICE REPORT - FUMIGATIONs)
       fumigation: Joi.object({
         areas: Joi.array().items(
           Joi.object({

@@ -36,8 +36,8 @@ Phase 3 introduces more complex business logic and workflows. Two main component
 
 **What it does**:
 - Multi-step report creation (Draft → Pending → Approved/Declined)
-- Bait Inspection reports (station management, pre-filling from previous)
-- Fumigation reports (area tracking, pest management)
+- SERVICE REPORT - BAIT INSPECTIONs (station management, pre-filling from previous)
+- SERVICE REPORT - FUMIGATIONs (area tracking, pest management)
 - Chemical usage tracking (integrates with Chemical Management)
 - Digital signature capture and validation
 - JSON import/export for offline work
@@ -171,8 +171,8 @@ Return to Phase 3.1: Assignment Management
 ### Database Tables Needed
 - `reports` (main report table - already exists in schema)
 - `report_chemicals` (chemical usage per report)
-- `bait_stations` (for bait inspection reports)
-- `fumigation_areas` (for fumigation reports)
+- `bait_stations` (for SERVICE REPORT - BAIT INSPECTIONs)
+- `fumigation_areas` (for SERVICE REPORT - FUMIGATIONs)
 - `report_pests` (pest sightings tracking)
 
 ### Report Types

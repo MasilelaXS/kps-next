@@ -42,7 +42,7 @@ Report Management is the **MOST COMPLEX** module in the KPS system. It involves:
 ### Pre-fill Logic Rules ⚠️
 1. **Source**: Pre-fill from **last APPROVED report** for **same client**
 2. **Bait Stations**: Match by location + station_number, auto-populate previous data
-3. **Fumigation**: Copy chemicals and target pests from last fumigation report
+3. **Fumigation**: Copy chemicals and target pests from last SERVICE REPORT - FUMIGATION
 4. **Insect Monitors**: Copy monitor types from last report
 5. **Visual Indicators**: Frontend shows pre-filled vs new data (different background color)
 
@@ -183,7 +183,7 @@ Report Management is the **MOST COMPLEX** module in the KPS system. It involves:
 1. ✅ **At Least One Area**: Must select at least one treatment area
 2. ✅ **At Least One Pest**: Must select at least one target pest
 3. ✅ **Chemical Validation**: All chemicals must be active and type-appropriate
-4. ✅ **Pre-fill Logic**: Copy chemicals and pests from last fumigation report
+4. ✅ **Pre-fill Logic**: Copy chemicals and pests from last SERVICE REPORT - FUMIGATION
 
 ### Status Workflow Rules
 1. ✅ **Draft → Pending**: Submit action (validates all data complete)

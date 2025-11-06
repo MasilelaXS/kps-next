@@ -20,7 +20,8 @@ import {
   Eye,
   Edit,
   Trash2,
-  Filter
+  Filter,
+  UserPlus
 } from 'lucide-react';
 
 interface Contact {
@@ -552,62 +553,67 @@ export default function ClientsPage() {
   return (
     <DashboardLayout >
       {/* Header */}
-      <div className="mb-4">
+      <div className="mb-3 lg:mb-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Building2 className="w-6 h-6 text-purple-600" />
-              Clients Management
+            <h2 className="text-xl lg:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Building2 className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
+              <span className="hidden sm:inline">Clients Management</span>
+              <span className="sm:hidden">Clients</span>
             </h2>
-            <p className="text-sm text-gray-600 mt-0.5">Manage your client accounts and information</p>
+            <p className="text-xs lg:text-sm text-gray-600 mt-0.5 hidden sm:block">Manage your client accounts and information</p>
           </div>
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm"
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-3 lg:px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            Add New Client
+            <span className="hidden sm:inline">Add New Client</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-sm p-3 mb-4">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <TextBox
-              type="text"
-              placeholder="Search clients by name, address, or contact..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              icon={<Search className="w-4 h-4 text-gray-400" />}
-            />
-          </div>
-          <button
-            onClick={handleSearch}
-            className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Search
-          </button>
-          <div className="relative">
-            <Filter className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="pl-9 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none bg-white"
+      {/* Search and Filters - Fixed on mobile */}
+      <div className="sticky top-14 z-20 bg-gray-50 -mx-4 px-4 py-3 lg:relative lg:top-0 lg:mx-0 lg:px-0 lg:py-0 mb-3 lg:mb-4 border-b lg:border-0 border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm p-2 lg:p-3">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <TextBox
+                type="text"
+                placeholder="Search clients..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                icon={<Search className="w-4 h-4 text-gray-400" />}
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              className="px-3 lg:px-4 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors active:scale-95"
             >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="suspended">Suspended</option>
-            </select>
+              <Search className="w-4 h-4 lg:hidden" />
+              <span className="hidden lg:inline">Search</span>
+            </button>
+            <div className="relative">
+              <Filter className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="pl-9 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none bg-white min-w-[100px]"
+              >
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-3 mb-3 lg:mb-4">
         <div className="bg-white rounded-lg shadow-sm p-3">
           <div className="flex items-center justify-between">
             <div>
@@ -659,8 +665,123 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* Clients Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      {/* Mobile List View - WhatsApp Style */}
+      <div className="lg:hidden space-y-2 mb-4">
+        {!Array.isArray(clients) || clients.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No clients found</p>
+            <p className="text-xs text-gray-400 mt-0.5">Try adjusting your search or filters</p>
+          </div>
+        ) : (
+          clients.map((client) => (
+            <div 
+              key={client.id} 
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 active:scale-98 transition-transform"
+            >
+              {/* Top Section - Company & Status */}
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate text-sm">
+                      {client.company_name || 'Unnamed Client'}
+                    </h3>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate">{client.city || 'Unknown city'}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ml-2 ${getStatusBadge(client.status)}`}>
+                  {client.status ? client.status.charAt(0).toUpperCase() + client.status.slice(1) : 'N/A'}
+                </span>
+              </div>
+
+              {/* Middle Section - PCO & Reports Info */}
+              <div className="flex items-center justify-between text-xs py-2 border-t border-gray-100">
+                <div className="flex items-center gap-1 text-gray-600">
+                  <Users className="w-3.5 h-3.5" />
+                  <span className="truncate">
+                    {client.assigned_pco_name ? (
+                      `${client.assigned_pco_name}`
+                    ) : (
+                      <span className="text-gray-400">No PCO</span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-gray-600">
+                  <span>{client.total_reports || 0} reports</span>
+                  {client.last_service_date && (
+                    <span className="text-gray-400">
+                      {new Date(client.last_service_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Section - Action Buttons */}
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                <button 
+                  onClick={() => handleViewClient(client)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 active:scale-95 transition-all"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  View
+                </button>
+                <button 
+                  onClick={() => handleEditClient(client)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 active:scale-95 transition-all"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  Edit
+                </button>
+                <button 
+                  onClick={() => handleDeleteClient(client)}
+                  className="px-3 py-2 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 active:scale-95 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+        
+        {/* Mobile Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 mt-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-600">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <span className="text-xs text-gray-500">
+                {pagination.totalItems} total
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                disabled={pagination.page === 1}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                disabled={pagination.page === pagination.totalPages}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -812,12 +933,15 @@ export default function ClientsPage() {
         {pagination.totalPages > 1 && (
           <div className="bg-gray-50 px-3 py-2.5 border-t border-gray-200">
             <div className="flex items-center justify-between">
-              <div className="text-xs text-gray-700">
+              <div className="text-xs text-gray-700 hidden lg:block">
                 Showing <span className="font-medium">{((pagination.page - 1) * pagination.pageSize) + 1}</span> to{' '}
                 <span className="font-medium">
                   {Math.min(pagination.page * pagination.pageSize, pagination.totalItems)}
                 </span> of{' '}
                 <span className="font-medium">{pagination.totalItems}</span> results
+              </div>
+              <div className="text-xs text-gray-700 lg:hidden">
+                Page {pagination.page} / {pagination.totalPages}
               </div>
               <div className="flex gap-1.5">
                 <button
@@ -869,28 +993,29 @@ export default function ClientsPage() {
 
       {/* Create Client Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-4xl my-8">
+        <div className="fixed inset-0 bg-black/25 lg:flex lg:items-center lg:justify-center z-50 lg:p-4 overflow-y-auto">
+          <div className="bg-white lg:rounded-lg w-full lg:max-w-4xl min-h-screen lg:min-h-0 lg:my-8">
             <form onSubmit={handleSubmit}>
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <Building2 className="w-6 h-6 text-purple-600" />
-                  Create New Client
+              <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+                <h3 className="text-lg lg:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
+                  <span className="hidden sm:inline">Create New Client</span>
+                  <span className="sm:hidden">New Client</span>
                 </h3>
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 max-h-[70vh] overflow-y-auto">
+              <div className="p-4 lg:p-6 lg:max-h-[70vh] lg:overflow-y-auto">
                 {/* General Error */}
                 {formErrors.general && (
                   <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -1210,19 +1335,19 @@ export default function ClientsPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-end gap-2 lg:gap-3 p-4 lg:p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
                 <button
                   type="button"
                   onClick={resetForm}
                   disabled={submitting}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  className="px-4 lg:px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 text-sm lg:text-base active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 lg:px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2 text-sm lg:text-base active:scale-95"
                 >
                   {submitting ? (
                     <>
@@ -1244,11 +1369,11 @@ export default function ClientsPage() {
 
       {/* View Client Modal */}
       {showViewModal && selectedClient && (
-        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-3xl my-8">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <Building2 className="w-6 h-6 text-purple-600" />
+        <div className="fixed inset-0 bg-black/25 lg:flex lg:items-center lg:justify-center z-50 lg:p-4 overflow-y-auto">
+          <div className="bg-white lg:rounded-lg w-full lg:max-w-3xl min-h-screen lg:min-h-0 lg:my-8">
+            <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+              <h3 className="text-lg lg:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
                 Client Details
               </h3>
               <button
@@ -1257,15 +1382,15 @@ export default function ClientsPage() {
                   setSelectedClient(null);
                   setClientDetails(null);
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-4 lg:p-6 lg:max-h-[70vh] lg:overflow-y-auto">
               {loadingDetails ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
@@ -1412,12 +1537,12 @@ export default function ClientsPage() {
 
       {/* Edit Client Modal */}
       {showEditModal && selectedClient && (
-        <div className="fixed inset-0 bg-black/25 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-4xl my-8">
+        <div className="fixed inset-0 bg-black/25 lg:flex lg:items-center lg:justify-center z-50 lg:p-4 overflow-y-auto">
+          <div className="bg-white lg:rounded-lg w-full lg:max-w-4xl min-h-screen lg:min-h-0 lg:my-8">
             <form onSubmit={handleUpdateClient}>
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <Edit className="w-6 h-6 text-purple-600" />
+              <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+                <h3 className="text-lg lg:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <Edit className="w-5 h-5 lg:w-6 lg:h-6 text-purple-600" />
                   Edit Client
                 </h3>
                 <button
@@ -1757,7 +1882,7 @@ export default function ClientsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-end gap-2 lg:gap-3 p-4 lg:p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -1766,14 +1891,14 @@ export default function ClientsPage() {
                     resetForm();
                   }}
                   disabled={submitting}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  className="px-4 lg:px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 text-sm lg:text-base active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 lg:px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2 text-sm lg:text-base active:scale-95"
                 >
                   {submitting ? (
                     <>

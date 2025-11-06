@@ -5,6 +5,7 @@ import { buildApiUrl } from '@/lib/api';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
+import { useDeviceStore } from '@/store/deviceStore';
 import TextBox from '@/components/TextBox';
 import { 
   Calendar,
@@ -65,6 +66,7 @@ interface Assignment {
 
 export default function SchedulePage() {
   const notification = useNotification();
+  const isMobile = useDeviceStore((state: any) => state.isMobile);
   const [loading, setLoading] = useState(true);
   const [pcos, setPcos] = useState<PCO[]>([]);
   const [selectedPco, setSelectedPco] = useState<PCO | null>(null);
@@ -78,6 +80,7 @@ export default function SchedulePage() {
   const [selectedClientsToAssign, setSelectedClientsToAssign] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
+  const [showMobileAssignments, setShowMobileAssignments] = useState(false);
 
   useEffect(() => {
     fetchPCOs();
@@ -366,6 +369,15 @@ export default function SchedulePage() {
     }
   };
 
+  const handlePcoSelect = (pco: PCO) => {
+    setSelectedPco(pco);
+    setShowMobileAssignments(true);
+  };
+
+  const handleBackToPcoList = () => {
+    setShowMobileAssignments(false);
+  };
+
   const filteredPcos = pcos.filter(pco =>
     pco.name.toLowerCase().includes(pcoSearchQuery.toLowerCase()) ||
     pco.pco_number.toLowerCase().includes(pcoSearchQuery.toLowerCase())
@@ -388,18 +400,229 @@ export default function SchedulePage() {
 
   return (
     <DashboardLayout >
+      {/* Mobile View - Conditional Screens */}
+      {isMobile ? (
+        <div>
+        {!showMobileAssignments ? (
+          /* PCO List Screen */
+          <>
+            {/* Header */}
+            <div className="sticky top-14 z-30 bg-gray-50 -mx-4 px-4 py-3 mb-3 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 truncate">
+                    <Calendar className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                    Schedule
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setStatusFilter('active')}
+                      className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                        statusFilter === 'active'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Active
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter('all')}
+                      className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                        statusFilter === 'all'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      All
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="mb-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search PCOs..."
+                  value={pcoSearchQuery}
+                  onChange={(e) => setPcoSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                />
+              </div>
+            </div>
+
+            {/* PCO List */}
+            <div className="space-y-2">
+              {loading ? (
+                <div className="flex items-center justify-center h-40">
+                  <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filteredPcos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-500 bg-white rounded-lg">
+                  <Users className="w-10 h-10 mb-2 text-gray-300" />
+                  <p className="text-xs">No PCOs found</p>
+                </div>
+              ) : (
+                filteredPcos.map((pco) => (
+                  <button
+                    key={pco.id}
+                    onClick={() => handlePcoSelect(pco)}
+                    className="w-full p-3 text-left bg-white rounded-lg border border-gray-200 shadow-sm active:scale-98 transition-transform"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <UserCheck className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                          <h3 className="font-medium text-sm text-gray-900 truncate">{pco.name}</h3>
+                        </div>
+                        <p className="text-xs text-gray-500">PCO #{pco.pco_number}</p>
+                      </div>
+                      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                        pco.status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {pco.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{pco.active_assignments || 0} assigned clients</span>
+                      </div>
+                      <span className="text-purple-600 text-xs">View →</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        ) : (
+          /* Assignments Screen */
+          <>
+            {/* Header with Back Button */}
+            <div className="sticky top-14 z-30 bg-gray-50 -mx-4 px-4 py-3 mb-3 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBackToPcoList}
+                  className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors active:scale-95"
+                >
+                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base font-semibold text-gray-900 truncate">{selectedPco?.name}</h2>
+                  <p className="text-xs text-gray-500">
+                    PCO #{selectedPco?.pco_number} • {assignments.length} clients
+                  </p>
+                </div>
+                <button
+                  onClick={openAssignModal}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-3 py-1.5 rounded-lg hover:shadow-lg transition-all text-xs active:scale-95 flex-shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Assign
+                </button>
+              </div>
+            </div>
+
+            {/* Assigned Clients List */}
+            <div className="space-y-2">
+              {assignments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500 bg-white rounded-lg">
+                  <Calendar className="w-12 h-12 mb-3 text-gray-300" />
+                  <h3 className="text-base font-medium text-gray-900 mb-2">No Assigned Clients</h3>
+                  <p className="text-xs text-gray-600 mb-4 text-center px-4">This PCO has no assigned clients yet</p>
+                  <button
+                    onClick={openAssignModal}
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Assign Clients
+                  </button>
+                </div>
+              ) : (
+                assignments.map((assignment) => (
+                  <div
+                    key={assignment.id}
+                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-3"
+                  >
+                    {/* Client Header */}
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm text-gray-900 mb-1 truncate">{assignment.client_name}</h3>
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{assignment.client_city}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => openUnassignModal(assignment)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors active:scale-95 flex-shrink-0"
+                        title="Unassign Client"
+                      >
+                        <UserX className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Service Info */}
+                    <div className="space-y-1.5 mb-2">
+                      {assignment.last_service_date && (
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="truncate">Last: {new Date(assignment.last_service_date).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{assignment.report_count} reports</span>
+                      </div>
+                    </div>
+
+                    {/* Service Priority Badge */}
+                    {assignment.service_priority && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${getServicePriorityBadge(assignment.service_priority)}`}>
+                          {getServicePriorityIcon(assignment.service_priority)}
+                          {getServicePriorityLabel(assignment.service_priority)}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Assigned Date */}
+                    <div className="pt-2 border-t border-gray-100">
+                      <p className="text-xs text-gray-500">
+                        Assigned {new Date(assignment.assigned_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+        </div>
+      ) : (
+      /* Desktop View - Original Layout */
+      <div>
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-6 h-6 text-purple-600" />
-              Schedule Management
+          <div className="flex-1 min-w-0">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2 truncate">
+              <Calendar className="w-6 h-6 text-purple-600 flex-shrink-0" />
+              Schedule
             </h2>
             <p className="text-sm text-gray-600 mt-0.5">Manage PCO assignments and client schedules</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setStatusFilter('active')}
                 className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -425,7 +648,7 @@ export default function SchedulePage() {
             {selectedPco && (
               <button
                 onClick={openAssignModal}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm"
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 Assign Clients
@@ -437,21 +660,24 @@ export default function SchedulePage() {
 
       {/* Main Content */}
       <div className="flex gap-4 h-[calc(100vh-180px)]">
-          {/* Left Sidebar - PCO List */}
+          {/* PCO List - Sidebar on desktop */}
           <div className="w-80 bg-white rounded-lg shadow-sm flex flex-col overflow-hidden">
             {/* PCO Search */}
             <div className="p-3 border-b border-gray-200">
-              <TextBox
-                type="text"
-                placeholder="Search PCOs..."
-                value={pcoSearchQuery}
-                onChange={(e) => setPcoSearchQuery(e.target.value)}
-                icon={<Search className="w-4 h-4 text-gray-400" />}
-              />
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search PCOs..."
+                  value={pcoSearchQuery}
+                  onChange={(e) => setPcoSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
             </div>
 
             {/* PCO List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               {loading ? (
                 <div className="flex items-center justify-center h-40">
                   <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
@@ -467,21 +693,21 @@ export default function SchedulePage() {
                     <button
                       key={pco.id}
                       onClick={() => setSelectedPco(pco)}
-                      className={`w-full p-3 text-left transition-colors rounded-lg ${
+                      className={`w-full p-3 text-left transition-all rounded-lg active:scale-98 focus:outline-none border ${
                         selectedPco?.id === pco.id
-                          ? 'bg-purple-50 border border-purple-200'
-                          : 'hover:bg-gray-50'
+                          ? 'bg-purple-50 border-purple-200'
+                          : 'border-transparent hover:bg-gray-50'
                       }`}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <UserCheck className="w-4 h-4 text-purple-600" />
-                            <h3 className="font-medium text-gray-900 truncate">{pco.name}</h3>
+                            <UserCheck className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                            <h3 className="font-medium text-sm text-gray-900 truncate">{pco.name}</h3>
                           </div>
                           <p className="text-xs text-gray-500">PCO #{pco.pco_number}</p>
                         </div>
-                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
                           pco.status === 'active'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-700'
@@ -490,8 +716,8 @@ export default function SchedulePage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>{pco.active_assignments || 0} assigned clients</span>
+                        <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{pco.active_assignments || 0} clients</span>
                       </div>
                     </button>
                   ))}
@@ -501,14 +727,14 @@ export default function SchedulePage() {
           </div>
 
           {/* Right Content - Assigned Clients */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-lg shadow-sm">
+          <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-lg shadow-sm min-h-[400px] lg:min-h-0">
             {selectedPco ? (
               <>
                 {/* Selected PCO Header */}
                 <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-3 rounded-t-lg">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-0.5">{selectedPco.name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold mb-0.5 truncate">{selectedPco.name}</h3>
                       <p className="text-xs text-purple-100">
                         PCO #{selectedPco.pco_number} • {assignments.length} assigned clients
                       </p>
@@ -519,20 +745,20 @@ export default function SchedulePage() {
                 {/* Assigned Clients Grid */}
                 <div className="flex-1 overflow-y-auto p-4">
                   {assignments.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                    <div className="flex flex-col items-center justify-center h-full text-gray-500 py-8">
                       <Calendar className="w-16 h-16 mb-4 text-gray-300" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No Assigned Clients</h3>
-                      <p className="text-sm text-gray-600 mb-4">This PCO has no assigned clients yet</p>
+                      <p className="text-sm text-gray-600 mb-4 text-center px-4">This PCO has no assigned clients yet</p>
                       <button
                         onClick={openAssignModal}
-                        className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm"
+                        className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
                       >
                         <Plus className="w-4 h-4" />
                         Assign Clients
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       {assignments.map((assignment) => (
                         <div
                           key={assignment.id}
@@ -541,16 +767,16 @@ export default function SchedulePage() {
                           <div className="p-4">
                             {/* Client Header */}
                             <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-gray-900 mb-1">{assignment.client_name}</h3>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-base text-gray-900 mb-1 truncate">{assignment.client_name}</h3>
                                 <div className="flex items-center gap-1 text-xs text-gray-500">
-                                  <MapPin className="w-3 h-3" />
-                                  <span>{assignment.client_city}</span>
+                                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">{assignment.client_city}</span>
                                 </div>
                               </div>
                               <button
                                 onClick={() => openUnassignModal(assignment)}
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors active:scale-95 flex-shrink-0"
                                 title="Unassign Client"
                               >
                                 <UserX className="w-4 h-4" />
@@ -561,19 +787,19 @@ export default function SchedulePage() {
                             <div className="space-y-2 mb-3">
                               {assignment.last_service_date && (
                                 <div className="flex items-center gap-2 text-xs text-gray-600">
-                                  <Clock className="w-3.5 h-3.5" />
-                                  <span>Last service: {new Date(assignment.last_service_date).toLocaleDateString()}</span>
+                                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                                  <span className="truncate">Last: {new Date(assignment.last_service_date).toLocaleDateString()}</span>
                                 </div>
                               )}
                               <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                                 <span>{assignment.report_count} reports</span>
                               </div>
                             </div>
 
                             {/* Service Priority Badge */}
                             {assignment.service_priority && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 mb-3">
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getServicePriorityBadge(assignment.service_priority)}`}>
                                   {getServicePriorityIcon(assignment.service_priority)}
                                   {getServicePriorityLabel(assignment.service_priority)}
@@ -582,7 +808,7 @@ export default function SchedulePage() {
                             )}
 
                             {/* Assigned Date */}
-                            <div className="mt-3 pt-3 border-t border-gray-100">
+                            <div className="pt-3 border-t border-gray-100">
                               <p className="text-xs text-gray-500">
                                 Assigned {new Date(assignment.assigned_at).toLocaleDateString()}
                               </p>
@@ -598,25 +824,27 @@ export default function SchedulePage() {
               <div className="flex flex-col items-center justify-center h-full text-gray-500 p-8">
                 <Calendar className="w-16 h-16 mb-4 text-gray-300" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Select a PCO</h3>
-                <p className="text-sm text-gray-600">Choose a PCO from the left sidebar to view their assigned clients</p>
+                <p className="text-sm text-gray-600 text-center">Choose a PCO from the list to view their assigned clients</p>
               </div>
             )}
           </div>
         </div>
+      </div>
+      )}
 
       {/* Assign Clients Modal */}
       {showAssignModal && selectedPco && (
-        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Plus className="w-5 h-5 text-purple-600" />
+        <div className="fixed inset-0 bg-black/25 flex items-end lg:items-center justify-center lg:p-4 z-50">
+          <div className="bg-white rounded-t-xl lg:rounded-xl shadow-2xl w-full lg:max-w-2xl max-h-[90vh] lg:max-h-[80vh] flex flex-col">
+            {/* Modal Header - Sticky */}
+            <div className="flex items-center justify-between p-3 lg:p-4 border-b border-gray-200 bg-white rounded-t-xl z-10 flex-shrink-0">
+              <div className="flex items-center gap-2 lg:gap-3 flex-1 min-w-0">
+                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Plus className="w-4 h-4 lg:w-5 lg:h-5 text-purple-600" />
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Assign Clients</h2>
-                  <p className="text-xs text-gray-500">Assign clients to {selectedPco.name}</p>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base lg:text-lg font-semibold text-gray-900 truncate">Assign Clients</h2>
+                  <p className="text-xs text-gray-500 truncate">Assign to {selectedPco.name}</p>
                 </div>
               </div>
               <button
@@ -624,28 +852,31 @@ export default function SchedulePage() {
                   setShowAssignModal(false);
                   setSelectedClientsToAssign([]);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Search */}
-            <div className="p-4 border-b border-gray-200">
-              <TextBox
-                type="text"
-                placeholder="Search clients..."
-                value={clientSearchQuery}
-                onChange={(e) => setClientSearchQuery(e.target.value)}
-                icon={<Search className="w-4 h-4 text-gray-400" />}
-              />
+            <div className="p-3 lg:p-4 border-b border-gray-200 bg-white flex-shrink-0">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search clients..."
+                  value={clientSearchQuery}
+                  onChange={(e) => setClientSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
             </div>
 
             {/* Client List */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-3 lg:p-4">
               {filteredAvailableClients.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-500">
-                  <Building2 className="w-12 h-12 mb-2 text-gray-300" />
+                  <Building2 className="w-10 h-10 lg:w-12 lg:h-12 mb-2 text-gray-300" />
                   <p className="text-sm">No clients found</p>
                 </div>
               ) : (
@@ -658,7 +889,7 @@ export default function SchedulePage() {
                     return (
                       <div
                         key={client.id}
-                        className={`flex items-center gap-3 p-3 border rounded-lg transition-colors ${
+                        className={`flex items-center gap-2 lg:gap-3 p-2.5 lg:p-3 border rounded-lg transition-colors ${
                           isAssigned
                             ? 'bg-gray-50 border-gray-200'
                             : selectedClientsToAssign.includes(client.id)
@@ -668,49 +899,41 @@ export default function SchedulePage() {
                       >
                         {/* Assignment Status Dot */}
                         <div className="flex-shrink-0">
-                          <div className={`w-3 h-3 rounded-full ${
+                          <div className={`w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full ${
                             isAssigned ? 'bg-green-500' : 'bg-gray-300'
                           }`} title={isAssigned ? 'Assigned' : 'Unassigned'} />
                         </div>
                         
                         {/* Checkbox - Only show for unassigned clients */}
                         {!isAssigned ? (
-                          <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                          <label className="flex items-center gap-2 lg:gap-3 flex-1 cursor-pointer min-w-0">
                             <input
                               type="checkbox"
                               checked={selectedClientsToAssign.includes(client.id)}
                               onChange={() => toggleClientSelection(client.id)}
-                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 flex-shrink-0"
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-gray-900">
-                                  {client.company_name}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {client.city}
-                                </span>
+                              <p className="font-medium text-sm lg:text-base text-gray-900 truncate">
+                                {client.company_name}
+                              </p>
+                              <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                                <MapPin className="w-3 h-3 flex-shrink-0" />
+                                <span className="truncate">{client.city}</span>
                               </div>
                             </div>
                           </label>
                         ) : (
                           <>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-gray-500">
-                                  {client.company_name}
-                                </p>
-                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                                  {isAssignedToCurrentPco ? 'Assigned to this PCO' : `Assigned to ${client.assigned_pco_name}`}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {client.city}
+                              <p className="font-medium text-sm lg:text-base text-gray-500 truncate">
+                                {client.company_name}
+                              </p>
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                <MapPin className="w-3 h-3 flex-shrink-0" />
+                                <span className="truncate">{client.city}</span>
+                                <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium flex-shrink-0">
+                                  {isAssignedToCurrentPco ? 'This PCO' : 'Assigned'}
                                 </span>
                               </div>
                             </div>
@@ -719,11 +942,11 @@ export default function SchedulePage() {
                               <button
                                 onClick={() => handleUnassignFromModal(assignmentId, client.company_name)}
                                 disabled={submitting}
-                                className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
+                                className="px-2 lg:px-3 py-1 lg:py-1.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 lg:gap-1.5 whitespace-nowrap flex-shrink-0 active:scale-95"
                                 title="Unassign this client"
                               >
-                                <X className="w-3.5 h-3.5" />
-                                Unassign
+                                <X className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                                <span className="hidden lg:inline">Unassign</span>
                               </button>
                             )}
                           </>
@@ -735,31 +958,31 @@ export default function SchedulePage() {
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between p-4 border-t border-gray-200">
-              <p className="text-sm text-gray-600">
-                {selectedClientsToAssign.length} client(s) selected
+            {/* Modal Footer - Sticky */}
+            <div className="flex items-center justify-between p-3 lg:p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 pb-20 lg:pb-3">
+              <p className="text-xs lg:text-sm text-gray-600">
+                {selectedClientsToAssign.length} selected
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2 lg:gap-3">
                 <button
                   onClick={() => {
                     setShowAssignModal(false);
                     setSelectedClientsToAssign([]);
                   }}
                   disabled={submitting}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 lg:px-4 py-1.5 lg:py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAssignClients}
                   disabled={submitting || selectedClientsToAssign.length === 0}
-                  className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-3 lg:px-4 py-1.5 lg:py-2 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 lg:gap-2 active:scale-95"
                 >
                   {submitting ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Assigning...
+                      <span className="hidden lg:inline">Assigning...</span>
                     </>
                   ) : (
                     <>
@@ -776,34 +999,43 @@ export default function SchedulePage() {
 
       {/* Unassign Confirmation Modal */}
       {showUnassignModal && selectedAssignment && (
-        <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black/25 flex items-end lg:items-center justify-center lg:p-4 z-50">
+          <div className="bg-white rounded-t-xl lg:rounded-xl shadow-2xl w-full lg:max-w-md flex flex-col">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                  <UserX className="w-5 h-5 text-red-600" />
+            <div className="flex items-center justify-between p-3 lg:p-4 border-b border-gray-200 bg-white rounded-t-xl flex-shrink-0">
+              <div className="flex items-center gap-2 lg:gap-3">
+                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <UserX className="w-4 h-4 lg:w-5 lg:h-5 text-red-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Unassign Client</h2>
+                  <h2 className="text-base lg:text-lg font-semibold text-gray-900">Unassign Client</h2>
                   <p className="text-xs text-gray-500">Remove assignment from PCO</p>
                 </div>
               </div>
+              <button
+                onClick={() => {
+                  setShowUnassignModal(false);
+                  setSelectedAssignment(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6">
+            <div className="p-4 lg:p-6">
               <p className="text-sm text-gray-700 mb-4">
                 Are you sure you want to unassign <span className="font-semibold">{selectedAssignment.client_name}</span> from <span className="font-semibold">{selectedPco?.name}</span>?
               </p>
               <div className="bg-gray-50 rounded-lg p-3 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-600">Client:</span>
-                  <span className="font-medium text-gray-900">{selectedAssignment.client_name}</span>
+                  <span className="font-medium text-gray-900 truncate ml-2">{selectedAssignment.client_name}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-600">Location:</span>
-                  <span className="font-medium text-gray-900">{selectedAssignment.client_city}</span>
+                  <span className="font-medium text-gray-900 truncate ml-2">{selectedAssignment.client_city}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-600">Reports:</span>
@@ -813,31 +1045,31 @@ export default function SchedulePage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-2 lg:gap-3 p-3 lg:p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 pb-20 lg:pb-3">
               <button
                 onClick={() => {
                   setShowUnassignModal(false);
                   setSelectedAssignment(null);
                 }}
                 disabled={submitting}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 lg:px-4 py-1.5 lg:py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUnassignClient}
                 disabled={submitting}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-3 lg:px-4 py-1.5 lg:py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 lg:gap-2 active:scale-95"
               >
                 {submitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Unassigning...
+                    <span className="hidden lg:inline">Unassigning...</span>
                   </>
                 ) : (
                   <>
                     <UserX className="w-4 h-4" />
-                    Unassign Client
+                    Unassign
                   </>
                 )}
               </button>
