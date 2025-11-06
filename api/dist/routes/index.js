@@ -16,6 +16,8 @@ const pcoSyncRoutes_1 = __importDefault(require("./pcoSyncRoutes"));
 const adminDashboardRoutes_1 = __importDefault(require("./adminDashboardRoutes"));
 const searchRoutes_1 = __importDefault(require("./searchRoutes"));
 const notificationRoutes_1 = __importDefault(require("./notificationRoutes"));
+const cleanupRoutes_1 = __importDefault(require("./cleanupRoutes"));
+const pushRoutes_1 = __importDefault(require("./pushRoutes"));
 const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({
@@ -50,6 +52,7 @@ router.get('/', (req, res) => {
             admin_dashboard: '/api/admin/dashboard',
             search: '/api/search',
             notifications: '/api/notifications',
+            cleanup: '/api/cleanup',
             health: '/api/health',
             status: '/api/status'
         }
@@ -68,5 +71,7 @@ router.use('/', pcoSyncRoutes_1.default);
 router.use('/', adminDashboardRoutes_1.default);
 router.use('/search', searchRoutes_1.default);
 router.use('/notifications', notificationRoutes_1.default);
+router.use('/cleanup', cleanupRoutes_1.default);
+router.use('/push', pushRoutes_1.default);
 exports.default = router;
 //# sourceMappingURL=index.js.map

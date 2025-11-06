@@ -3,12 +3,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteNotification = exports.markAllAsRead = exports.sendNotification = exports.markAsRead = exports.getNotifications = exports.createNotification = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
+const pushNotificationService_1 = require("../services/pushNotificationService");
 const createNotification = async (userId, type, title, message) => {
     try {
         const result = await (0, database_1.executeQuery)(`INSERT INTO notifications (user_id, type, title, message)
        VALUES (?, ?, ?, ?)`, [userId, type, title, message]);
         const notificationId = result.insertId;
         logger_1.logger.info(`Notification created for user ${userId}: ${title}`);
+        (0, pushNotificationService_1.sendPushNotification)(userId, {
+            title,
+            body: message,
+            icon: '/icons/192.png',
+            data: {
+                type,
+                notificationId,
+                timestamp: Date.now()
+            }
+        }).catch(error => {
+            logger_1.logger.error('Error sending push notification:', error);
+        });
         return notificationId;
     }
     catch (error) {

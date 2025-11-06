@@ -78,6 +78,13 @@ export const productionConfig = {
     url: 'https://my.kpspestcontrol.co.za'
   },
 
+  // Push Notifications (VAPID)
+  push: {
+    vapidPublicKey: 'BFhbMEOIl023VNDbsaAJWW9xDxDm5kMYux14ml3XNsKVrVmKlqi6CguED_Vm4JtgJlsN2vV68-AA3iyMNeqIi4A',
+    vapidPrivateKey: 'mfnpufAZrBbTyODNxjacGTAZ1nAbgPmuOWxkIlAHOnI',
+    vapidSubject: 'mailto:mail@kpspestcontrol.co.za'
+  },
+
   // Timezone
   timezone: 'Africa/Johannesburg'
 };

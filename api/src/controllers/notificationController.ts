@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
+import { sendPushNotification } from '../services/pushNotificationService';
 
 /**
  * Helper function to create a notification
@@ -28,6 +29,21 @@ export const createNotification = async (
     
     const notificationId = (result as any).insertId;
     logger.info(`Notification created for user ${userId}: ${title}`);
+    
+    // Send push notification (don't wait for it, fire and forget)
+    sendPushNotification(userId, {
+      title,
+      body: message,
+      icon: '/icons/192.png',
+      data: {
+        type,
+        notificationId,
+        timestamp: Date.now()
+      }
+    }).catch(error => {
+      logger.error('Error sending push notification:', error);
+    });
+    
     return notificationId;
   } catch (error) {
     logger.error('Error creating notification:', error);

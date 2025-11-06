@@ -42,6 +42,9 @@ export default function LoginPage() {
         localStorage.setItem('kps_user', JSON.stringify(data.data.user));
         localStorage.setItem('kps_login_time', new Date().toISOString());
 
+        // Trigger push notification subscription
+        window.dispatchEvent(new Event('kps-login'));
+
         // Redirect based on role_context (determined by login prefix: admin12345 or pco12345)
         // This allows users with role='both' to access either portal based on how they log in
         const roleContext = data.data.user.role_context || data.data.user.role;

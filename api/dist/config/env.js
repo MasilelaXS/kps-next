@@ -79,6 +79,11 @@ exports.config = useProductionConfig ? production_config_1.productionConfig : {
     frontend: {
         url: process.env.FRONTEND_URL || 'http://localhost:3000'
     },
+    push: {
+        vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
+        vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
+        vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@kpspestcontrol.co.za'
+    },
     timezone: process.env.TZ || 'Africa/Johannesburg'
 };
 const isDevelopment = () => exports.config.server.env === 'development';

@@ -11,7 +11,7 @@ import app from './app';
 import { config } from './config/env';
 import { logger } from './config/logger';
 import { testConnection, closeConnection } from './config/database';
-import { cleanupOldDrafts } from './controllers/reportController';
+import { initializeCronJobs } from './config/cron';
 
 /**
  * Start the server with proper error handling
@@ -22,12 +22,9 @@ const startServer = async (): Promise<void> => {
     logger.info('🔄 Testing database connection...');
     await testConnection();
     
-    // Run cleanup of old draft reports
-    logger.info('🧹 Running cleanup of old draft reports...');
-    const cleanupResult = await cleanupOldDrafts();
-    if (cleanupResult.success && cleanupResult.deletedCount > 0) {
-      logger.info(`✅ Cleanup completed: ${cleanupResult.message}`);
-    }
+    // Initialize cron jobs for automated tasks
+    logger.info('⏰ Initializing scheduled tasks...');
+    initializeCronJobs();
     
     // Start HTTP server - listen on 0.0.0.0 to accept connections from all network interfaces
     const server = app.listen(config.server.port, '0.0.0.0', () => {
@@ -49,18 +46,6 @@ const startServer = async (): Promise<void> => {
       console.log(`📊 Status: http://localhost:${config.server.port}/api/status`);
       console.log(`📚 API Docs: http://localhost:${config.server.port}/api-docs`);
       console.log(`\n🛑 Press Ctrl+C to stop the server\n`);
-      
-      // Schedule daily cleanup of old draft reports (runs every 24 hours)
-      const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-      setInterval(async () => {
-        logger.info('🧹 Running scheduled cleanup of old draft reports...');
-        const result = await cleanupOldDrafts();
-        if (result.success && result.deletedCount > 0) {
-          logger.info(`✅ Scheduled cleanup completed: ${result.message}`);
-        }
-      }, CLEANUP_INTERVAL);
-      
-      logger.info('⏰ Scheduled daily cleanup task for old draft reports');
     });
 
     // Handle server errors

@@ -174,8 +174,8 @@ const getAdminReports = async (req, res) => {
                     queryParams.push('declined');
                     break;
                 case 'emailed':
-                    whereConditions.push('r.status = ?');
-                    queryParams.push('emailed');
+                    whereConditions.push('r.status = ? AND r.emailed_at IS NOT NULL');
+                    queryParams.push('approved');
                     break;
                 case 'archived':
                     whereConditions.push('r.status = ?');
@@ -238,6 +238,7 @@ const getAdminReports = async (req, res) => {
         r.submitted_at,
         r.reviewed_at,
         r.reviewed_by,
+        r.emailed_at,
         c.company_name as client_name,
         c.city as client_city,
         u.name as pco_name,
@@ -2481,9 +2482,7 @@ const adminEmailReportPDF = async (req, res) => {
         r.client_id,
         r.report_type,
         r.service_date,
-        c.company_name,
-        c.email,
-        c.contact_person
+        c.company_name
       FROM reports r
       INNER JOIN clients c ON r.client_id = c.id
       WHERE r.id = ?
@@ -2498,14 +2497,21 @@ const adminEmailReportPDF = async (req, res) => {
         if (recipients) {
             emailRecipients = recipients;
         }
-        else if (report.email) {
-            emailRecipients = report.email;
-        }
         else {
-            return res.status(400).json({
-                success: false,
-                message: 'No recipients specified and client has no email address on file'
-            });
+            const primaryContact = await (0, database_1.executeQuerySingle)(`
+        SELECT email FROM client_contacts 
+        WHERE client_id = ? AND is_primary = 1 AND email IS NOT NULL
+        LIMIT 1
+      `, [report.client_id]);
+            if (primaryContact?.email) {
+                emailRecipients = primaryContact.email;
+            }
+            else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No recipients specified and client has no email address on file'
+                });
+            }
         }
         const validateEmail = (email) => {
             return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

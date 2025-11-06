@@ -305,3 +305,82 @@ self.addEventListener('message', (event) => {
     );
   }
 });
+
+// Handle push notifications
+self.addEventListener('push', (event) => {
+  let notificationData = {
+    title: 'KPS Notification',
+    body: 'You have a new notification',
+    icon: '/icons/192.png',
+    badge: '/icons/192.png',
+    data: {}
+  };
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = {
+        title: payload.title || notificationData.title,
+        body: payload.body || notificationData.body,
+        icon: payload.icon || notificationData.icon,
+        badge: payload.badge || notificationData.badge,
+        data: payload.data || {},
+        tag: payload.data?.type || 'notification',
+        requireInteraction: false,
+        vibrate: [200, 100, 200]
+      };
+    } catch (error) {
+      console.error('[SW] Error parsing push notification:', error);
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      data: notificationData.data,
+      tag: notificationData.tag,
+      requireInteraction: notificationData.requireInteraction,
+      vibrate: notificationData.vibrate
+    })
+  );
+});
+
+// Handle notification clicks
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const data = event.notification.data || {};
+  let targetUrl = '/';
+
+  // Navigate to appropriate page based on notification type
+  if (data.type === 'assignment') {
+    targetUrl = '/pco/schedule';
+  } else if (data.type === 'report_declined') {
+    targetUrl = '/pco/dashboard';
+  } else if (data.type === 'report_submitted') {
+    targetUrl = '/admin/reports';
+  } else if (data.type === 'system_update') {
+    targetUrl = '/';
+  }
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If a window is already open, focus it and navigate
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if (client.url !== targetUrl) {
+            return client.navigate(targetUrl);
+          }
+          return;
+        }
+      }
+      // If no window is open, open a new one
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

@@ -97,7 +97,8 @@ const recordLoginAttempt = async (pcoNumber, userId, success, failureReason, ipA
     }
 };
 const parseLoginId = (loginId) => {
-    const match = loginId.match(/^(admin|pco)(\d+)$/);
+    const cleanedInput = loginId.replace(/\s+/g, '').toLowerCase();
+    const match = cleanedInput.match(/^(admin|pco)(\d+)$/);
     if (!match)
         return null;
     return {
@@ -123,7 +124,7 @@ class AuthController {
                 await recordLoginAttempt(login_id, null, false, 'invalid_credentials', req.ip || '0.0.0.0', req.get('User-Agent') || 'Unknown');
                 res.status(400).json({
                     success: false,
-                    message: 'Invalid login format. Use admin12345 or pco67890'
+                    message: 'Invalid login format. Use admin12345 or pco67890 (case-insensitive, spaces allowed)'
                 });
                 return;
             }
@@ -150,26 +151,21 @@ class AuthController {
             u.role,
             u.status,
             u.password_hash,
-            CASE 
-                WHEN LEFT(?, 5) = 'admin' THEN 'admin'
-                WHEN LEFT(?, 3) = 'pco' THEN 'pco'
-                ELSE NULL 
-            END as role_context
+            ? as role_context
         FROM users u 
-        WHERE u.pco_number = CASE 
-            WHEN LEFT(?, 5) = 'admin' THEN SUBSTRING(?, 6)
-            WHEN LEFT(?, 3) = 'pco' THEN SUBSTRING(?, 4)
-            ELSE NULL 
-        END
+        WHERE u.pco_number = ?
         AND u.status = 'active'
         AND (
-            (LEFT(?, 5) = 'admin' AND u.role IN ('admin', 'both'))
+            (? = 'admin' AND u.role IN ('admin', 'both'))
             OR 
-            (LEFT(?, 3) = 'pco' AND u.role IN ('pco', 'both'))
+            (? = 'pco' AND u.role IN ('pco', 'both'))
         )
       `;
             const user = await (0, database_1.executeQuerySingle)(query, [
-                login_id, login_id, login_id, login_id, login_id, login_id, login_id, login_id
+                parsed.type,
+                parsed.number,
+                parsed.type,
+                parsed.type
             ]);
             if (!user) {
                 await recordLoginAttempt(parsed.number, null, false, 'invalid_credentials', req.ip || '0.0.0.0', req.get('User-Agent') || 'Unknown');

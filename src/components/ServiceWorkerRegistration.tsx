@@ -12,8 +12,6 @@ export default function ServiceWorkerRegistration() {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          console.log('[PWA] Service Worker registered:', registration.scope);
-
           // Check for updates
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing;
@@ -21,9 +19,6 @@ export default function ServiceWorkerRegistration() {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                   // New service worker available
-                  console.log('[PWA] New version available! Reload to update.');
-                  
-                  // Show update prompt
                   setNewWorker(newWorker);
                   setShowUpdateModal(true);
                 }
@@ -32,7 +27,9 @@ export default function ServiceWorkerRegistration() {
           });
         })
         .catch((error) => {
-          console.error('[PWA] Service Worker registration failed:', error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[PWA] Service Worker registration failed:', error);
+          }
         });
 
       // Handle controller change (new SW activated)

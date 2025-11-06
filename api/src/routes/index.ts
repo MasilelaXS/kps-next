@@ -20,6 +20,8 @@ import pcoSyncRoutes from './pcoSyncRoutes';
 import adminDashboardRoutes from './adminDashboardRoutes';
 import searchRoutes from './searchRoutes';
 import notificationRoutes from './notificationRoutes';
+import cleanupRoutes from './cleanupRoutes';
+import pushRoutes from './pushRoutes';
 
 const router = Router();
 
@@ -59,6 +61,7 @@ router.get('/', (req, res) => {
       admin_dashboard: '/api/admin/dashboard',
       search: '/api/search',
       notifications: '/api/notifications',
+      cleanup: '/api/cleanup',
       health: '/api/health',
       status: '/api/status'
     }
@@ -103,6 +106,12 @@ router.use('/search', searchRoutes);
 
 // Notification routes (Phase 5.2)
 router.use('/notifications', notificationRoutes);
+
+// Cleanup routes (Admin only - Database maintenance)
+router.use('/cleanup', cleanupRoutes);
+
+// Push notification routes
+router.use('/push', pushRoutes);
 
 // Future route groups will be added here:
 // router.use('/schedules', scheduleRoutes);

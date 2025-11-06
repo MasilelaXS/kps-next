@@ -54,6 +54,11 @@ export declare const config: {
     frontend: {
         url: string;
     };
+    push: {
+        vapidPublicKey: string;
+        vapidPrivateKey: string;
+        vapidSubject: string;
+    };
     timezone: string;
 };
 export declare const isDevelopment: () => boolean;

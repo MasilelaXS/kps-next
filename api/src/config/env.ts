@@ -110,6 +110,13 @@ export const config = useProductionConfig ? productionConfig : {
     url: process.env.FRONTEND_URL || 'http://localhost:3000'
   },
 
+  // Push Notifications (VAPID)
+  push: {
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY || '',
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@kpspestcontrol.co.za'
+  },
+
   // Timezone
   timezone: process.env.TZ || 'Africa/Johannesburg'
 };

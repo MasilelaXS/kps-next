@@ -20,8 +20,10 @@ import {
   Building2,
   AlertCircle,
   Download,
-  Mail
+  Mail,
+  Trash2
 } from 'lucide-react';
+import Button from '@/components/Button';
 
 interface Chemical {
   id: number;
@@ -170,6 +172,7 @@ export default function ReportsPage() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [declineNotes, setDeclineNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cleaningUp, setCleaningUp] = useState(false);
   
   // Email modal state
   const [clientContacts, setClientContacts] = useState<any[]>([]);
@@ -452,6 +455,80 @@ export default function ReportsPage() {
       setSubmitting(false);
     }
   }, [selectedReport, notification, setShowArchiveModal, fetchReports]);
+
+  const handleCleanupDrafts = useCallback(async () => {
+    try {
+      setCleaningUp(true);
+      const token = localStorage.getItem('kps_token');
+      
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      // First, check how many drafts will be deleted
+      const countResponse = await fetch(buildApiUrl('/api/cleanup/draft-reports/count'), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (countResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const countData = await countResponse.json();
+
+      if (!countResponse.ok) {
+        throw new Error(countData.message || 'Failed to check draft count');
+      }
+
+      if (countData.count === 0) {
+        notification.info('No Drafts to Clean', 'There are no draft reports older than 72 hours');
+        return;
+      }
+
+      // Confirm deletion
+      if (!confirm(`Delete ${countData.count} draft report(s) older than 72 hours?\n\nThis action cannot be undone.`)) {
+        return;
+      }
+
+      // Trigger cleanup
+      const response = await fetch(buildApiUrl('/api/cleanup/draft-reports/run'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to cleanup drafts');
+      }
+
+      notification.success('Cleanup Complete', `Successfully deleted ${countData.count} old draft report(s)`);
+      
+      // Refresh reports if we're on the draft tab
+      if (statusGroup === 'draft') {
+        fetchReports();
+      }
+    } catch (error) {
+      console.error('Error cleaning up drafts:', error);
+      notification.error('Cleanup Failed', error instanceof Error ? error.message : 'Failed to cleanup drafts');
+    } finally {
+      setCleaningUp(false);
+    }
+  }, [notification, fetchReports, statusGroup]);
 
   const handleDownloadPDF = useCallback(async (reportId: number) => {
     try {
@@ -795,6 +872,18 @@ export default function ReportsPage() {
               Reports Management
             </h2>
             <p className="text-sm text-gray-600 mt-0.5">Review, approve, and manage service reports</p>
+          </div>
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Trash2 className="w-4 h-4" />}
+              onClick={handleCleanupDrafts}
+              loading={cleaningUp}
+              disabled={cleaningUp}
+            >
+              {cleaningUp ? 'Cleaning...' : 'Cleanup Old Drafts'}
+            </Button>
           </div>
         </div>
       </div>

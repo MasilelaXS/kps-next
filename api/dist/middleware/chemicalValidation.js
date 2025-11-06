@@ -24,11 +24,10 @@ const validateChemicalInput = (req, res, next) => {
         active_ingredients: joi_1.default.string()
             .trim()
             .min(2)
-            .required()
+            .allow(null, '')
+            .optional()
             .messages({
-            'string.empty': 'Active ingredients are required',
-            'string.min': 'Active ingredients must be at least 2 characters',
-            'any.required': 'Active ingredients are required'
+            'string.min': 'Active ingredients must be at least 2 characters if provided'
         }),
         quantity_unit: joi_1.default.string()
             .trim()
@@ -43,19 +42,25 @@ const validateChemicalInput = (req, res, next) => {
         }),
         l_number: joi_1.default.string()
             .trim()
+            .min(1)
             .max(50)
-            .allow(null, '')
-            .optional()
+            .required()
             .messages({
-            'string.max': 'L number cannot exceed 50 characters'
+            'string.empty': 'L-Number is required (used as identifier)',
+            'string.min': 'L-Number must be at least 1 character',
+            'string.max': 'L-Number cannot exceed 50 characters',
+            'any.required': 'L-Number is required (used as identifier)'
         }),
         batch_number: joi_1.default.string()
             .trim()
+            .min(1)
             .max(100)
-            .allow(null, '')
-            .optional()
+            .required()
             .messages({
-            'string.max': 'Batch number cannot exceed 100 characters'
+            'string.empty': 'Batch number is required (used as identifier)',
+            'string.min': 'Batch number must be at least 1 character',
+            'string.max': 'Batch number cannot exceed 100 characters',
+            'any.required': 'Batch number is required (used as identifier)'
         }),
         usage_type: joi_1.default.string()
             .valid(...USAGE_TYPES)
@@ -108,10 +113,10 @@ const validateChemicalUpdate = (req, res, next) => {
         active_ingredients: joi_1.default.string()
             .trim()
             .min(2)
+            .allow(null, '')
             .optional()
             .messages({
-            'string.empty': 'Active ingredients cannot be empty',
-            'string.min': 'Active ingredients must be at least 2 characters'
+            'string.min': 'Active ingredients must be at least 2 characters if provided'
         }),
         quantity_unit: joi_1.default.string()
             .trim()
@@ -125,18 +130,22 @@ const validateChemicalUpdate = (req, res, next) => {
         }),
         l_number: joi_1.default.string()
             .trim()
+            .min(1)
             .max(50)
-            .allow(null, '')
             .optional()
             .messages({
-            'string.max': 'L number cannot exceed 50 characters'
+            'string.empty': 'L-Number cannot be empty (used as identifier)',
+            'string.min': 'L-Number must be at least 1 character',
+            'string.max': 'L-Number cannot exceed 50 characters'
         }),
         batch_number: joi_1.default.string()
             .trim()
+            .min(1)
             .max(100)
-            .allow(null, '')
             .optional()
             .messages({
+            'string.empty': 'Batch number cannot be empty (used as identifier)',
+            'string.min': 'Batch number must be at least 1 character',
             'string.max': 'Batch number cannot exceed 100 characters'
         }),
         usage_type: joi_1.default.string()

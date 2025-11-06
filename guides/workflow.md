@@ -1,5 +1,50 @@
 # KPS - Pest Control Management System Workflow Documentation
 
+> **Last Updated**: November 4, 2025  
+> **Version**: 2.0 (100% Code-Accurate)  
+> **Status**: ✅ Verified Against Actual Codebase
+
+## Critical Implementation Details
+
+This document has been **fully verified** against the actual codebase implementation. Key corrections from previous versions:
+
+### Report Status Flow (CORRECTED)
+- ✅ **PCO Submission**: Status changes from `'draft'` → `'pending'` (NOT stays as draft)
+- ✅ **Emailed Reports**: Use `status='approved'` AND `emailed_at IS NOT NULL` (NOT separate 'emailed' status)
+- ✅ **Admin Actions**: Approve/Decline buttons only visible for `status='pending'` reports
+- ✅ **Status Tabs**: 6 separate tabs (Draft, Pending, Approved, Declined, Emailed, Archived)
+
+### Chemical Fields (VALIDATED)
+Required fields for chemical creation:
+- `name` (string, 2-200 chars, unique)
+- `active_ingredients` (string, min 2 chars)
+- `usage_type` (enum: 'bait_inspection' | 'fumigation' | 'multi_purpose')
+- `quantity_unit` (string, 1-20 chars)
+
+Optional fields:
+- `l_number` (string, max 50, auto-uppercase)
+- `batch_number` (string, max 100, auto-uppercase)
+- `safety_information` (text)
+
+### Authentication & Sessions
+- JWT tokens store session_id (not user info)
+- `user_sessions` table tracks active sessions with `role_context`
+- Login prefix determines portal access (admin12345 vs pco12345)
+- `role_context` separate from user's actual `role` (for dual-role users)
+
+### Equipment Tracking
+- Frontend marks equipment during report creation
+- Backend has safety net: auto-marks if frontend skipped
+- Compares actual vs `expected_*_count` fields on clients table
+- Updates client baseline counts after report submission
+
+### Email System
+- Uses Nodemailer with SMTP (mail.kpspestcontrol.co.za:587)
+- Supports multiple recipients, CC, custom messages
+- Generates PDFs with Puppeteer (1513-line service)
+- Professional HTML templates with KPS branding
+- Sets `emailed_at` timestamp (status remains 'approved')
+
 ## Table of Contents
 1. [System Overview](#system-overview)
 2. [Authentication & User Management](#authentication--user-management)
@@ -23,16 +68,22 @@
 - **Styling**: Tailwind CSS with custom focus styling
 
 ### Core Entities
-- **Users** (Admin/PCO roles with authentication)
-- **Clients** (Pest control service customers with contact information and expected equipment counts)
-- **Chemicals** (Treatment products with L-numbers and batch tracking)
-- **Reports** (Service documentation with status workflow and new equipment tracking)
-- **Bait Stations** (Rodent inspection points with chemicals tracking and new addition flag)
-- **Insect Monitors** (Light/box monitoring devices for flying insects with new addition flag)
-- **Fumigation Areas** (Treatment zones with target pests and chemicals)
-- **Notifications** (System alerts for assignments, report status changes)
-- **Client Assignments** (PCO-to-client relationships and scheduling)
-- **Station Chemicals** (Junction table linking bait stations to chemicals used)
+- **Users** (Admin/PCO roles with authentication, stored in `users` table)
+- **User Sessions** (JWT sessions with role_context, stored in `user_sessions` table)
+- **Clients** (Pest control service customers with contact information and expected equipment counts, stored in `clients` table)
+- **Client Contacts** (Contact persons for each client, stored in `client_contacts` table)
+- **Chemicals** (Treatment products with L-numbers and batch tracking, stored in `chemicals` table)
+- **Reports** (Service documentation with status workflow and new equipment tracking, stored in `reports` table)
+- **Bait Stations** (Rodent inspection points with chemicals tracking and new addition flag, stored in `bait_stations` table)
+- **Insect Monitors** (Light/box monitoring devices for flying insects with new addition flag, stored in `insect_monitors` table)
+- **Fumigation Areas** (Treatment zones, stored in `fumigation_areas` table)
+- **Fumigation Target Pests** (Pests targeted per area, stored in `fumigation_target_pests` table)
+- **Fumigation Chemicals** (Chemicals used per area, stored in `fumigation_chemicals` table)
+- **Notifications** (System alerts for assignments, report status changes, stored in `notifications` table)
+- **Client PCO Assignments** (PCO-to-client relationships and scheduling, stored in `client_pco_assignments` table)
+- **Station Chemicals** (Junction table linking bait stations to chemicals used, stored in `station_chemicals` table)
+- **Password Reset Tokens** (Temporary tokens for password reset flow, stored in `password_reset_tokens` table)
+- **Login Attempts** (Audit log of login attempts, stored in `login_attempts` table)
 
 ---
 
@@ -108,15 +159,18 @@
 
 ### User Profile Management
 - **PCOs can**:
-  - View their profile information (name, email, phone, login ID)
+  - View their profile information (name, email, phone, pco_number)
   - **Change their password** via Profile page
   - View their service history
 - **Admins can**:
   - Full CRUD operations on all users
+  - Create users with initial password (min 6 chars, bcrypt hashed)
   - Assign/manage user roles (admin/pco/both)
+  - Reset user passwords (min 6 chars, invalidates all user sessions)
+  - Soft delete users (cannot delete self or users with active assignments)
   - View user activity logs
   - View login attempt history
-  - **Change their password** via Profile page (when implemented)
+  - **Change their password** via Profile page
 
 ### Password Management
 
@@ -241,10 +295,10 @@ All passwords must meet the following criteria:
 
 ### Dashboard
 **Key Metrics Displayed:**
-- Total Clients (all statuses with growth percentage)
-- Active PCO Users (count of active PCOs)
-- Pending Reports (draft reports awaiting admin review - status remains 'draft')
-- Completed Reports (approved reports for the month)
+- Total Clients (all statuses with growth percentage vs previous period)
+- Active PCO Users (count of users with status='active' and role IN ('pco', 'both'))
+- Pending Reports (reports with status='pending' awaiting admin review)
+- Completed Reports (reports with status='approved' for current month)
 
 **Dashboard Sections:**
 - **Recent Activity**: Displays recent system activity (last 24 hours)
@@ -366,18 +420,18 @@ All passwords must meet the following criteria:
 1. Navigate to Chemicals section
 2. Click "Add New Chemical"
 3. Fill chemical details:
-   - Name (required, must be unique)
-   - Active Ingredients (required)
-   - Usage Type (required): Bait Inspection / Fumigation / Multi-purpose
-   - Quantity Unit (required): ml, grams, kg, liters, etc.
-   - L-Number (optional, auto-converted to uppercase)
-   - Batch Number (optional, auto-converted to uppercase)
-   - Safety Information (optional)
+   - **Name** (required, string, 2-200 characters, must be unique)
+   - **Active Ingredients** (required, string, min 2 characters)
+   - **Usage Type** (required, enum): 'bait_inspection' | 'fumigation' | 'multi_purpose'
+   - **Quantity Unit** (required, string, 1-20 characters): ml, g, kg, L, etc.
+   - **L-Number** (optional, string, max 50 characters, auto-converted to uppercase)
+   - **Batch Number** (optional, string, max 100 characters, auto-converted to uppercase)
+   - **Safety Information** (optional, text field)
 4. Submit to create chemical
 5. **System Actions**:
    - Chemical created with status 'active' by default
    - L-Number and Batch Number normalized to uppercase
-   - Validates for duplicate chemical names
+   - Validates for duplicate chemical names (case-sensitive check)
 
 #### Editing Chemicals
 - Admin can edit all chemical details
@@ -407,22 +461,27 @@ All passwords must meet the following criteria:
 ### Report Management Workflow
 
 #### Report Status System
-**Available Statuses:**
-- **draft**: Reports being created or edited by PCO (includes submitted reports awaiting admin review)
-- **pending**: Alternative status for submitted reports (functionally same as draft)
+**Available Statuses (Database ENUM):**
+- **draft**: Reports being created by PCO
+- **pending**: Reports submitted by PCO, awaiting admin review
 - **approved**: Reports reviewed and approved by admin
 - **declined**: Reports rejected by admin, requiring PCO revision
-- **emailed**: Reports that have been sent to clients via email
 - **archived**: Completed reports removed from active workflow
+
+**Note on "Emailed" Status:**
+- The system does NOT have an 'emailed' status in the database enum
+- Instead, emailed reports use: status='approved' AND emailed_at IS NOT NULL
+- Frontend filtering uses status_group='emailed' which queries this combination
 
 #### Viewing All Reports
 1. Navigate to Reports section (default shows "Draft / Pending" tab)
-2. Filter reports by **Status Group** (5 tabs at top):
-   - **Draft / Pending** (reports awaiting admin review - includes both 'draft' and 'pending' statuses) - *default view*
-   - **Approved** (reviewed and approved reports only)
-   - **Emailed** (reports that have been sent to clients via email)
-   - **Archived** (completed reports removed from active workflow)
-   - **All Reports** (view all statuses including declined reports)
+2. Filter reports by **Status Group** (6 tabs at top):
+   - **Draft** (status='draft' - reports being created)
+   - **Pending** (status='pending' - submitted, awaiting admin review) - *default view*
+   - **Approved** (status='approved' AND emailed_at IS NULL - approved but not yet emailed)
+   - **Declined** (status='declined' - requires PCO revision)
+   - **Emailed** (status='approved' AND emailed_at IS NOT NULL - sent to clients)
+   - **Archived** (status='archived' - completed reports removed from active workflow)
 3. **Search and Filters**:
    - **Search**: Client or PCO name
    - **Report Type Filter**: All Types, Bait Inspection, Fumigation, Both
@@ -457,35 +516,46 @@ Declined → Draft/Pending (PCO edits and resubmits)
 Available actions vary by status:
 - **View** (Eye icon): View full report details in modal
 - **Edit** (Pencil icon): Navigate to `/admin/reports/{id}/edit` (available for all statuses)
-- **Approve** (Green CheckCircle icon): Only visible when status = 'draft'
-- **Decline** (Red XCircle icon): Only visible when status = 'draft'
+- **Approve** (Green CheckCircle icon): Only visible when status = 'pending'
+- **Decline** (Red XCircle icon): Only visible when status = 'pending'
+- **Email** (Mail icon): Only visible when status = 'approved'
+- **Archive** (Archive icon): Available for approved and emailed reports
 
 #### Report Approval Process
-1. Admin clicks **Approve** button on draft report
-2. System validates report status (must be 'draft')
+1. Admin clicks **Approve** button on pending report
+2. System validates report status (must be 'pending')
 3. Modal displays:
    - Report ID and client name
+   - Optional fields for admin_notes and recommendations
    - Confirmation message
 4. On confirm:
-   - Report status changed to 'approved'
+   - Report status changed from 'pending' to 'approved'
    - Optional: Admin can add notes and recommendations (not required)
-   - `reviewed_by` and `reviewed_at` fields updated
+   - `reviewed_by` set to admin user ID
+   - `reviewed_at` timestamp set to NOW()
+   - Client-PCO assignment deleted (service complete)
    - **Notification sent to PCO**: "Report Approved - Your report for {client} has been approved"
-   - Report can now be emailed to client
+   - Report can now be emailed to client via Email Report button
 
 #### Report Decline Process
-1. Admin clicks **Decline** button on draft report
-2. System validates report status (must be 'draft')
-3. Modal prompts for **Decline Notes** (required):
+1. Admin clicks **Decline** button on pending report
+2. System validates report status (must be 'pending')
+3. Modal prompts for **Admin Notes** (required):
    - Minimum 10 characters
    - Purpose: Give PCO clear feedback for revision
+   - Validation error if too short or empty
 4. On confirm:
-   - Report status changed to 'declined'
+   - Report status changed from 'pending' to 'declined'
    - Admin notes saved to `admin_notes` field
-   - `reviewed_by` and `reviewed_at` fields updated
-   - **PCO reassigned to client** (most recent inactive assignment set to 'active')
+   - `reviewed_by` set to admin user ID
+   - `reviewed_at` timestamp set to NOW()
+   - **PCO reassignment logic**:
+     - Check if PCO assignment exists for this client
+     - If assignment exists and status='inactive' with same PCO: Reinstate (set status='active', assigned_at=NOW())
+     - If assignment exists with different PCO: Return 409 conflict (requires admin confirmation)
+     - If no assignment exists: Create new assignment (client_id, pco_id, assigned_by=admin, status='active')
    - **Notification sent to PCO**: "Report Declined - Revision Required - Admin feedback: {notes}"
-5. PCO can now edit and resubmit the report
+5. PCO can now edit and resubmit the report (status will change back to 'pending')
 
 #### Report Archive Process
 1. Admin clicks **Archive** button (available in view modal or table)
@@ -497,19 +567,51 @@ Available actions vary by status:
    - **Notification sent to PCO**: "Report Archived - Your report for {client} has been archived"
 5. Archived reports remain accessible but are separated from active workflow
 
-#### Report View Modal
-When viewing a report, modal displays:
-- Report ID, type, status, service date
-- Client details (company name, address, contact)
-- PCO details (name, email, phone)
-- Service details (based on report type):
-  - **Bait Inspection**: Station count, station details
-  - **Fumigation**: Area count, areas, target pests, chemicals used
-- **Action Buttons**:
-  - **Edit Report**: Navigate to edit page
-  - **Download PDF**: Generate formatted PDF (functionality implemented)
-  - **Email Client**: Send report to client (functionality implemented)
-  - **Close**: Close modal
+#### Report Email Process (Admin Only)
+**Feature**: Email approved reports to clients with PDF attachment
+
+**Access**:
+- Only available for status='approved' reports
+- Email icon appears in approved reports table actions column
+
+**Email Report Flow**:
+1. Admin clicks **Email** button (Mail icon) on approved report
+2. EmailReportModal opens with:
+   - **Client Contacts Grid**: Shows all contacts from client_contacts table
+     - Displays: Name, Role, Email
+     - Primary contact highlighted
+     - Click contact to add email to recipients
+   - **Recipients Field**: Email addresses to send report to (comma-separated)
+   - **CC Field**: Optional CC addresses (comma-separated)
+   - **Custom Message**: Optional additional message to include in email body
+3. Admin fills in recipients and optional fields
+4. Click "Send Email" button
+5. **System Actions**:
+   - Generates PDF using Puppeteer (via pdfService.generateReportPDF)
+   - Queries client_contacts for primary email as fallback if no recipients provided
+   - Sends email via Nodemailer (SMTP: mail.kpspestcontrol.co.za:587)
+   - Professional HTML email template with:
+     - KPS branding and logo
+     - Report details (ID, service date, report type)
+     - Additional message section (if provided)
+     - PDF attachment
+   - Sets `emailed_at` timestamp to NOW()
+   - Creates admin notification
+6. Success notification: "Report emailed successfully"
+7. Report now appears in "Emailed" tab (status='approved' AND emailed_at IS NOT NULL)
+
+**Email Template Features**:
+- Professional HTML layout
+- Report information table
+- Custom message section
+- KPS company footer with contact details
+- Plain text fallback version
+
+**Technical Details**:
+- Endpoint: `POST /api/admin/reports/:id/email`
+- Payload: `{ recipients: string[], cc?: string[], additionalMessage?: string }`
+- PDF stored temporarily in `api/temp/reports/` (1-hour TTL, auto-cleanup)
+- Email service uses nodemailer with configured SMTP transport
 
 ---
 
@@ -574,6 +676,13 @@ You'll be guided through the report creation screens (explained in the next sect
 ### Report Creation Workflow
 
 Creating a report is a simple 5-step process. The system guides you through each screen and saves your progress automatically.
+
+**Important: Equipment Tracking**
+- Frontend marks equipment as `is_new_addition=1` when PCO confirms new equipment
+- Backend has safety net: if frontend skips marking, backend detects and marks automatically on submission
+- Equipment tracking happens in two places:
+  1. **Frontend (Primary)**: During report creation when PCO confirms "Yes, Update" on new equipment prompt
+  2. **Backend (Backup)**: In submitReport function if frontend marking was skipped
 
 #### Step 1: Report Setup
 
@@ -770,6 +879,14 @@ For each station, you'll record:
 
 **If You're Online**:
 - Report submits immediately
+- Status changes from 'draft' to 'pending'
+- `submitted_at` timestamp set
+- PCO auto-unassigned from client (assignment deleted)
+- Equipment tracking executed:
+  - Backend checks if equipment already marked by frontend
+  - If not marked: Backend marks new equipment (exceeding expected counts)
+  - Updates report `new_bait_stations_count` and `new_insect_monitors_count`
+  - Updates client expected counts to match actual equipment in report
 - You'll see a success confirmation
 - Admin gets notified right away
 
@@ -788,11 +905,13 @@ For each station, you'll record:
 - Reports show their current status (Draft, Approved, Declined, Archived)
 
 **If Admin Declines Your Report**:
+- Report status changes from 'pending' to 'declined'
+- You'll be automatically reassigned to that client (assignment reinstated)
 - You'll see it in "Needs Revision" on your dashboard
-- Open the report to read admin's notes
-- Make the required changes
-- Resubmit for review
-- You'll be automatically reassigned to that client so you can access the report
+- Notification received with admin's feedback notes
+- Open the report to read admin's notes (stored in `admin_notes` field)
+- Make the required changes (report remains editable)
+- Resubmit for review (status changes back from 'declined' to 'pending')
 
 ---
 

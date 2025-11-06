@@ -122,8 +122,13 @@ const recordLoginAttempt = async (
 };
 
 // Helper function to parse login format
+// Handles case-insensitive input (ADMIN/Admin/admin, PCO/Pco/pco) and removes spaces
 const parseLoginId = (loginId: string): { type: 'admin' | 'pco'; number: string } | null => {
-  const match = loginId.match(/^(admin|pco)(\d+)$/);
+  // Remove all spaces and convert to lowercase for matching
+  const cleanedInput = loginId.replace(/\s+/g, '').toLowerCase();
+  
+  // Match admin or pco prefix (case-insensitive) followed by digits
+  const match = cleanedInput.match(/^(admin|pco)(\d+)$/);
   if (!match) return null;
   
   return {
@@ -156,7 +161,7 @@ export class AuthController {
 
       const { login_id, password } = value;
 
-      // Parse login ID format
+      // Parse login ID format (case-insensitive, removes spaces)
       const parsed = parseLoginId(login_id);
       if (!parsed) {
         await recordLoginAttempt(
@@ -165,7 +170,7 @@ export class AuthController {
         
         res.status(400).json({
           success: false,
-          message: 'Invalid login format. Use admin12345 or pco67890'
+          message: 'Invalid login format. Use admin12345 or pco67890 (case-insensitive, spaces allowed)'
         });
         return;
       }
@@ -190,7 +195,7 @@ export class AuthController {
         return;
       }
 
-      // Use the proper SQL query from auth.sql guides
+      // Query using parsed values (already normalized to lowercase)
       const query = `
         SELECT 
             u.id,
@@ -200,27 +205,22 @@ export class AuthController {
             u.role,
             u.status,
             u.password_hash,
-            CASE 
-                WHEN LEFT(?, 5) = 'admin' THEN 'admin'
-                WHEN LEFT(?, 3) = 'pco' THEN 'pco'
-                ELSE NULL 
-            END as role_context
+            ? as role_context
         FROM users u 
-        WHERE u.pco_number = CASE 
-            WHEN LEFT(?, 5) = 'admin' THEN SUBSTRING(?, 6)
-            WHEN LEFT(?, 3) = 'pco' THEN SUBSTRING(?, 4)
-            ELSE NULL 
-        END
+        WHERE u.pco_number = ?
         AND u.status = 'active'
         AND (
-            (LEFT(?, 5) = 'admin' AND u.role IN ('admin', 'both'))
+            (? = 'admin' AND u.role IN ('admin', 'both'))
             OR 
-            (LEFT(?, 3) = 'pco' AND u.role IN ('pco', 'both'))
+            (? = 'pco' AND u.role IN ('pco', 'both'))
         )
       `;
       
       const user = await executeQuerySingle(query, [
-        login_id, login_id, login_id, login_id, login_id, login_id, login_id, login_id
+        parsed.type,  // role_context
+        parsed.number,  // pco_number
+        parsed.type,  // for admin check
+        parsed.type   // for pco check
       ]);
 
       if (!user) {
