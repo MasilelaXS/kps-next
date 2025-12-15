@@ -88,6 +88,7 @@ export class AssignmentController {
           u.name as pco_name,
           u.pco_number,
           ca.assigned_at,
+          ca.assignment_type,
           ab.name as assigned_by_name,
           ca.unassigned_at,
           ub.name as unassigned_by_name,

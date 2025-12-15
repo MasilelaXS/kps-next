@@ -1,0 +1,14 @@
+{
+    "name": "kps/pdf-service",
+    "description": "PDF generation service using DomPDF",
+    "type": "library",
+    "require": {
+        "php": ">=7.4",
+        "dompdf/dompdf": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "KPS\\PDFService\\": "src/"
+        }
+    }
+}

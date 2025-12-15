@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Output mode for production deployment
+  output: 'standalone',
+  
   // Enable React Compiler for automatic memoization (stable in Next.js 16)
   reactCompiler: true,
   

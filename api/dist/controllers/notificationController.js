@@ -176,6 +176,18 @@ const sendNotification = async (req, res) => {
         const notificationId = result.insertId;
         const notification = await (0, database_1.executeQuerySingle)('SELECT id, user_id, type, title, message, read_at, created_at FROM notifications WHERE id = ?', [notificationId]);
         logger_1.logger.info(`Notification sent to user ${user_id} by admin ${currentUserId}`);
+        (0, pushNotificationService_1.sendPushNotification)(user_id, {
+            title,
+            body: message,
+            icon: '/icons/192.png',
+            data: {
+                type,
+                notificationId,
+                timestamp: Date.now()
+            }
+        }).catch(error => {
+            logger_1.logger.error('Error sending push notification:', error);
+        });
         res.status(201).json({
             success: true,
             message: 'Notification sent successfully',

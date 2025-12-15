@@ -18,6 +18,7 @@ const searchRoutes_1 = __importDefault(require("./searchRoutes"));
 const notificationRoutes_1 = __importDefault(require("./notificationRoutes"));
 const cleanupRoutes_1 = __importDefault(require("./cleanupRoutes"));
 const pushRoutes_1 = __importDefault(require("./pushRoutes"));
+const calendar_1 = __importDefault(require("./calendar"));
 const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({
@@ -29,6 +30,9 @@ router.get('/health', (req, res) => {
         environment: process.env.NODE_ENV || 'development',
         version: '1.0.0'
     });
+});
+router.get('/version', (req, res) => {
+    res.json({ version: '1.0.0' });
 });
 router.get('/', (req, res) => {
     res.json({
@@ -73,5 +77,6 @@ router.use('/search', searchRoutes_1.default);
 router.use('/notifications', notificationRoutes_1.default);
 router.use('/cleanup', cleanupRoutes_1.default);
 router.use('/push', pushRoutes_1.default);
+router.use('/calendar', calendar_1.default);
 exports.default = router;
 //# sourceMappingURL=index.js.map

@@ -9,7 +9,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 // API Base URLs
 export const API_CONFIG = {
   // Backend API base URL
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://192.168.1.128:3001',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://app.kpspestcontrol.co.za',
   
   // API endpoints
   ENDPOINTS: {
@@ -35,7 +35,7 @@ export const API_CONFIG = {
     PCO_PROFILE: '/api/pco/profile',
     
     // Reports
-    REPORTS: '/api/reports',
+    REPORTS: '/api/admin/reports',
     BAIT_STATIONS: '/api/bait-stations',
     FUMIGATION: '/api/fumigation',
     INSECT_MONITORS: '/api/insect-monitors',

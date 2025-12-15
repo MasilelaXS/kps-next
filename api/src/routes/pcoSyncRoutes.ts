@@ -9,6 +9,8 @@
  * - GET /api/pco/sync/reports - Incremental report sync
  * - POST /api/pco/sync/upload - Upload offline-created reports
  * - GET /api/pco/data/export - Export complete dataset for backup
+ * - GET /api/pco/clients/available - Browse available clients for self-assignment
+ * - POST /api/pco/assignments/self-assign - Self-assign to a client
  */
 
 import { Router } from 'express';
@@ -21,7 +23,9 @@ import {
   syncRecentReports,
   uploadReports,
   exportData,
-  updateClientCounts
+  updateClientCounts,
+  getAvailableClients,
+  selfAssignClient
 } from '../controllers/pcoSyncController';
 import { ChemicalController } from '../controllers/chemicalController';
 import {
@@ -111,5 +115,25 @@ router.get('/pco/reports/last-for-client/:clientId', authenticateToken, async (r
   const { getLastReportForClient } = require('../controllers/pcoSyncController');
   return getLastReportForClient(req, res, next);
 });
+
+/**
+ * GET /api/pco/clients/available
+ * Browse available clients for self-assignment
+ * Returns active clients that are either unassigned or not assigned to this PCO
+ * Query params:
+ * - search (string) - Search by company name, city, or address
+ * - page (number) - Page number for pagination
+ * - limit (number) - Results per page (default: 25)
+ */
+router.get('/pco/clients/available', authenticateToken, getAvailableClients);
+
+/**
+ * POST /api/pco/assignments/self-assign
+ * Self-assign to a client
+ * Body:
+ * - client_id (number) - The client ID to self-assign
+ * Creates active assignment with assignment_type='self'
+ */
+router.post('/pco/assignments/self-assign', authenticateToken, selfAssignClient);
 
 export default router;

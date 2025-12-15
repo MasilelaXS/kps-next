@@ -8,14 +8,17 @@ import {
   Building2, 
   FileText, 
   Calendar, 
+  CalendarDays,
   User,
-  LogOut
+  LogOut,
+  Search
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import Loading from './Loading';
 import OfflineSyncStatus from './OfflineSyncStatus';
 import { requireAuth, logout } from '@/lib/auth';
 import { preloadCache } from '@/lib/preloadCache';
+import { useBrowserNotifications } from '@/hooks/useBrowserNotifications';
 
 interface PcoDashboardLayoutProps {
   children: React.ReactNode;
@@ -26,6 +29,9 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
+
+  // Enable browser notifications automatically
+  useBrowserNotifications();
 
   useEffect(() => {
     setMounted(true);
@@ -68,7 +74,8 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
 
   const pcoNav = [
     { name: 'Dashboard', href: '/pco/dashboard', icon: LayoutDashboard },
-    { name: 'Schedule', href: '/pco/schedule', icon: Calendar },
+    { name: 'Calendar', href: '/pco/calendar', icon: Calendar },
+    { name: 'Schedule', href: '/pco/schedule', icon: CalendarDays },
     { name: 'Reports', href: '/pco/reports', icon: FileText },
     { name: 'Profile', href: '/pco/profile', icon: User },
   ];

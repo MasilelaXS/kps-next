@@ -50,6 +50,45 @@ const clientInputSchema = Joi.object({
       'string.max': 'Postal code cannot exceed 20 characters'
     }),
   
+  country: Joi.string().trim().max(100).optional().default('South Africa')
+    .messages({
+      'string.max': 'Country cannot exceed 100 characters'
+    }),
+  
+  service_notes: Joi.string().trim().max(65535).allow('', null).optional()
+    .messages({
+      'string.max': 'Service notes cannot exceed 65535 characters'
+    }),
+  
+  // Station and monitor counts
+  total_bait_stations_inside: Joi.number().integer().min(0).optional().default(0)
+    .messages({
+      'number.base': 'Inside bait stations must be a number',
+      'number.integer': 'Inside bait stations must be a whole number',
+      'number.min': 'Inside bait stations cannot be negative'
+    }),
+  
+  total_bait_stations_outside: Joi.number().integer().min(0).optional().default(0)
+    .messages({
+      'number.base': 'Outside bait stations must be a number',
+      'number.integer': 'Outside bait stations must be a whole number',
+      'number.min': 'Outside bait stations cannot be negative'
+    }),
+  
+  total_insect_monitors_light: Joi.number().integer().min(0).optional().default(0)
+    .messages({
+      'number.base': 'Light insect monitors must be a number',
+      'number.integer': 'Light insect monitors must be a whole number',
+      'number.min': 'Light insect monitors cannot be negative'
+    }),
+  
+  total_insect_monitors_box: Joi.number().integer().min(0).optional().default(0)
+    .messages({
+      'number.base': 'Box insect monitors must be a number',
+      'number.integer': 'Box insect monitors must be a whole number',
+      'number.min': 'Box insect monitors cannot be negative'
+    }),
+  
   contacts: Joi.array().items(
     Joi.object({
       name: Joi.string().trim().min(2).max(100).required()

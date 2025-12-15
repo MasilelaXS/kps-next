@@ -3,7 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import InstallPrompt from "@/components/InstallPrompt";
 import DeviceDetection from "@/components/DeviceDetection";
+import EnablePushButton from "@/components/EnablePushButton";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -27,7 +29,11 @@ export const metadata: Metadata = {
     icon: [
       { url: "/icons/16.png", sizes: "16x16", type: "image/png" },
       { url: "/icons/32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/48.png", sizes: "48x48", type: "image/png" },
       { url: "/icons/192.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: [
+      { url: "/icons/32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: [
       { url: "/icons/180.png", sizes: "180x180", type: "image/png" },
@@ -53,6 +59,10 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/16.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/32.png" />
+        <link rel="icon" type="image/png" sizes="48x48" href="/icons/48.png" />
+        <link rel="shortcut icon" href="/icons/32.png" />
         <meta name="theme-color" content="#8b5cf6" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -67,7 +77,9 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <DeviceDetection />
         <ServiceWorkerRegistration />
+        <InstallPrompt />
         <NotificationProvider>
+          <EnablePushButton />
           {children}
         </NotificationProvider>
       </body>

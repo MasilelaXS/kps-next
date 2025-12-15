@@ -81,25 +81,15 @@ export const resetPasswordSchema = Joi.object({
 });
 
 export const profileUpdateSchema = Joi.object({
-  first_name: Joi.string()
+  name: Joi.string()
     .optional()
     .min(2)
-    .max(50)
+    .max(100)
     .pattern(/^[a-zA-Z\s'-]+$/)
     .messages({
-      'string.min': 'First name must be at least 2 characters long',
-      'string.max': 'First name cannot exceed 50 characters',
-      'string.pattern.base': 'First name can only contain letters, spaces, hyphens, and apostrophes'
-    }),
-  last_name: Joi.string()
-    .optional()
-    .min(2)
-    .max(50)
-    .pattern(/^[a-zA-Z\s'-]+$/)
-    .messages({
-      'string.min': 'Last name must be at least 2 characters long',
-      'string.max': 'Last name cannot exceed 50 characters',
-      'string.pattern.base': 'Last name can only contain letters, spaces, hyphens, and apostrophes'
+      'string.min': 'Name must be at least 2 characters long',
+      'string.max': 'Name cannot exceed 100 characters',
+      'string.pattern.base': 'Name can only contain letters, spaces, hyphens, and apostrophes'
     }),
   email: Joi.string()
     .optional()

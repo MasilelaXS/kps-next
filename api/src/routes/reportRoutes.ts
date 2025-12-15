@@ -56,6 +56,7 @@ import {
   
   // PDF Generation
   adminDownloadReportPDF,
+  adminGetReportHTML,
   adminEmailReportPDF
 } from '../controllers/reportController';
 import {
@@ -385,6 +386,17 @@ router.get(
   '/admin/reports/:id/download',
   authenticateToken,
   adminDownloadReportPDF
+);
+
+/**
+ * GET /api/admin/reports/:id/html
+ * Get report HTML for client-side PDF generation
+ * Business Rule: Admin only, returns HTML that frontend converts to PDF
+ */
+router.get(
+  '/admin/reports/:id/html',
+  authenticateToken,
+  adminGetReportHTML
 );
 
 /**

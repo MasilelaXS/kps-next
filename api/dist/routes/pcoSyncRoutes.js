@@ -19,5 +19,7 @@ router.get('/pco/reports/last-for-client/:clientId', auth_1.authenticateToken, a
     const { getLastReportForClient } = require('../controllers/pcoSyncController');
     return getLastReportForClient(req, res, next);
 });
+router.get('/pco/clients/available', auth_1.authenticateToken, pcoSyncController_1.getAvailableClients);
+router.post('/pco/assignments/self-assign', auth_1.authenticateToken, pcoSyncController_1.selfAssignClient);
 exports.default = router;
 //# sourceMappingURL=pcoSyncRoutes.js.map

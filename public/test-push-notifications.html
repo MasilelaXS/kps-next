@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Push Notification Test - KPS System</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: #1a202c;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #718096;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .section {
+      background: #f7fafc;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .section h2 {
+      font-size: 18px;
+      color: #2d3748;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status.success {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+
+    .status.error {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+
+    .status.warning {
+      background: #feebc8;
+      color: #744210;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      background: #cbd5e0;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    button.secondary {
+      background: #48bb78;
+    }
+
+    button.danger {
+      background: #f56565;
+    }
+
+    .log {
+      background: #2d3748;
+      color: #a0aec0;
+      border-radius: 8px;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+
+    .log-entry {
+      margin-bottom: 5px;
+    }
+
+    .log-entry.success {
+      color: #68d391;
+    }
+
+    .log-entry.error {
+      color: #fc8181;
+    }
+
+    .log-entry.warning {
+      color: #f6ad55;
+    }
+
+    .input-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 8px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .info-box {
+      background: #bee3f8;
+      color: #2c5282;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔔 Push Notification Test</h1>
+    <p class="subtitle">Test the KPS System push notification implementation</p>
+
+    <div class="info-box">
+      <strong>⚠️ Requirements:</strong> This must be run on <code>localhost</code> or <code>HTTPS</code>. Push notifications don't work on regular HTTP domains.
+    </div>
+
+    <!-- Step 1: Service Worker Status -->
+    <div class="section">
+      <h2>
+        Step 1: Service Worker
+        <span id="sw-status" class="status warning">Checking...</span>
+      </h2>
+      <p id="sw-info" style="font-size: 14px; color: #4a5568;">Checking service worker status...</p>
+      <button id="register-sw" style="margin-top: 10px;">Register Service Worker</button>
+    </div>
+
+    <!-- Step 2: Notification Permission -->
+    <div class="section">
+      <h2>
+        Step 2: Notification Permission
+        <span id="permission-status" class="status warning">Unknown</span>
+      </h2>
+      <p id="permission-info" style="font-size: 14px; color: #4a5568;">Not requested yet</p>
+      <button id="request-permission" style="margin-top: 10px;">Request Permission</button>
+    </div>
+
+    <!-- Step 3: Push Subscription -->
+    <div class="section">
+      <h2>
+        Step 3: Push Subscription
+        <span id="subscription-status" class="status warning">Not Subscribed</span>
+      </h2>
+      <p id="subscription-info" style="font-size: 14px; color: #4a5568;">No active subscription</p>
+      <button id="subscribe-push" style="margin-top: 10px;">Subscribe to Push</button>
+      <button id="unsubscribe-push" class="danger" style="margin-top: 10px;">Unsubscribe</button>
+    </div>
+
+    <!-- Step 4: Test Notification -->
+    <div class="section">
+      <h2>Step 4: Test Browser Notification</h2>
+      
+      <div class="input-group">
+        <label for="test-title">Notification Title</label>
+        <input type="text" id="test-title" value="KPS Test Notification" placeholder="Enter title...">
+      </div>
+
+      <div class="input-group">
+        <label for="test-body">Notification Body</label>
+        <textarea id="test-body" placeholder="Enter message...">This is a test notification from the KPS Pest Control System. Push notifications are working correctly! 🎉</textarea>
+      </div>
+
+      <button id="show-notification" class="secondary">Show Browser Notification</button>
+      <button id="send-push" class="secondary">Simulate Push Event</button>
+    </div>
+
+    <!-- Debug Log -->
+    <div class="section">
+      <h2>Debug Log</h2>
+      <div id="log" class="log">
+        <div class="log-entry">Initializing test suite...</div>
+      </div>
+      <button id="clear-log" style="margin-top: 10px;">Clear Log</button>
+    </div>
+  </div>
+
+  <script>
+    // Logging utility
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+
+    // Update status badge
+    function updateStatus(id, status, text) {
+      const el = document.getElementById(id);
+      el.className = `status ${status}`;
+      el.textContent = text;
+    }
+
+    // Update info text
+    function updateInfo(id, text) {
+      document.getElementById(id).textContent = text;
+    }
+
+    // VAPID public key (from backend)
+    const VAPID_PUBLIC_KEY = 'BFhbMEOIl023VNDbsaAJWW9xDxDm5kMYux14ml3XNsKVrVmKlqi6CguED_Vm4JtgJlsN2vV68-AA3iyMNeqIi4A';
+
+    // Helper: URL-safe base64 to Uint8Array
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    // Step 1: Check Service Worker
+    async function checkServiceWorker() {
+      if (!('serviceWorker' in navigator)) {
+        log('Service Worker not supported in this browser', 'error');
+        updateStatus('sw-status', 'error', 'Not Supported');
+        updateInfo('sw-info', 'This browser does not support Service Workers');
+        return false;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          log('Service Worker already registered', 'success');
+          updateStatus('sw-status', 'success', 'Active');
+          updateInfo('sw-info', `Scope: ${registration.scope}`);
+          return true;
+        } else {
+          log('Service Worker not registered yet', 'warning');
+          updateStatus('sw-status', 'warning', 'Not Registered');
+          updateInfo('sw-info', 'Click "Register Service Worker" to continue');
+          return false;
+        }
+      } catch (error) {
+        log(`Error checking Service Worker: ${error.message}`, 'error');
+        updateStatus('sw-status', 'error', 'Error');
+        return false;
+      }
+    }
+
+    // Step 1: Register Service Worker
+    async function registerServiceWorker() {
+      try {
+        log('Registering Service Worker...', 'info');
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        log('Service Worker registered successfully', 'success');
+        updateStatus('sw-status', 'success', 'Active');
+        updateInfo('sw-info', `Scope: ${registration.scope}`);
+        await navigator.serviceWorker.ready;
+        log('Service Worker is ready', 'success');
+        return true;
+      } catch (error) {
+        log(`Error registering Service Worker: ${error.message}`, 'error');
+        updateStatus('sw-status', 'error', 'Failed');
+        updateInfo('sw-info', error.message);
+        return false;
+      }
+    }
+
+    // Step 2: Check Notification Permission
+    function checkPermission() {
+      if (!('Notification' in window)) {
+        log('Notifications not supported in this browser', 'error');
+        updateStatus('permission-status', 'error', 'Not Supported');
+        updateInfo('permission-info', 'This browser does not support notifications');
+        return false;
+      }
+
+      const permission = Notification.permission;
+      log(`Notification permission: ${permission}`, permission === 'granted' ? 'success' : 'warning');
+      
+      if (permission === 'granted') {
+        updateStatus('permission-status', 'success', 'Granted');
+        updateInfo('permission-info', 'Browser notifications are allowed');
+      } else if (permission === 'denied') {
+        updateStatus('permission-status', 'error', 'Denied');
+        updateInfo('permission-info', 'Please allow notifications in browser settings');
+      } else {
+        updateStatus('permission-status', 'warning', 'Not Granted');
+        updateInfo('permission-info', 'Click "Request Permission" to continue');
+      }
+
+      return permission === 'granted';
+    }
+
+    // Step 2: Request Notification Permission
+    async function requestPermission() {
+      try {
+        log('Requesting notification permission...', 'info');
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+          log('Notification permission granted!', 'success');
+          updateStatus('permission-status', 'success', 'Granted');
+          updateInfo('permission-info', 'Browser notifications are allowed');
+          return true;
+        } else {
+          log('Notification permission denied', 'error');
+          updateStatus('permission-status', 'error', 'Denied');
+          updateInfo('permission-info', 'Permission was denied by user');
+          return false;
+        }
+      } catch (error) {
+        log(`Error requesting permission: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    // Step 3: Check Push Subscription
+    async function checkSubscription() {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+          log('Push subscription found', 'success');
+          updateStatus('subscription-status', 'success', 'Subscribed');
+          updateInfo('subscription-info', `Endpoint: ${subscription.endpoint.substring(0, 50)}...`);
+          return true;
+        } else {
+          log('No push subscription', 'warning');
+          updateStatus('subscription-status', 'warning', 'Not Subscribed');
+          updateInfo('subscription-info', 'Click "Subscribe to Push" to enable push notifications');
+          return false;
+        }
+      } catch (error) {
+        log(`Error checking subscription: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    // Step 3: Subscribe to Push
+    async function subscribeToPush() {
+      try {
+        log('Subscribing to push notifications...', 'info');
+        const registration = await navigator.serviceWorker.ready;
+        
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+
+        log('Push subscription created!', 'success');
+        log(`Endpoint: ${subscription.endpoint}`, 'info');
+        updateStatus('subscription-status', 'success', 'Subscribed');
+        updateInfo('subscription-info', `Endpoint: ${subscription.endpoint.substring(0, 50)}...`);
+        
+        // In production, you would send this subscription to your backend
+        log('NOTE: In production, this subscription would be sent to the backend', 'warning');
+        
+        return true;
+      } catch (error) {
+        log(`Error subscribing to push: ${error.message}`, 'error');
+        updateStatus('subscription-status', 'error', 'Failed');
+        return false;
+      }
+    }
+
+    // Step 3: Unsubscribe from Push
+    async function unsubscribeFromPush() {
+      try {
+        log('Unsubscribing from push notifications...', 'info');
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+          await subscription.unsubscribe();
+          log('Push subscription removed', 'success');
+          updateStatus('subscription-status', 'warning', 'Not Subscribed');
+          updateInfo('subscription-info', 'No active subscription');
+          return true;
+        } else {
+          log('No subscription to remove', 'warning');
+          return false;
+        }
+      } catch (error) {
+        log(`Error unsubscribing: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    // Step 4: Show Browser Notification (direct)
+    async function showNotification() {
+      try {
+        const title = document.getElementById('test-title').value;
+        const body = document.getElementById('test-body').value;
+
+        if (Notification.permission !== 'granted') {
+          log('Cannot show notification: Permission not granted', 'error');
+          return;
+        }
+
+        log('Showing browser notification...', 'info');
+        
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(title, {
+          body: body,
+          icon: '/icons/192.png',
+          badge: '/icons/192.png',
+          vibrate: [200, 100, 200],
+          tag: 'test-notification',
+          requireInteraction: false,
+          data: {
+            type: 'test',
+            timestamp: Date.now()
+          }
+        });
+
+        log('Browser notification displayed!', 'success');
+      } catch (error) {
+        log(`Error showing notification: ${error.message}`, 'error');
+      }
+    }
+
+    // Step 4: Simulate Push Event (advanced test)
+    async function simulatePushEvent() {
+      try {
+        const title = document.getElementById('test-title').value;
+        const body = document.getElementById('test-body').value;
+
+        log('Simulating push event to Service Worker...', 'info');
+        log('NOTE: This simulates the Service Worker push handler, not a real push from backend', 'warning');
+
+        const registration = await navigator.serviceWorker.ready;
+        
+        // This mimics what the service worker does when it receives a push
+        await registration.showNotification(title, {
+          body: body,
+          icon: '/icons/192.png',
+          badge: '/icons/192.png',
+          vibrate: [200, 100, 200],
+          tag: 'push-simulation',
+          requireInteraction: false,
+          data: {
+            type: 'system_update',
+            timestamp: Date.now()
+          }
+        });
+
+        log('Push event simulation complete!', 'success');
+      } catch (error) {
+        log(`Error simulating push: ${error.message}`, 'error');
+      }
+    }
+
+    // Initialize on load
+    window.addEventListener('load', async () => {
+      log('Push Notification Test Suite loaded', 'success');
+      await checkServiceWorker();
+      checkPermission();
+      await checkSubscription();
+    });
+
+    // Event Listeners
+    document.getElementById('register-sw').addEventListener('click', async () => {
+      if (await registerServiceWorker()) {
+        await checkSubscription();
+      }
+    });
+
+    document.getElementById('request-permission').addEventListener('click', requestPermission);
+    document.getElementById('subscribe-push').addEventListener('click', subscribeToPush);
+    document.getElementById('unsubscribe-push').addEventListener('click', unsubscribeFromPush);
+    document.getElementById('show-notification').addEventListener('click', showNotification);
+    document.getElementById('send-push').addEventListener('click', simulatePushEvent);
+    
+    document.getElementById('clear-log').addEventListener('click', () => {
+      document.getElementById('log').innerHTML = '<div class="log-entry">Log cleared</div>';
+    });
+  </script>
+</body>
+</html>

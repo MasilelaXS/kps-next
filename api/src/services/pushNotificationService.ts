@@ -59,6 +59,34 @@ export const subscribeToPush = async (
       );
       logger.info(`Push subscription updated for user ${userId}`);
     } else {
+      // Check subscription limit per user (max 5 devices/browsers)
+      try {
+        const userSubscriptions = await executeQuery(
+          'SELECT COUNT(*) as count FROM push_subscriptions WHERE user_id = ?',
+          [userId]
+        );
+        
+        const subscriptionCount = parseInt((userSubscriptions as any[])[0].count) || 0;
+        
+        logger.info(`User ${userId} has ${subscriptionCount} existing subscriptions`);
+        
+        if (subscriptionCount >= 5) {
+          logger.warn(`User ${userId} exceeded push subscription limit (${subscriptionCount}/5)`);
+          // Remove oldest subscription before adding new one
+          const deleteResult = await executeQuery(
+            `DELETE FROM push_subscriptions 
+             WHERE user_id = ? 
+             ORDER BY created_at ASC 
+             LIMIT 1`,
+            [userId]
+          );
+          logger.info(`Removed oldest subscription for user ${userId} due to limit. Affected rows: ${(deleteResult as any)?.affectedRows || 0}`);
+        }
+      } catch (limitCheckError) {
+        logger.error(`Error checking subscription limit for user ${userId}:`, limitCheckError);
+        // Continue with subscription creation even if limit check fails
+      }
+
       // Create new subscription
       await executeQuery(
         `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) 
@@ -191,6 +219,43 @@ export const sendPushNotification = async (
   } catch (error) {
     logger.error('Error in sendPushNotification:', error);
     return { sent: 0, failed: 0 };
+  }
+};
+
+/**
+ * Get push subscription count for a user
+ */
+export const getUserSubscriptionCount = async (userId: number): Promise<number> => {
+  try {
+    const result = await executeQuery(
+      'SELECT COUNT(*) as count FROM push_subscriptions WHERE user_id = ?',
+      [userId]
+    );
+    return (result as any[])[0].count;
+  } catch (error) {
+    logger.error('Error getting user subscription count:', error);
+    return 0;
+  }
+};
+
+/**
+ * Clean up old or inactive push subscriptions
+ */
+export const cleanupPushSubscriptions = async (): Promise<{ removed: number }> => {
+  try {
+    // Remove subscriptions older than 90 days that haven't been updated
+    const result = await executeQuery(
+      `DELETE FROM push_subscriptions 
+       WHERE updated_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`,
+      []
+    );
+    
+    const removed = (result as any).affectedRows || 0;
+    logger.info(`Cleaned up ${removed} old push subscriptions`);
+    return { removed };
+  } catch (error) {
+    logger.error('Error cleaning up push subscriptions:', error);
+    return { removed: 0 };
   }
 };
 

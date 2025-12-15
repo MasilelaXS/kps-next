@@ -21,6 +21,7 @@ import BottomNav from './BottomNav';
 import Loading from './Loading';
 import Button from './Button';
 import { preloadCache } from '@/lib/preloadCache';
+import { useBrowserNotifications } from '@/hooks/useBrowserNotifications';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -33,6 +34,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false); // Default to closed
   const [mounted, setMounted] = useState(false);
   const [appVersion, setAppVersion] = useState<string>('...');
+
+  // Enable browser notifications automatically
+  useBrowserNotifications();
 
   useEffect(() => {
     setMounted(true);

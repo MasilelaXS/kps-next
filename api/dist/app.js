@@ -25,7 +25,7 @@ const allowedOrigins = [
     'http://127.0.0.1:3002',
     'http://192.168.1.128:3000',
     'http://192.168.1.128:3002',
-    env_1.config.security.corsOrigin
+    ...(env_1.config.security.corsOrigin ? env_1.config.security.corsOrigin.split(',').map(o => o.trim()) : [])
 ].filter(Boolean);
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {

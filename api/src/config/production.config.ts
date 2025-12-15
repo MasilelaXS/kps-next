@@ -40,7 +40,7 @@ export const productionConfig = {
     bcryptRounds: 12,
     sessionSecret: 'kps-session-prod-z9y8x7w6v5u4t3s2r1q0p9o8n7m6l5k4j3i2h1g0f9e8d7c6b5a4',
     sessionTimeout: '24h',
-    corsOrigin: 'https://my.kpspestcontrol.co.za,https://www.kpspestcontrol.co.za',
+    corsOrigin: 'https://app.kpspestcontrol.co.za,https://www.app.kpspestcontrol.co.za,https://kpspestcontrol.co.za,https://www.kpspestcontrol.co.za',
     corsCredentials: true,
     rateLimitWindowMs: 900000, // 15 minutes
     rateLimitMaxRequests: 1000,
@@ -75,7 +75,7 @@ export const productionConfig = {
 
   // Frontend URL
   frontend: {
-    url: 'https://my.kpspestcontrol.co.za'
+    url: 'https://app.kpspestcontrol.co.za'
   },
 
   // Push Notifications (VAPID)

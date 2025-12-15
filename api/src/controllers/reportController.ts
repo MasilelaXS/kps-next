@@ -7,6 +7,7 @@ import { createNotification } from './notificationController';
 import { pdfService } from '../services/pdfService';
 import { sendReportEmail } from '../services/emailService';
 import path from 'path';
+import fs from 'fs/promises';
 
 /**
  * Report Controller - Phase 3.2
@@ -3750,9 +3751,9 @@ export const adminDownloadReportPDF = async (req: Request, res: Response) => {
 
     logger.info(`Generating PDF for report ${reportId}`);
 
-    // Generate PDF
+    // Generate PDF using PHP dompdf service
     const pdfPath = await pdfService.generateReportPDF(reportId);
-    const filename = path.basename(pdfPath);
+    const filename = `Report_${reportId}_${new Date().toISOString().split('T')[0]}.pdf`;
 
     // Set headers for download
     res.setHeader('Content-Type', 'application/pdf');
@@ -3768,6 +3769,11 @@ export const adminDownloadReportPDF = async (req: Request, res: Response) => {
             message: 'Failed to download PDF'
           });
         }
+      } else {
+        // Clean up PDF file after successful send
+        fs.unlink(pdfPath).catch(unlinkErr => {
+          logger.warn('Failed to delete temporary PDF file', { pdfPath, error: unlinkErr });
+        });
       }
     });
 
@@ -3776,6 +3782,61 @@ export const adminDownloadReportPDF = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to generate PDF',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
+ * GET /api/admin/reports/:id/html
+ * Generate HTML for client-side PDF conversion
+ * 
+ * Business Rules:
+ * - Admin only
+ * - Returns HTML that preserves all styling and layout
+ * - Client-side converts to PDF using jsPDF + html2canvas
+ */
+export const adminGetReportHTML = async (req: Request, res: Response) => {
+  try {
+    const reportId = parseInt(req.params.id);
+
+    if (isNaN(reportId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid report ID'
+      });
+    }
+
+    // Verify report exists
+    const report = await executeQuerySingle(
+      'SELECT id, report_type FROM reports WHERE id = ?',
+      [reportId]
+    );
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: 'Report not found'
+      });
+    }
+
+    logger.info(`Generating HTML for client-side PDF conversion, report ${reportId}`);
+
+    // Generate HTML
+    const html = await pdfService.generateReportHTML(reportId);
+
+    // Return HTML
+    return res.status(200).json({
+      success: true,
+      html: html,
+      reportId: reportId
+    });
+
+  } catch (error) {
+    logger.error('Error in adminGetReportHTML:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate report HTML',
       error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     });
   }

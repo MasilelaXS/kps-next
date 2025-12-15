@@ -558,25 +558,15 @@ export default function ReportsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || 'Failed to generate PDF');
+        throw new Error(data.message || 'Failed to download PDF');
       }
 
-      // Get filename from Content-Disposition header or use default
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `Report_${reportId}.pdf`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
-      }
-
-      // Download the PDF
+      // Get PDF blob and download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = `Report_${reportId}_${new Date().toISOString().split('T')[0]}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);

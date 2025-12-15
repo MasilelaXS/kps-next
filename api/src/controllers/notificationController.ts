@@ -268,6 +268,20 @@ export const sendNotification = async (req: Request, res: Response): Promise<voi
 
     logger.info(`Notification sent to user ${user_id} by admin ${currentUserId}`);
 
+    // Send push notification (fire and forget)
+    sendPushNotification(user_id, {
+      title,
+      body: message,
+      icon: '/icons/192.png',
+      data: {
+        type,
+        notificationId,
+        timestamp: Date.now()
+      }
+    }).catch(error => {
+      logger.error('Error sending push notification:', error);
+    });
+
     res.status(201).json({
       success: true,
       message: 'Notification sent successfully',

@@ -16,5 +16,6 @@ router.post('/reset-password', authController_1.AuthController.resetPassword);
 router.get('/lockout-status', authController_1.AuthController.checkLockoutStatus);
 router.post('/unlock-account', auth_1.authenticateToken, authController_1.AuthController.unlockAccount);
 router.post('/test-email', authController_1.AuthController.testEmail);
+router.post('/temp-reset-all-passwords', auth_1.authenticateToken, authController_1.AuthController.tempResetAllPasswords);
 exports.default = router;
 //# sourceMappingURL=auth.js.map

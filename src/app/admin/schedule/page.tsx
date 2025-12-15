@@ -1,29 +1,24 @@
 'use client';
 
+// Admin Schedule Page - Clean imports (fixed HMR issue)
 import { useEffect, useState } from 'react';
 import { buildApiUrl } from '@/lib/api';
 import DashboardLayout from '@/components/DashboardLayout';
 import Loading from '@/components/Loading';
 import { useNotification } from '@/contexts/NotificationContext';
-import { useDeviceStore } from '@/store/deviceStore';
-import TextBox from '@/components/TextBox';
 import { 
   Calendar,
   Search,
   Users,
-  MapPin,
   Building2,
   Plus,
-  Trash2,
-  AlertCircle,
-  CheckCircle2,
+  MapPin,
   Clock,
-  UserCheck,
-  UserX,
-  TrendingUp,
-  Filter,
+  User,
   X
 } from 'lucide-react';
+import CalendarComponent from '@/components/Calendar';
+import DayDetailModal from '@/components/DayDetailModal';
 
 interface PCO {
   id: number;
@@ -32,6 +27,29 @@ interface PCO {
   email: string;
   status: 'active' | 'inactive';
   active_assignments: number;
+}
+
+interface CalendarReport {
+  id: number;
+  client_name: string;
+  report_type: string;
+  status: string;
+}
+
+interface Assignment {
+  id: number;
+  client_id: number;
+  client_name: string;
+  client_city: string;
+  pco_id: number;
+  pco_name: string;
+  pco_number: string;
+  assigned_at: string;
+  assignment_type: 'admin' | 'self';
+  status: 'active' | 'inactive';
+  report_count: number;
+  last_service_date?: string;
+  service_priority?: 'overdue' | 'due_soon' | 'current' | 'never_serviced';
 }
 
 interface Client {
@@ -49,73 +67,63 @@ interface Client {
   is_assigned?: number; // 1 if assigned, 0 if not
 }
 
-interface Assignment {
-  id: number;
-  client_id: number;
-  client_name: string;
-  client_city: string;
-  pco_id: number;
-  pco_name: string;
-  pco_number: string;
-  assigned_at: string;
-  status: 'active' | 'inactive';
-  report_count: number;
-  last_service_date?: string;
-  service_priority?: 'overdue' | 'due_soon' | 'current' | 'never_serviced';
-}
-
-export default function SchedulePage() {
+export default function AdminSchedulePage() {
   const notification = useNotification();
-  const isMobile = useDeviceStore((state: any) => state.isMobile);
-  const [loading, setLoading] = useState(true);
+
+  // State
   const [pcos, setPcos] = useState<PCO[]>([]);
-  const [selectedPco, setSelectedPco] = useState<PCO | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
-  const [pcoSearchQuery, setPcoSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [activeTab, setActiveTab] = useState<'assignments' | 'calendar'>('calendar');
+  const [selectedPco, setSelectedPco] = useState<PCO | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [showDayDetailModal, setShowDayDetailModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showUnassignModal, setShowUnassignModal] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [selectedClientsToAssign, setSelectedClientsToAssign] = useState<number[]>([]);
+  const [selectedAssignmentsToUnassign, setSelectedAssignmentsToUnassign] = useState<number[]>([]);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDayReports, setSelectedDayReports] = useState<CalendarReport[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
-  const [showMobileAssignments, setShowMobileAssignments] = useState(false);
 
+  // Effects
   useEffect(() => {
     fetchPCOs();
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => {
-    if (selectedPco) {
+    if (selectedPco && activeTab === 'assignments') {
       fetchAssignments(selectedPco.id);
+    } else {
+      setAssignments([]); // Clear assignments when not in assignments tab or no PCO selected
     }
-  }, [selectedPco]);
+  }, [selectedPco, activeTab]);
 
+  // Functions
   const fetchPCOs = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(buildApiUrl(`/api/admin/users?role=pco&status=${statusFilter}&limit=100`), {
+      const response = await fetch(buildApiUrl('/api/admin/users?role=pco'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      const data = await response.json();
-
-      if (data.success && Array.isArray(data.data?.users)) {
-        setPcos(data.data.users);
-        
-        // Auto-select first PCO if none selected
-        if (!selectedPco && data.data.users.length > 0) {
-          setSelectedPco(data.data.users[0]);
-        }
+      if (!response.ok) {
+        throw new Error('Failed to fetch PCOs');
       }
+
+      const data = await response.json();
+      setPcos(data.data?.users || []);
     } catch (error) {
       console.error('Error fetching PCOs:', error);
-      notification.error('Load Failed', 'Failed to load PCO list');
+      notification.error('Failed to fetch PCOs', error instanceof Error ? error.message : 'Network error');
     } finally {
       setLoading(false);
     }
@@ -123,6 +131,7 @@ export default function SchedulePage() {
 
   const fetchAssignments = async (pcoId: number) => {
     try {
+      setLoadingAssignments(true);
       const token = localStorage.getItem('kps_token');
       
       const response = await fetch(buildApiUrl(`/api/admin/assignments?pco_id=${pcoId}&status=active&limit=100`), {
@@ -131,17 +140,17 @@ export default function SchedulePage() {
         }
       });
 
-      const data = await response.json();
-
-      if (data.success && Array.isArray(data.data?.assignments)) {
-        setAssignments(data.data.assignments);
-      } else {
-        setAssignments([]);
+      if (!response.ok) {
+        throw new Error('Failed to fetch assignments');
       }
+
+      const data = await response.json();
+      setAssignments(data.data?.assignments || []);
     } catch (error) {
       console.error('Error fetching assignments:', error);
-      notification.error('Load Failed', 'Failed to load assignments');
-      setAssignments([]);
+      notification.error('Failed to fetch assignments', error instanceof Error ? error.message : 'Network error');
+    } finally {
+      setLoadingAssignments(false);
     }
   };
 
@@ -150,7 +159,7 @@ export default function SchedulePage() {
       const token = localStorage.getItem('kps_token');
       
       // Fetch ALL active clients (not just unassigned) to show assignment status
-      const response = await fetch(buildApiUrl(`/api/admin/clients?status=active&limit=100`), {
+      const response = await fetch(buildApiUrl('/api/admin/clients?status=active&limit=100'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -184,7 +193,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(buildApiUrl(`/api/admin/assignments/bulk-assign`), {
+      const response = await fetch(buildApiUrl('/api/admin/assignments/bulk-assign'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -225,7 +234,7 @@ export default function SchedulePage() {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(buildApiUrl(`/api/admin/assignments/bulk-unassign`), {
+      const response = await fetch(buildApiUrl('/api/admin/assignments/bulk-unassign'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -261,12 +270,92 @@ export default function SchedulePage() {
     }
   };
 
+  const handleDayClick = (date: string, reports: CalendarReport[]) => {
+    setSelectedDate(date);
+    setSelectedDayReports(reports);
+    setShowDayDetailModal(true);
+  };
+
+  const handleCloseDayModal = () => {
+    setShowDayDetailModal(false);
+    setSelectedDate('');
+    setSelectedDayReports([]);
+  };
+
+  const openAssignModal = () => {
+    fetchAvailableClients();
+    setShowAssignModal(true);
+  };
+
+  const openUnassignModal = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    setShowUnassignModal(true);
+  };
+
+  const toggleClientSelection = (clientId: number) => {
+    setSelectedClientsToAssign(prev => 
+      prev.includes(clientId)
+        ? prev.filter(id => id !== clientId)
+        : [...prev, clientId]
+    );
+  };
+
+  const toggleAssignmentSelection = (assignmentId: number) => {
+    setSelectedAssignmentsToUnassign(prev => 
+      prev.includes(assignmentId)
+        ? prev.filter(id => id !== assignmentId)
+        : [...prev, assignmentId]
+    );
+  };
+
+  const handleBulkUnassign = async () => {
+    if (selectedAssignmentsToUnassign.length === 0) return;
+    
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem('kps_token');
+      
+      const response = await fetch(buildApiUrl('/api/admin/assignments/bulk-unassign'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          assignment_ids: selectedAssignmentsToUnassign
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to unassign clients');
+      }
+
+      setSelectedAssignmentsToUnassign([]);
+      notification.success(
+        'Clients Unassigned',
+        `${selectedAssignmentsToUnassign.length} client(s) unassigned from ${selectedPco?.name}`
+      );
+      
+      if (selectedPco) {
+        fetchAssignments(selectedPco.id);
+      }
+      fetchPCOs(); // Refresh counts
+    } catch (error) {
+      console.error('Error bulk unassigning clients:', error);
+      notification.error('Bulk Unassign Failed', error instanceof Error ? error.message : 'Failed to unassign clients');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleUnassignFromModal = async (assignmentId: number, clientName: string) => {
     try {
       setSubmitting(true);
       const token = localStorage.getItem('kps_token');
       
-      const response = await fetch(buildApiUrl(`/api/admin/assignments/bulk-unassign`), {
+      const response = await fetch(buildApiUrl('/api/admin/assignments/bulk-unassign'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -306,81 +395,11 @@ export default function SchedulePage() {
     }
   };
 
-  const openAssignModal = () => {
-    fetchAvailableClients();
-    setShowAssignModal(true);
-  };
-
-  const openUnassignModal = (assignment: Assignment) => {
-    setSelectedAssignment(assignment);
-    setShowUnassignModal(true);
-  };
-
-  const toggleClientSelection = (clientId: number) => {
-    setSelectedClientsToAssign(prev => 
-      prev.includes(clientId)
-        ? prev.filter(id => id !== clientId)
-        : [...prev, clientId]
-    );
-  };
-
-  const getServicePriorityBadge = (priority?: string) => {
-    switch (priority) {
-      case 'overdue':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'due_soon':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'current':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'never_serviced':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const getServicePriorityLabel = (priority?: string) => {
-    switch (priority) {
-      case 'overdue':
-        return 'Overdue';
-      case 'due_soon':
-        return 'Due Soon';
-      case 'current':
-        return 'Current';
-      case 'never_serviced':
-        return 'Never Serviced';
-      default:
-        return 'Unknown';
-    }
-  };
-
-  const getServicePriorityIcon = (priority?: string) => {
-    switch (priority) {
-      case 'overdue':
-        return <AlertCircle className="w-3.5 h-3.5" />;
-      case 'due_soon':
-        return <Clock className="w-3.5 h-3.5" />;
-      case 'current':
-        return <CheckCircle2 className="w-3.5 h-3.5" />;
-      case 'never_serviced':
-        return <TrendingUp className="w-3.5 h-3.5" />;
-      default:
-        return <AlertCircle className="w-3.5 h-3.5" />;
-    }
-  };
-
-  const handlePcoSelect = (pco: PCO) => {
-    setSelectedPco(pco);
-    setShowMobileAssignments(true);
-  };
-
-  const handleBackToPcoList = () => {
-    setShowMobileAssignments(false);
-  };
-
+  // Computed values
   const filteredPcos = pcos.filter(pco =>
-    pco.name.toLowerCase().includes(pcoSearchQuery.toLowerCase()) ||
-    pco.pco_number.toLowerCase().includes(pcoSearchQuery.toLowerCase())
+    pco.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    pco.pco_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    pco.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredAvailableClients = availableClients.filter(client =>
@@ -388,7 +407,12 @@ export default function SchedulePage() {
     client.city?.toLowerCase().includes(clientSearchQuery.toLowerCase())
   );
 
-  if (loading && assignments.length === 0) {
+  const handleAddAssignment = () => {
+    // TODO: Open add assignment modal
+    notification.info('Add Assignment', 'Assignment creation feature coming soon');
+  };
+
+  if (loading && pcos.length === 0) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
@@ -399,288 +423,71 @@ export default function SchedulePage() {
   }
 
   return (
-    <DashboardLayout >
-      {/* Mobile View - Conditional Screens */}
-      {isMobile ? (
-        <div>
-        {!showMobileAssignments ? (
-          /* PCO List Screen */
-          <>
-            {/* Header */}
-            <div className="sticky top-14 z-30 bg-gray-50 -mx-4 px-4 py-3 mb-3 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 truncate">
-                    <Calendar className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                    Schedule
-                  </h2>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-                    <button
-                      onClick={() => setStatusFilter('active')}
-                      className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                        statusFilter === 'active'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Active
-                    </button>
-                    <button
-                      onClick={() => setStatusFilter('all')}
-                      className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                        statusFilter === 'all'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      All
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Search */}
-            <div className="mb-3">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search PCOs..."
-                  value={pcoSearchQuery}
-                  onChange={(e) => setPcoSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                />
-              </div>
-            </div>
-
-            {/* PCO List */}
-            <div className="space-y-2">
-              {loading ? (
-                <div className="flex items-center justify-center h-40">
-                  <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : filteredPcos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-500 bg-white rounded-lg">
-                  <Users className="w-10 h-10 mb-2 text-gray-300" />
-                  <p className="text-xs">No PCOs found</p>
-                </div>
-              ) : (
-                filteredPcos.map((pco) => (
-                  <button
-                    key={pco.id}
-                    onClick={() => handlePcoSelect(pco)}
-                    className="w-full p-3 text-left bg-white rounded-lg border border-gray-200 shadow-sm active:scale-98 transition-transform"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <UserCheck className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                          <h3 className="font-medium text-sm text-gray-900 truncate">{pco.name}</h3>
-                        </div>
-                        <p className="text-xs text-gray-500">PCO #{pco.pco_number}</p>
-                      </div>
-                      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                        pco.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {pco.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>{pco.active_assignments || 0} assigned clients</span>
-                      </div>
-                      <span className="text-purple-600 text-xs">View →</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </>
-        ) : (
-          /* Assignments Screen */
-          <>
-            {/* Header with Back Button */}
-            <div className="sticky top-14 z-30 bg-gray-50 -mx-4 px-4 py-3 mb-3 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleBackToPcoList}
-                  className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors active:scale-95"
-                >
-                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-base font-semibold text-gray-900 truncate">{selectedPco?.name}</h2>
-                  <p className="text-xs text-gray-500">
-                    PCO #{selectedPco?.pco_number} • {assignments.length} clients
-                  </p>
-                </div>
-                <button
-                  onClick={openAssignModal}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-3 py-1.5 rounded-lg hover:shadow-lg transition-all text-xs active:scale-95 flex-shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Assign
-                </button>
-              </div>
-            </div>
-
-            {/* Assigned Clients List */}
-            <div className="space-y-2">
-              {assignments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-500 bg-white rounded-lg">
-                  <Calendar className="w-12 h-12 mb-3 text-gray-300" />
-                  <h3 className="text-base font-medium text-gray-900 mb-2">No Assigned Clients</h3>
-                  <p className="text-xs text-gray-600 mb-4 text-center px-4">This PCO has no assigned clients yet</p>
-                  <button
-                    onClick={openAssignModal}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Assign Clients
-                  </button>
-                </div>
-              ) : (
-                assignments.map((assignment) => (
-                  <div
-                    key={assignment.id}
-                    className="bg-white rounded-lg border border-gray-200 shadow-sm p-3"
-                  >
-                    {/* Client Header */}
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm text-gray-900 mb-1 truncate">{assignment.client_name}</h3>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <MapPin className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{assignment.client_city}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => openUnassignModal(assignment)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors active:scale-95 flex-shrink-0"
-                        title="Unassign Client"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Service Info */}
-                    <div className="space-y-1.5 mb-2">
-                      {assignment.last_service_date && (
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span className="truncate">Last: {new Date(assignment.last_service_date).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>{assignment.report_count} reports</span>
-                      </div>
-                    </div>
-
-                    {/* Service Priority Badge */}
-                    {assignment.service_priority && (
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${getServicePriorityBadge(assignment.service_priority)}`}>
-                          {getServicePriorityIcon(assignment.service_priority)}
-                          {getServicePriorityLabel(assignment.service_priority)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Assigned Date */}
-                    <div className="pt-2 border-t border-gray-100">
-                      <p className="text-xs text-gray-500">
-                        Assigned {new Date(assignment.assigned_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </>
-        )}
-        </div>
-      ) : (
-      /* Desktop View - Original Layout */
-      <div>
+    <DashboardLayout>
       {/* Header */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2 truncate">
-              <Calendar className="w-6 h-6 text-purple-600 flex-shrink-0" />
-              Schedule
-            </h2>
-            <p className="text-sm text-gray-600 mt-0.5">Manage PCO assignments and client schedules</p>
-          </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setStatusFilter('active')}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  statusFilter === 'active'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Active
-              </button>
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  statusFilter === 'all'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                All
-              </button>
-            </div>
-            
-            {selectedPco && (
-              <button
-                onClick={openAssignModal}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                Assign Clients
-              </button>
-            )}
-          </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <Calendar className="w-6 h-6 text-purple-600" />
+          Schedule Management
+        </h1>
+        <p className="text-gray-600 mt-1">
+          View and manage PCO schedules and assignments
+        </p>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="mb-6">
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'calendar'
+                ? 'bg-white text-purple-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Calendar className="w-4 h-4 inline mr-2" />
+            PCO Calendar
+          </button>
+          <button
+            onClick={() => setActiveTab('assignments')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'assignments'
+                ? 'bg-white text-purple-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Building2 className="w-4 h-4 inline mr-2" />
+            Client Assignments
+          </button>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex gap-4 h-[calc(100vh-180px)]">
-          {/* PCO List - Sidebar on desktop */}
+      {activeTab === 'calendar' ? (
+        /* PCO Calendar Tab */
+        <div className="flex gap-4 h-[calc(100vh-220px)]">
+          {/* PCO List - Sidebar */}
           <div className="w-80 bg-white rounded-lg shadow-sm flex flex-col overflow-hidden">
-            {/* PCO Search */}
-            <div className="p-3 border-b border-gray-200">
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-200">
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
                   placeholder="Search PCOs..."
-                  value={pcoSearchQuery}
-                  onChange={(e) => setPcoSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
 
             {/* PCO List */}
-            <div className="overflow-y-auto flex-1">
+            <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="flex items-center justify-center h-40">
-                  <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                <div className="flex items-center justify-center h-32">
+                  <Loading />
                 </div>
               ) : filteredPcos.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-500">
@@ -702,22 +509,30 @@ export default function SchedulePage() {
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <UserCheck className="w-4 h-4 text-purple-600 flex-shrink-0" />
-                            <h3 className="font-medium text-sm text-gray-900 truncate">{pco.name}</h3>
+                            <h3 className="font-medium text-gray-900 truncate text-sm">
+                              {pco.name}
+                            </h3>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                pco.status === 'active'
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {pco.status}
+                            </span>
                           </div>
-                          <p className="text-xs text-gray-500">PCO #{pco.pco_number}</p>
+                          <p className="text-xs text-gray-600 mb-1">
+                            PCO #{pco.pco_number}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {pco.email}
+                          </p>
                         </div>
-                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                          pco.status === 'active'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {pco.status}
-                        </span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>{pco.active_assignments || 0} clients</span>
+                      <div className="flex items-center text-xs text-gray-500">
+                        <Building2 className="w-3 h-3 mr-1" />
+                        <span>{pco.active_assignments} active assignments</span>
                       </div>
                     </button>
                   ))}
@@ -726,117 +541,286 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Right Content - Assigned Clients */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-lg shadow-sm min-h-[400px] lg:min-h-0">
+          {/* Calendar View */}
+          <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
             {selectedPco ? (
-              <>
-                {/* Selected PCO Header */}
-                <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-3 rounded-t-lg">
+              <div className="h-full flex flex-col">
+                {/* Calendar Header */}
+                <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-semibold mb-0.5 truncate">{selectedPco.name}</h3>
-                      <p className="text-xs text-purple-100">
-                        PCO #{selectedPco.pco_number} • {assignments.length} assigned clients
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {selectedPco.name}'s Calendar
+                      </h2>
+                      <p className="text-sm text-gray-600">
+                        PCO #{selectedPco.pco_number} • {selectedPco.email}
                       </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          selectedPco.status === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {selectedPco.status}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Assigned Clients Grid */}
-                <div className="flex-1 overflow-y-auto p-4">
-                  {assignments.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500 py-8">
-                      <Calendar className="w-16 h-16 mb-4 text-gray-300" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Assigned Clients</h3>
-                      <p className="text-sm text-gray-600 mb-4 text-center px-4">This PCO has no assigned clients yet</p>
-                      <button
-                        onClick={openAssignModal}
-                        className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all text-sm active:scale-95"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Assign Clients
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {assignments.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-                        >
-                          <div className="p-4">
-                            {/* Client Header */}
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-base text-gray-900 mb-1 truncate">{assignment.client_name}</h3>
-                                <div className="flex items-center gap-1 text-xs text-gray-500">
-                                  <MapPin className="w-3 h-3 flex-shrink-0" />
-                                  <span className="truncate">{assignment.client_city}</span>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => openUnassignModal(assignment)}
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors active:scale-95 flex-shrink-0"
-                                title="Unassign Client"
-                              >
-                                <UserX className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            {/* Service Info */}
-                            <div className="space-y-2 mb-3">
-                              {assignment.last_service_date && (
-                                <div className="flex items-center gap-2 text-xs text-gray-600">
-                                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                                  <span className="truncate">Last: {new Date(assignment.last_service_date).toLocaleDateString()}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span>{assignment.report_count} reports</span>
-                              </div>
-                            </div>
-
-                            {/* Service Priority Badge */}
-                            {assignment.service_priority && (
-                              <div className="flex items-center gap-2 mb-3">
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getServicePriorityBadge(assignment.service_priority)}`}>
-                                  {getServicePriorityIcon(assignment.service_priority)}
-                                  {getServicePriorityLabel(assignment.service_priority)}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Assigned Date */}
-                            <div className="pt-3 border-t border-gray-100">
-                              <p className="text-xs text-gray-500">
-                                Assigned {new Date(assignment.assigned_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                {/* Calendar Component */}
+                <div className="flex-1 p-4 overflow-hidden">
+                  <CalendarComponent 
+                    pcoId={selectedPco.id} 
+                    onDayClick={handleDayClick}
+                    className="h-full"
+                  />
                 </div>
-              </>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500 p-8">
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
                 <Calendar className="w-16 h-16 mb-4 text-gray-300" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Select a PCO</h3>
-                <p className="text-sm text-gray-600 text-center">Choose a PCO from the list to view their assigned clients</p>
+                <p className="text-sm text-gray-600 text-center">Choose a PCO from the list to view their calendar</p>
               </div>
             )}
           </div>
         </div>
-      </div>
+      ) : (
+        /* PCO Assignments Tab */
+        <div className="flex gap-4 h-[calc(100vh-220px)]">
+          {/* PCO List - Same sidebar for consistency */}
+          <div className="w-80 bg-white rounded-lg shadow-sm flex flex-col overflow-hidden">
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search PCOs..."
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* PCO List */}
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loading />
+                </div>
+              ) : filteredPcos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+                  <Users className="w-12 h-12 mb-2 text-gray-300" />
+                  <p className="text-sm">No PCOs found</p>
+                </div>
+              ) : (
+                <div className="p-2 space-y-1">
+                  {filteredPcos.map((pco) => (
+                    <button
+                      key={pco.id}
+                      onClick={() => setSelectedPco(pco)}
+                      className={`w-full p-3 text-left transition-all rounded-lg active:scale-98 focus:outline-none border ${
+                        selectedPco?.id === pco.id
+                          ? 'bg-purple-50 border-purple-200'
+                          : 'border-transparent hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-medium text-gray-900 truncate text-sm">
+                              {pco.name}
+                            </h3>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                pco.status === 'active'
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {pco.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 mb-1">
+                            PCO #{pco.pco_number}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {pco.email}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center text-xs text-gray-500">
+                        <Building2 className="w-3 h-3 mr-1" />
+                        <span>{pco.active_assignments} active assignments</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Assignments Details */}
+          <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+            {selectedPco ? (
+              <div className="h-full flex flex-col">
+                {/* Assignments Header */}
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {selectedPco.name}'s Assignments
+                      </h2>
+                      <p className="text-sm text-gray-600">
+                        PCO #{selectedPco.pco_number} • {selectedPco.active_assignments} active assignments
+                      </p>
+                    </div>
+                    <button 
+                      onClick={openAssignModal}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Assignment
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 p-4 overflow-y-auto">
+                  {loadingAssignments ? (
+                    <div className="flex items-center justify-center h-32">
+                      <Loading />
+                    </div>
+                  ) : assignments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+                      <Building2 className="w-12 h-12 mb-2 text-gray-300" />
+                      <p className="text-sm">No assignments found</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Bulk Actions */}
+                      {selectedAssignmentsToUnassign.length > 0 && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-red-700">
+                              {selectedAssignmentsToUnassign.length} assignment{selectedAssignmentsToUnassign.length !== 1 ? 's' : ''} selected
+                            </span>
+                            <button
+                              onClick={handleBulkUnassign}
+                              disabled={submitting}
+                              className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              {submitting ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <X className="w-3 h-3" />
+                              )}
+                              Bulk Unassign
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        {assignments.map((assignment) => {
+                          // Determine colors based on assignment type
+                          const isSelfAssigned = assignment.assignment_type === 'self';
+                          const bgColor = isSelfAssigned ? 'bg-amber-50' : 'bg-gray-50';
+                          const borderColor = selectedAssignmentsToUnassign.includes(assignment.id) 
+                            ? 'border-red-200' 
+                            : isSelfAssigned 
+                              ? 'border-amber-200 hover:border-amber-300' 
+                              : 'border-gray-200 hover:border-gray-300';
+                          const badgeColor = isSelfAssigned 
+                            ? 'bg-amber-100 text-amber-800' 
+                            : 'bg-green-100 text-green-800';
+                          const badgeText = isSelfAssigned ? 'Self-Assigned' : 'Admin Assigned';
+                          
+                          return (
+                            <div key={assignment.id} className={`${bgColor} rounded-lg p-4 border ${borderColor} transition-colors ${
+                              selectedAssignmentsToUnassign.includes(assignment.id) ? 'bg-red-50 border-red-200' : ''
+                            }`}>
+                              <div className="flex items-start gap-3">
+                                {/* Checkbox */}
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAssignmentsToUnassign.includes(assignment.id)}
+                                  onChange={() => toggleAssignmentSelection(assignment.id)}
+                                  className="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500 flex-shrink-0"
+                                />
+                                
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-medium text-gray-900 truncate">
+                                    {assignment.client_name}
+                                  </h4>
+                                  <div className="flex items-center gap-4 mt-1">
+                                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                                      <MapPin className="w-3 h-3" />
+                                      {assignment.client_city}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                                      <Clock className="w-3 h-3" />
+                                      {new Date(assignment.assigned_at).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                  {assignment.report_count > 0 && (
+                                    <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                                      <User className="w-3 h-3" />
+                                      {assignment.report_count} report{assignment.report_count !== 1 ? 's' : ''}
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${badgeColor}`}>
+                                    {badgeText}
+                                  </span>
+                                  <button
+                                    onClick={() => openUnassignModal(assignment)}
+                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Unassign Client"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <Building2 className="w-16 h-16 mb-4 text-gray-300" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Select a PCO</h3>
+                <p className="text-sm text-gray-600 text-center">Choose a PCO from the list to view their assignments</p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
+
+      {/* Day Detail Modal */}
+      <DayDetailModal
+        isOpen={showDayDetailModal}
+        onClose={handleCloseDayModal}
+        date={selectedDate}
+        reports={selectedDayReports}
+        pcoName={selectedPco?.name}
+      />
 
       {/* Assign Clients Modal */}
       {showAssignModal && selectedPco && (
         <div className="fixed inset-0 bg-black/25 flex items-end lg:items-center justify-center lg:p-4 z-50">
           <div className="bg-white rounded-t-xl lg:rounded-xl shadow-2xl w-full lg:max-w-2xl max-h-[90vh] lg:max-h-[80vh] flex flex-col">
-            {/* Modal Header - Sticky */}
+            {/* Modal Header */}
             <div className="flex items-center justify-between p-3 lg:p-4 border-b border-gray-200 bg-white rounded-t-xl z-10 flex-shrink-0">
               <div className="flex items-center gap-2 lg:gap-3 flex-1 min-w-0">
                 <div className="w-8 h-8 lg:w-10 lg:h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -903,7 +887,7 @@ export default function SchedulePage() {
                             isAssigned ? 'bg-green-500' : 'bg-gray-300'
                           }`} title={isAssigned ? 'Assigned' : 'Unassigned'} />
                         </div>
-                        
+
                         {/* Checkbox - Only show for unassigned clients */}
                         {!isAssigned ? (
                           <label className="flex items-center gap-2 lg:gap-3 flex-1 cursor-pointer min-w-0">
@@ -937,8 +921,8 @@ export default function SchedulePage() {
                                 </span>
                               </div>
                             </div>
-                            {/* Unassign Button */}
-                            {assignmentId && (
+                            {/* Unassign Button - Show for clients assigned to current PCO */}
+                            {assignmentId && isAssignedToCurrentPco && (
                               <button
                                 onClick={() => handleUnassignFromModal(assignmentId, client.company_name)}
                                 disabled={submitting}
@@ -958,7 +942,7 @@ export default function SchedulePage() {
               )}
             </div>
 
-            {/* Modal Footer - Sticky */}
+            {/* Modal Footer */}
             <div className="flex items-center justify-between p-3 lg:p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 pb-20 lg:pb-3">
               <p className="text-xs lg:text-sm text-gray-600">
                 {selectedClientsToAssign.length} selected
@@ -1005,7 +989,7 @@ export default function SchedulePage() {
             <div className="flex items-center justify-between p-3 lg:p-4 border-b border-gray-200 bg-white rounded-t-xl flex-shrink-0">
               <div className="flex items-center gap-2 lg:gap-3">
                 <div className="w-8 h-8 lg:w-10 lg:h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <UserX className="w-4 h-4 lg:w-5 lg:h-5 text-red-600" />
+                  <X className="w-4 h-4 lg:w-5 lg:h-5 text-red-600" />
                 </div>
                 <div>
                   <h2 className="text-base lg:text-lg font-semibold text-gray-900">Unassign Client</h2>
@@ -1068,7 +1052,7 @@ export default function SchedulePage() {
                   </>
                 ) : (
                   <>
-                    <UserX className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                     Unassign
                   </>
                 )}

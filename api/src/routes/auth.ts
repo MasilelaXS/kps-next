@@ -459,4 +459,20 @@ router.post('/unlock-account', authenticateToken, AuthController.unlockAccount);
  */
 router.post('/test-email', AuthController.testEmail);
 
+/**
+ * @swagger
+ * /auth/temp-reset-all-passwords:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Temporary endpoint to reset all user passwords
+ *     description: TEMPORARY - Reset all user passwords to ResetPassword123 for testing
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All passwords reset successfully
+ */
+router.post('/temp-reset-all-passwords', authenticateToken, AuthController.tempResetAllPasswords);
+
 export default router;

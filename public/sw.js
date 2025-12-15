@@ -87,14 +87,22 @@ self.addEventListener('activate', (event) => {
     APP_VERSION = version;
     const currentCaches = [`kps-cache-${APP_VERSION}`, `kps-runtime-${APP_VERSION}`, `kps-static-${APP_VERSION}`];
 
+    // Delete ALL old caches - aggressive cleanup
     const cacheNames = await caches.keys();
-    await Promise.all(cacheNames
-      .filter((name) => !currentCaches.includes(name))
-      .map((name) => {
+    await Promise.all(cacheNames.map((name) => {
+      if (!currentCaches.includes(name)) {
         console.log('[SW] Deleting old cache:', name);
         return caches.delete(name);
-      })
-    );
+      }
+    }));
+    
+    // Force reload all clients to get fresh pages
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(client => {
+      console.log('[SW] Reloading client:', client.url);
+      client.navigate(client.url);
+    });
+    
     console.log('[SW] Service worker activated and claiming clients');
     return self.clients.claim();
   })());

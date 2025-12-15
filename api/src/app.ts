@@ -38,7 +38,7 @@ const allowedOrigins = [
   'http://127.0.0.1:3002',
   'http://192.168.1.128:3000',
   'http://192.168.1.128:3002', // Production build on network
-  config.security.corsOrigin // Also include env variable
+  ...(config.security.corsOrigin ? config.security.corsOrigin.split(',').map(o => o.trim()) : []) // Split comma-separated origins
 ].filter(Boolean);
 
 app.use(cors({

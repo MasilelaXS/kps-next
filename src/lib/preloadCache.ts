@@ -17,15 +17,16 @@ const PRELOAD_ENDPOINTS: PreloadConfig[] = [
   { endpoint: '/api/pco/sync/clients?include_contacts=true', priority: 'high', role: 'pco' },
   { endpoint: '/api/pco/dashboard/summary', priority: 'high', role: 'pco' },
   { endpoint: '/api/pco/dashboard/statistics', priority: 'high', role: 'pco' },
+  { endpoint: '/api/pco/sync/chemicals', priority: 'high', role: 'pco' }, // Bait station chemicals
+  { endpoint: '/api/pco/chemicals/fumigation', priority: 'high', role: 'pco' }, // Fumigation chemicals
   { endpoint: '/api/pco/dashboard/recent-reports', priority: 'normal', role: 'pco' },
   { endpoint: '/api/pco/dashboard/declined-reports', priority: 'normal', role: 'pco' },
   
   // Admin Endpoints (High Priority)
   { endpoint: '/api/admin/dashboard/stats', priority: 'high', role: 'admin' },
-  { endpoint: '/api/clients', priority: 'high', role: 'admin' },
-  { endpoint: '/api/admin/users', priority: 'normal', role: 'admin' },
-  { endpoint: '/api/pco/sync/chemicals', priority: 'normal', role: 'pco' },
-  { endpoint: '/api/reports', priority: 'normal', role: 'admin' },
+  { endpoint: '/api/admin/clients', priority: 'high', role: 'admin' },
+  { endpoint: '/api/admin/chemicals', priority: 'normal', role: 'admin' },
+  { endpoint: '/api/admin/reports', priority: 'normal', role: 'admin' },
 ];
 
 class PreloadCacheManager {
@@ -94,6 +95,11 @@ class PreloadCacheManager {
         normalPriority.map(config => this.preloadEndpoint(config.endpoint))
       );
 
+      // For PCO role, also preload last reports for all assigned clients (for autopopulate)
+      if (role === 'pco' || role === 'both') {
+        await this.preloadLastReportsForClients();
+      }
+
       // Update last preload time
       localStorage.setItem(this.PRELOAD_KEY, Date.now().toString());
       console.log('[Preload] Completed successfully');
@@ -122,6 +128,62 @@ class PreloadCacheManager {
       await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`[Preload] Failed to cache ${endpoint}:`, error);
+    }
+  }
+
+  /**
+   * Preload last reports for all assigned clients (for bait station autopopulation)
+   * This is called after clients are cached to enable offline autopopulate
+   */
+  private async preloadLastReportsForClients(): Promise<void> {
+    try {
+      console.log('[Preload] Fetching last reports for assigned clients...');
+      
+      // Get cached clients data
+      const clientsResponse = await apiCall('/api/pco/sync/clients?include_contacts=true');
+      
+      if (!clientsResponse.success || !Array.isArray(clientsResponse.data)) {
+        console.warn('[Preload] No clients found for last report preload');
+        return;
+      }
+
+      const clients = clientsResponse.data;
+      console.log(`[Preload] Found ${clients.length} assigned clients`);
+
+      // Fetch last report for each client (in parallel batches to avoid overwhelming server)
+      const BATCH_SIZE = 3; // Process 3 clients at a time
+      for (let i = 0; i < clients.length; i += BATCH_SIZE) {
+        const batch = clients.slice(i, i + BATCH_SIZE);
+        
+        await Promise.allSettled(
+          batch.map(async (client: any) => {
+            const endpoint = `/api/pco/reports/last-for-client/${client.id}`;
+            
+            // Skip if already preloaded
+            if (this.preloadedEndpoints.has(endpoint)) {
+              return;
+            }
+
+            try {
+              console.log(`[Preload] Caching last report for client ${client.id} (${client.company_name})`);
+              await apiCall(endpoint);
+              this.preloadedEndpoints.add(endpoint);
+            } catch (error) {
+              // Client may not have any approved reports yet - this is OK
+              console.log(`[Preload] No previous report for client ${client.id} - ${error}`);
+            }
+          })
+        );
+
+        // Small delay between batches
+        if (i + BATCH_SIZE < clients.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      console.log('[Preload] Last reports caching completed');
+    } catch (error) {
+      console.error('[Preload] Failed to preload last reports:', error);
     }
   }
 

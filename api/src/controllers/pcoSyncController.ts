@@ -212,7 +212,8 @@ export const syncClients = async (req: Request, res: Response) => {
         c.total_insect_monitors_light,
         c.total_insect_monitors_box,
         c.updated_at,
-        cpa.assigned_at
+        cpa.assigned_at,
+        cpa.assignment_type
     `;
 
     if (include_contacts === 'true') {
@@ -957,3 +958,210 @@ export const getLastReportForClient = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * GET /api/pco/clients/available
+ * Browse available clients for self-assignment
+ * 
+ * Returns active clients that are either:
+ * - Unassigned to any PCO
+ * - Not assigned to this specific PCO (allows backup/coverage)
+ * 
+ * Query params:
+ * - search (string) - Search by company name, city, or address
+ * - page (number) - Page number for pagination (default: 1)
+ * - limit (number) - Results per page (default: 25, max: 100)
+ */
+export const getAvailableClients = async (req: Request, res: Response) => {
+  try {
+    const pcoId = req.user!.id;
+    const { search = '', page = '1', limit = '25' } = req.query;
+    
+    const pageNum = Math.max(1, parseInt(page as string));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string)));
+    const offset = (pageNum - 1) * limitNum;
+
+    // Build WHERE clause for search
+    let whereConditions = ['c.status = ?'];
+    const queryParams: any[] = ['active'];
+    
+    if (search) {
+      whereConditions.push(`(
+        c.company_name LIKE ? OR 
+        c.city LIKE ? OR 
+        c.address_line1 LIKE ?
+      )`);
+      const searchPattern = `%${search}%`;
+      queryParams.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(DISTINCT c.id) as total
+      FROM clients c
+      LEFT JOIN client_pco_assignments cpa ON c.id = cpa.client_id AND cpa.status = 'active'
+      WHERE ${whereClause}
+        AND (cpa.pco_id IS NULL OR cpa.pco_id != ?)
+    `;
+    
+    const countResult = await executeQuery<RowDataPacket[]>(countQuery, [...queryParams, pcoId]);
+    const totalClients = (countResult[0] as any)?.total || 0;
+    const totalPages = Math.ceil(totalClients / limitNum);
+
+    // Get available clients with assignment status
+    const clientsQuery = `
+      SELECT 
+        c.id,
+        c.company_name,
+        c.address_line1,
+        c.address_line2,
+        c.city,
+        c.state,
+        c.postal_code,
+        c.total_bait_stations_inside,
+        c.total_bait_stations_outside,
+        c.total_insect_monitors_light,
+        c.total_insect_monitors_box,
+        CASE 
+          WHEN cpa.pco_id IS NULL THEN 'unassigned'
+          ELSE 'assigned_to_other'
+        END as assignment_status,
+        u.name as current_pco_name,
+        u.pco_number as current_pco_number
+      FROM clients c
+      LEFT JOIN client_pco_assignments cpa ON c.id = cpa.client_id AND cpa.status = 'active'
+      LEFT JOIN users u ON cpa.pco_id = u.id
+      WHERE ${whereClause}
+        AND (cpa.pco_id IS NULL OR cpa.pco_id != ?)
+      GROUP BY c.id
+      ORDER BY c.company_name
+      LIMIT ? OFFSET ?
+    `;
+
+    const clients = await executeQuery<RowDataPacket[]>(
+      clientsQuery, 
+      [...queryParams, pcoId, limitNum, offset]
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        clients,
+        pagination: {
+          current_page: pageNum,
+          total_pages: totalPages,
+          total_clients: totalClients,
+          per_page: limitNum,
+          has_next: pageNum < totalPages,
+          has_prev: pageNum > 1
+        },
+        filters: {
+          search: search || null
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error in getAvailableClients:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve available clients',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
+ * POST /api/pco/assignments/self-assign
+ * PCO self-assigns to a client
+ * 
+ * Body:
+ * - client_id (number) - The client ID to assign
+ * 
+ * Business rules:
+ * - Client must be active
+ * - Client must not already be assigned to this PCO
+ * - If client is assigned to another PCO, allow (backup/coverage scenario)
+ * - Creates assignment with assignment_type='self'
+ */
+export const selfAssignClient = async (req: Request, res: Response) => {
+  try {
+    const pcoId = req.user!.id;
+    const { client_id } = req.body;
+
+    if (!client_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'client_id is required'
+      });
+    }
+
+    // Check if client exists and is active
+    const clientCheck = await executeQuery<RowDataPacket[]>(
+      'SELECT id, company_name, status FROM clients WHERE id = ?',
+      [client_id]
+    );
+
+    if (clientCheck.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client not found'
+      });
+    }
+
+    if ((clientCheck[0] as any).status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot assign to inactive client'
+      });
+    }
+
+    // Check if already assigned to this PCO
+    const existingAssignment = await executeQuery<RowDataPacket[]>(
+      'SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = ?',
+      [client_id, pcoId, 'active']
+    );
+
+    if (existingAssignment.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'You are already assigned to this client'
+      });
+    }
+
+    // Create self-assignment
+    await executeQuery(
+      `INSERT INTO client_pco_assignments 
+       (client_id, pco_id, assigned_by, status, assignment_type) 
+       VALUES (?, ?, ?, 'active', 'self')`,
+      [client_id, pcoId, pcoId] // assigned_by is self (pcoId)
+    );
+
+    logger.info('PCO self-assigned to client', {
+      pco_id: pcoId,
+      client_id,
+      assignment_type: 'self'
+    });
+
+    return res.json({
+      success: true,
+      message: 'Successfully assigned to client',
+      data: {
+        client_id,
+        client_name: (clientCheck[0] as any).company_name,
+        assignment_type: 'self'
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error in selfAssignClient:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to self-assign to client',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+

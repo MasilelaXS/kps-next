@@ -174,4 +174,39 @@ router.post('/test', authenticateToken, async (req: Request, res: Response): Pro
   }
 });
 
+/**
+ * GET /api/push/debug-subscriptions
+ * Debug endpoint to check user's subscription count and data
+ */
+router.get('/debug-subscriptions', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user.id;
+    const { getUserSubscriptionCount } = await import('../services/pushNotificationService');
+    
+    // Get subscription count
+    const count = await getUserSubscriptionCount(userId);
+    
+    // Get actual subscriptions for verification
+    const { executeQuery } = await import('../config/database');
+    const subscriptions = await executeQuery(
+      'SELECT id, endpoint, created_at, updated_at FROM push_subscriptions WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      userId,
+      subscriptionCount: count,
+      subscriptions: subscriptions,
+      message: 'Debug info retrieved'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Debug failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

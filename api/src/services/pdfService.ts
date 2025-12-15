@@ -4,14 +4,17 @@
  * Generates PDF reports for bait inspection and fumigation services
  * 
  * @author KPS Development Team
- * @version 1.0.0
+ * @version 4.0.0 - Server-side PDF generation using PHP dompdf (no Node.js binaries needed)
  */
 
-import puppeteer from 'puppeteer';
 import { executeQuery, executeQuerySingle } from '../config/database';
 import { logger } from '../config/logger';
 import path from 'path';
 import fs from 'fs/promises';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 interface ReportData {
   report: any;
@@ -34,8 +37,10 @@ export class PDFService {
   private async ensureTempDirectory() {
     try {
       await fs.mkdir(this.tempDir, { recursive: true });
+      logger.info('Temp directory ensured', { tempDir: this.tempDir });
     } catch (error) {
-      logger.error('Failed to create temp directory', { error });
+      logger.error('Failed to create temp directory', { tempDir: this.tempDir, error });
+      throw error; // Throw to prevent further operations
     }
   }
 
@@ -73,6 +78,8 @@ export class PDFService {
    * Generate PDF report for a given report ID
    */
   async generateReportPDF(reportId: number): Promise<string> {
+    // Ensure temp directory exists before proceeding
+    await this.ensureTempDirectory();
     await this.cleanupOldFiles();
 
     try {
@@ -86,59 +93,215 @@ export class PDFService {
         insectMonitors: data.insectMonitors?.length || 0
       });
       
+      // Auto-detect report type if not set
+      let reportType = data.report.report_type;
+      if (!reportType) {
+        const hasBaitData = data.baitStations.length > 0;
+        const hasFumigationData = data.fumigationTreatments.length > 0 || data.fumigationAreas.length > 0;
+        
+        if (hasBaitData && hasFumigationData) {
+          reportType = 'both';
+        } else if (hasFumigationData) {
+          reportType = 'fumigation';
+        } else {
+          reportType = 'bait_inspection'; // Default
+        }
+        logger.info('Auto-detected report type', { reportId, reportType, hasBaitData, hasFumigationData });
+      }
+
+      const filename = `Report_${reportId}_${Date.now()}.pdf`;
+      const pdfFilePath = path.join(this.tempDir, filename);
+      const htmlFilePath = path.join(this.tempDir, filename.replace('.pdf', '.html'));
+      
+      // Generate HTML based on report type
+      let html: string;
+      if (reportType === 'fumigation') {
+        html = await this.generateFumigationHTML(data);
+      } else if (reportType === 'both') {
+        html = await this.generateCombinedReportHTML(data);
+      } else {
+        html = await this.generateBaitInspectionHTML(data);
+      }
+      
+      // Save HTML to temp file
+      await fs.writeFile(htmlFilePath, html, 'utf-8');
+      logger.info('HTML file created', { reportId, htmlFilePath });
+      
+      // Call PHP script to generate PDF from HTML file
+      const phpScriptPath = path.join(__dirname, '../../pdf-service/generate-pdf.php');
+      const command = `php "${phpScriptPath}" "${htmlFilePath}" "${pdfFilePath}"`;
+      
+      logger.info('Calling PHP PDF service', { reportId, reportType, command });
+      
+      try {
+        const { stdout, stderr } = await execAsync(command, { maxBuffer: 10 * 1024 * 1024 }); // 10MB buffer
+        
+        if (stderr) {
+          logger.warn('PHP script stderr', { reportId, stderr });
+        }
+        
+        logger.info('PHP script output', { reportId, stdout: stdout.trim() });
+      } catch (execError: any) {
+        logger.error('PHP script execution failed', { 
+          reportId, 
+          error: execError.message,
+          stderr: execError.stderr,
+          stdout: execError.stdout
+        });
+        throw new Error(`PDF generation failed: ${execError.message}`);
+      }
+      
+      // Clean up HTML temp file
+      try {
+        await fs.unlink(htmlFilePath);
+        logger.info('HTML temp file cleaned up', { reportId, htmlFilePath });
+      } catch (err) {
+        logger.warn('Failed to delete HTML temp file', { reportId, htmlFilePath, error: err });
+      }
+
+      // Verify PDF was created
+      try {
+        await fs.access(pdfFilePath);
+        const stats = await fs.stat(pdfFilePath);
+        logger.info('PDF file verified', { reportId, filename, size: stats.size });
+      } catch (error) {
+        logger.error('PDF file verification failed', { reportId, pdfFilePath, error });
+        throw new Error('PDF file was not created successfully');
+      }
+
+      logger.info('PDF generated successfully', { reportId, filename });
+      
+      return pdfFilePath;
+
+    } catch (error) {
+      logger.error('PDF generation error', { 
+        reportId, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Generate HTML for client-side PDF conversion
+   * Returns the HTML string that the frontend can convert to PDF using jsPDF + html2canvas
+   */
+  async generateReportHTML(reportId: number): Promise<string> {
+    try {
+      logger.info('Generating report HTML for client-side PDF', { reportId });
+      const data = await this.getCompleteReportData(reportId);
+      logger.info('Report data retrieved', { 
+        reportId, 
+        reportType: data.report.report_type,
+        fumigationAreas: data.fumigationAreas?.length || 0,
+        fumigationPests: data.fumigationPests?.length || 0,
+        insectMonitors: data.insectMonitors?.length || 0
+      });
+      
+      // Auto-detect report type if not set
+      let reportType = data.report.report_type;
+      if (!reportType) {
+        const hasBaitData = data.baitStations.length > 0;
+        const hasFumigationData = data.fumigationTreatments.length > 0 || data.fumigationAreas.length > 0;
+        
+        if (hasBaitData && hasFumigationData) {
+          reportType = 'both';
+        } else if (hasFumigationData) {
+          reportType = 'fumigation';
+        } else {
+          reportType = 'bait_inspection';
+        }
+        logger.info('Auto-detected report type', { reportId, reportType, hasBaitData, hasFumigationData });
+      }
+      
       let html = '';
-      let filename = '';
 
       // Generate appropriate report based on type
-      if (data.report.report_type === 'bait_inspection') {
+      if (reportType === 'bait_inspection') {
         logger.info('Generating bait inspection HTML', { reportId });
         html = await this.generateBaitInspectionHTML(data);
-        filename = `Bait_Inspection_Report_${reportId}_${Date.now()}.pdf`;
-      } else if (data.report.report_type === 'fumigation') {
+      } else if (reportType === 'fumigation') {
         logger.info('Generating fumigation HTML', { reportId });
         html = await this.generateFumigationHTML(data);
-        filename = `Fumigation_Report_${reportId}_${Date.now()}.pdf`;
-      } else if (data.report.report_type === 'both') {
+      } else if (reportType === 'both') {
         logger.info('Generating combined report HTML', { reportId });
         html = await this.generateCombinedReportHTML(data);
-        filename = `Complete_Report_${reportId}_${Date.now()}.pdf`;
       } else {
         throw new Error('Invalid report type');
       }
 
-      logger.info('Launching Puppeteer browser', { reportId });
-      // Generate PDF using Puppeteer
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      logger.info('HTML generated successfully for client-side PDF', { reportId, htmlLength: html.length });
       
-      const filePath = path.join(this.tempDir, filename);
-      
-      await page.pdf({
-        path: filePath,
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '15mm',
-          right: '10mm',
-          bottom: '15mm',
-          left: '10mm'
-        }
-      });
-
-      await browser.close();
-
-      logger.info('PDF generated successfully', { reportId, filename });
-      
-      return filePath;
+      return html;
 
     } catch (error) {
-      logger.error('PDF generation error', { reportId, error });
-      throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.error('HTML generation error', { 
+        reportId, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw new Error(`HTML generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Generate PDF using DomPDF (PHP service)
+   * Creates actual PDF file on the server
+   */
+  async generateReportPDFWithDomPDF(reportId: number): Promise<string> {
+    try {
+      logger.info('Generating PDF with DomPDF', { reportId });
+      
+      // Generate HTML first
+      const html = await this.generateReportHTML(reportId);
+      
+      // Create temporary HTML file
+      const htmlFileName = `report_${reportId}_${Date.now()}.html`;
+      const htmlFilePath = path.join(this.tempDir, htmlFileName);
+      await fs.writeFile(htmlFilePath, html);
+      
+      // Create PDF file path
+      const pdfFileName = `report_${reportId}_${Date.now()}.pdf`;
+      const pdfFilePath = path.join(this.tempDir, pdfFileName);
+      
+      // Call PHP script to generate PDF
+      const phpScriptPath = path.join(__dirname, '../../pdf-service/generate-pdf.php');
+      const command = `php "${phpScriptPath}" "${htmlFilePath}" "${pdfFilePath}"`;
+      
+      logger.info('Executing PHP PDF generation', { command });
+      
+      const { stdout, stderr } = await execAsync(command);
+      
+      if (stderr) {
+        logger.warn('PHP script stderr', { stderr });
+      }
+      
+      // Verify PDF was created
+      try {
+        await fs.access(pdfFilePath);
+      } catch {
+        throw new Error('PDF file was not created');
+      }
+      
+      // Clean up HTML file
+      try {
+        await fs.unlink(htmlFilePath);
+      } catch (err) {
+        logger.warn('Failed to delete temporary HTML file', { htmlFilePath, error: err });
+      }
+      
+      logger.info('PDF generated successfully with DomPDF', { reportId, pdfFilePath });
+      
+      return pdfFilePath;
+      
+    } catch (error) {
+      logger.error('DomPDF generation error', { 
+        reportId, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw new Error(`PDF generation with DomPDF failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -467,10 +630,11 @@ export class PDFService {
     <title>SERVICE REPORT - BAIT INSPECTION #${report.id}</title>
     <style>
         body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
-        .header-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
+        .header-section { padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
+        .logo-section { float: left; width: 50%; }
         .logo-section h1 { margin: 0; font-size: 16pt; color: #1f5582; font-weight: bold; }
         .logo-section h2 { margin: 3px 0 0 0; font-size: 11pt; color: #666; font-weight: normal; }
-        .address-section { text-align: right; font-size: 8pt; color: #666; }
+        .address-section { float: right; width: 45%; text-align: right; font-size: 8pt; color: #666; }
         .address-section p { margin: 1px 0; }
         .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; }
         .info-row { margin: 3px 0; font-size: 8pt; }
@@ -478,8 +642,9 @@ export class PDFService {
         .value { display: inline-block; }
         .section { margin: 12px 0; page-break-inside: avoid; }
         .section-title { background: #1f5582; color: white; padding: 6px 10px; margin: 10px 0 8px 0; font-size: 10pt; font-weight: bold; }
-        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0; }
-        .stat-card { background: #f9f9f9; padding: 8px; text-align: center; border: 1px solid #ddd; }
+        .grid { width: 100%; margin: 10px 0; overflow: hidden; }
+        .stat-card { float: left; width: 23%; margin-right: 2%; background: #f9f9f9; padding: 8px; text-align: center; border: 1px solid #ddd; box-sizing: border-box; }
+        .stat-card:last-child { margin-right: 0; }
         .stat-number { font-size: 18pt; font-weight: bold; color: #1f5582; margin: 3px 0; }
         .stat-label { font-size: 7pt; color: #666; }
         .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0; }
@@ -517,6 +682,7 @@ export class PDFService {
             <p>Groblersdal, 0470</p>
             <p>South Africa</p>
         </div>
+        <div style="clear: both;"></div>
     </div>
 
     <!-- Report Details -->
@@ -1068,10 +1234,11 @@ export class PDFService {
     <title>SERVICE REPORT - FUMIGATION #${report.id}</title>
     <style>
         body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
-        .header-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
+        .header-section { padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
+        .logo-section { float: left; width: 50%; }
         .logo-section h1 { margin: 0; font-size: 16pt; color: #1f5582; font-weight: bold; }
         .logo-section h2 { margin: 3px 0 0 0; font-size: 11pt; color: #666; font-weight: normal; }
-        .address-section { text-align: right; font-size: 8pt; color: #666; }
+        .address-section { float: right; width: 45%; text-align: right; font-size: 8pt; color: #666; }
         .address-section p { margin: 1px 0; }
         .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; }
         .info-row { margin: 3px 0; font-size: 8pt; }

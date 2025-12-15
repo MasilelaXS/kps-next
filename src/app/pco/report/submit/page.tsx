@@ -43,6 +43,18 @@ export default function SubmitReport() {
         return;
       }
 
+      // Check for imported report first
+      const importedReport = localStorage.getItem('kps_imported_report');
+      if (importedReport) {
+        const reportData = JSON.parse(importedReport);
+        console.log('[Submit] Loaded imported report:', reportData);
+        setReport(reportData);
+        setLoading(false);
+        // Clear the imported report so it doesn't reload on refresh
+        localStorage.removeItem('kps_imported_report');
+        return;
+      }
+
       const savedReport = localStorage.getItem('current_report');
       if (!savedReport) {
         setError('No report data found. Please start from the beginning.');
@@ -82,7 +94,7 @@ export default function SubmitReport() {
     link.href = url;
     const companyName = report?.client?.company_name || 'unknown-client';
     const serviceDate = report?.serviceDate || new Date().toISOString().split('T')[0];
-    link.download = `report-${companyName.replace(/\s+/g, '-')}-${serviceDate}.json`;
+    link.download = `report-${companyName.replace(/\s+/g, '-')}-${serviceDate}.kps`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -497,7 +509,7 @@ export default function SubmitReport() {
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-medium"
           >
             <Download className="w-5 h-5" />
-            Download Backup (JSON)
+            Download Backup (KPS)
           </button>
         </div>
 

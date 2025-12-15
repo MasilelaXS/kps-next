@@ -36,13 +36,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupOldDrafts = exports.adminEmailReportPDF = exports.adminDownloadReportPDF = exports.updateCompleteReport = exports.createCompleteReport = exports.markNewEquipmentBeforeUpdate = exports.importReportFromJSON = exports.exportReportAsJSON = exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.forceDeclineReport = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
+exports.cleanupOldDrafts = exports.adminEmailReportPDF = exports.adminGetReportHTML = exports.adminDownloadReportPDF = exports.updateCompleteReport = exports.createCompleteReport = exports.markNewEquipmentBeforeUpdate = exports.importReportFromJSON = exports.exportReportAsJSON = exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.forceDeclineReport = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const notificationController_1 = require("./notificationController");
 const pdfService_1 = require("../services/pdfService");
 const emailService_1 = require("../services/emailService");
-const path_1 = __importDefault(require("path"));
+const promises_1 = __importDefault(require("fs/promises"));
 const getPCOReports = async (req, res) => {
     try {
         const pcoId = req.user.id;
@@ -2441,7 +2441,7 @@ const adminDownloadReportPDF = async (req, res) => {
         }
         logger_1.logger.info(`Generating PDF for report ${reportId}`);
         const pdfPath = await pdfService_1.pdfService.generateReportPDF(reportId);
-        const filename = path_1.default.basename(pdfPath);
+        const filename = `Report_${reportId}_${new Date().toISOString().split('T')[0]}.pdf`;
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         return res.sendFile(pdfPath, (err) => {
@@ -2453,6 +2453,11 @@ const adminDownloadReportPDF = async (req, res) => {
                         message: 'Failed to download PDF'
                     });
                 }
+            }
+            else {
+                promises_1.default.unlink(pdfPath).catch(unlinkErr => {
+                    logger_1.logger.warn('Failed to delete temporary PDF file', { pdfPath, error: unlinkErr });
+                });
             }
         });
     }
@@ -2466,6 +2471,40 @@ const adminDownloadReportPDF = async (req, res) => {
     }
 };
 exports.adminDownloadReportPDF = adminDownloadReportPDF;
+const adminGetReportHTML = async (req, res) => {
+    try {
+        const reportId = parseInt(req.params.id);
+        if (isNaN(reportId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid report ID'
+            });
+        }
+        const report = await (0, database_1.executeQuerySingle)('SELECT id, report_type FROM reports WHERE id = ?', [reportId]);
+        if (!report) {
+            return res.status(404).json({
+                success: false,
+                message: 'Report not found'
+            });
+        }
+        logger_1.logger.info(`Generating HTML for client-side PDF conversion, report ${reportId}`);
+        const html = await pdfService_1.pdfService.generateReportHTML(reportId);
+        return res.status(200).json({
+            success: true,
+            html: html,
+            reportId: reportId
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in adminGetReportHTML:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to generate report HTML',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.adminGetReportHTML = adminGetReportHTML;
 const adminEmailReportPDF = async (req, res) => {
     try {
         const reportId = parseInt(req.params.id);

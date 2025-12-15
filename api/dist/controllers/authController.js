@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const auth_1 = require("../middleware/auth");
@@ -347,7 +348,7 @@ class AuthController {
                 return;
             }
             await (0, database_1.executeQuery)(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`, [...updateValues, userId]);
-            const updatedUser = await (0, database_1.executeQuerySingle)('SELECT id, login_id, first_name, last_name, email, phone, role, created_at, last_login FROM users WHERE id = ?', [userId]);
+            const updatedUser = await (0, database_1.executeQuerySingle)('SELECT id, pco_number, name, email, phone, role, created_at, updated_at FROM users WHERE id = ?', [userId]);
             (0, logger_1.logAuth)('profile_updated', userId, {
                 fields: Object.keys(value),
                 ip: req.ip
@@ -447,6 +448,7 @@ class AuthController {
                 });
                 return;
             }
+            await (0, database_1.executeQuery)('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL', [user.id]);
             const resetToken = generateSessionId();
             await (0, database_1.executeQuery)(`
         INSERT INTO password_reset_tokens (
@@ -723,5 +725,42 @@ class AuthController {
     }
 }
 exports.AuthController = AuthController;
+_a = AuthController;
+AuthController.tempResetAllPasswords = async (req, res) => {
+    try {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
+            res.status(403).json({
+                success: false,
+                message: 'Access denied. Admin role required.'
+            });
+            return;
+        }
+        const newPassword = 'ResetPassword123';
+        const hashedPassword = await bcryptjs_1.default.hash(newPassword, env_1.config.security.bcryptRounds);
+        const result = await (0, database_1.executeQuery)('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE status = "active"', [hashedPassword]);
+        logger_1.logger.info('Temporary password reset for all users', {
+            admin_id: req.user?.id,
+            affected_rows: result.affectedRows
+        });
+        res.json({
+            success: true,
+            message: `Successfully reset passwords for ${result.affectedRows} active users`,
+            data: {
+                affected_users: result.affectedRows,
+                new_password: newPassword
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Temporary password reset error', {
+            error: error instanceof Error ? error.message : error,
+            admin_id: req.user?.id
+        });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset passwords'
+        });
+    }
+};
 exports.default = AuthController;
 //# sourceMappingURL=authController.js.map

@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://192.168.1.128:3001',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://app.kpspestcontrol.co.za',
   ENDPOINTS: {
     // Auth
     LOGIN: '/api/auth/login',
@@ -17,14 +17,14 @@ export const API_CONFIG = {
     PCO_STATISTICS: '/api/pco/dashboard/statistics',
     
     // Reports
-    REPORTS: '/api/reports',
-    REPORTS_SEARCH: '/api/reports/search',
+    REPORTS: '/api/admin/reports',
+    REPORTS_SEARCH: '/api/admin/reports/search',
     
     // Clients
-    CLIENTS: '/api/clients',
+    CLIENTS: '/api/admin/clients',
     
     // Assignments
-    ASSIGNMENTS: '/api/assignments',
+    ASSIGNMENTS: '/api/admin/assignments',
     
     // Notifications
     NOTIFICATIONS: '/api/notifications',

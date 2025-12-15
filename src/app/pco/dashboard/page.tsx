@@ -5,6 +5,7 @@ import PcoDashboardLayout from '@/components/PcoDashboardLayout';
 import UpdateModal from '@/components/UpdateModal';
 import Loading from '@/components/Loading';
 import Button from '@/components/Button';
+import ReportImport from '@/components/ReportImport';
 import { useVersionCheck } from '@/hooks/useVersionCheck';
 import { API_CONFIG, apiCall } from '@/lib/api';
 import { cachedApiCall } from '@/lib/cache';
@@ -231,6 +232,9 @@ export default function PCODashboard() {
             </div>
           </div>
 
+          {/* Import Report Section - Moved to bottom */}
+          <ReportImport />
+
           {/* Quick Stats Grid - Card Style */}
           <div className="grid grid-cols-2 gap-4">
             {/* Active Clients */}
@@ -366,6 +370,9 @@ export default function PCODashboard() {
               </div>
             </div>
           )}
+
+          {/* Import Report Section - Compact at bottom */}
+          <ReportImport />
         </div>
       </PcoDashboardLayout>
 

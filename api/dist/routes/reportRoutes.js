@@ -32,6 +32,7 @@ router.post('/admin/reports/:id/decline', auth_1.authenticateToken, (0, validati
 router.post('/admin/reports/:id/decline/force', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.declineReportSchema), reportController_1.forceDeclineReport);
 router.post('/admin/reports/:id/archive', auth_1.authenticateToken, reportController_1.archiveReport);
 router.get('/admin/reports/:id/download', auth_1.authenticateToken, reportController_1.adminDownloadReportPDF);
+router.get('/admin/reports/:id/html', auth_1.authenticateToken, reportController_1.adminGetReportHTML);
 router.post('/admin/reports/:id/email', auth_1.authenticateToken, reportController_1.adminEmailReportPDF);
 router.get('/pco/reports/:id/export-json', auth_1.authenticateToken, reportController_1.exportReportAsJSON);
 router.post('/admin/reports/import-json', auth_1.authenticateToken, reportController_1.importReportFromJSON);

@@ -22,6 +22,7 @@ import searchRoutes from './searchRoutes';
 import notificationRoutes from './notificationRoutes';
 import cleanupRoutes from './cleanupRoutes';
 import pushRoutes from './pushRoutes';
+import calendarRoutes from './calendar';
 
 const router = Router();
 
@@ -36,6 +37,11 @@ router.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     version: '1.0.0'
   });
+});
+
+// Simple version endpoint for frontend
+router.get('/version', (req, res) => {
+  res.json({ version: '1.0.0' });
 });
 
 // API Version and Info endpoint
@@ -112,6 +118,9 @@ router.use('/cleanup', cleanupRoutes);
 
 // Push notification routes
 router.use('/push', pushRoutes);
+
+// PCO Calendar routes
+router.use('/calendar', calendarRoutes);
 
 // Future route groups will be added here:
 // router.use('/schedules', scheduleRoutes);

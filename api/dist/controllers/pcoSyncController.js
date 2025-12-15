@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLastReportForClient = exports.updateClientCounts = exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
+exports.selfAssignClient = exports.getAvailableClients = exports.getLastReportForClient = exports.updateClientCounts = exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const getFullSync = async (req, res) => {
@@ -147,7 +147,8 @@ const syncClients = async (req, res) => {
         c.total_insect_monitors_light,
         c.total_insect_monitors_box,
         c.updated_at,
-        cpa.assigned_at
+        cpa.assigned_at,
+        cpa.assignment_type
     `;
         if (include_contacts === 'true') {
             query += `,
@@ -668,4 +669,148 @@ const getLastReportForClient = async (req, res) => {
     }
 };
 exports.getLastReportForClient = getLastReportForClient;
+const getAvailableClients = async (req, res) => {
+    try {
+        const pcoId = req.user.id;
+        const { search = '', page = '1', limit = '25' } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+        const offset = (pageNum - 1) * limitNum;
+        let whereConditions = ['c.status = ?'];
+        const queryParams = ['active'];
+        if (search) {
+            whereConditions.push(`(
+        c.company_name LIKE ? OR 
+        c.city LIKE ? OR 
+        c.address_line1 LIKE ?
+      )`);
+            const searchPattern = `%${search}%`;
+            queryParams.push(searchPattern, searchPattern, searchPattern);
+        }
+        const whereClause = whereConditions.join(' AND ');
+        const countQuery = `
+      SELECT COUNT(DISTINCT c.id) as total
+      FROM clients c
+      LEFT JOIN client_pco_assignments cpa ON c.id = cpa.client_id AND cpa.status = 'active'
+      WHERE ${whereClause}
+        AND (cpa.pco_id IS NULL OR cpa.pco_id != ?)
+    `;
+        const countResult = await (0, database_1.executeQuery)(countQuery, [...queryParams, pcoId]);
+        const totalClients = countResult[0]?.total || 0;
+        const totalPages = Math.ceil(totalClients / limitNum);
+        const clientsQuery = `
+      SELECT 
+        c.id,
+        c.company_name,
+        c.address_line1,
+        c.address_line2,
+        c.city,
+        c.state,
+        c.postal_code,
+        c.total_bait_stations_inside,
+        c.total_bait_stations_outside,
+        c.total_insect_monitors_light,
+        c.total_insect_monitors_box,
+        CASE 
+          WHEN cpa.pco_id IS NULL THEN 'unassigned'
+          ELSE 'assigned_to_other'
+        END as assignment_status,
+        u.name as current_pco_name,
+        u.pco_number as current_pco_number
+      FROM clients c
+      LEFT JOIN client_pco_assignments cpa ON c.id = cpa.client_id AND cpa.status = 'active'
+      LEFT JOIN users u ON cpa.pco_id = u.id
+      WHERE ${whereClause}
+        AND (cpa.pco_id IS NULL OR cpa.pco_id != ?)
+      GROUP BY c.id
+      ORDER BY c.company_name
+      LIMIT ? OFFSET ?
+    `;
+        const clients = await (0, database_1.executeQuery)(clientsQuery, [...queryParams, pcoId, limitNum, offset]);
+        return res.json({
+            success: true,
+            data: {
+                clients,
+                pagination: {
+                    current_page: pageNum,
+                    total_pages: totalPages,
+                    total_clients: totalClients,
+                    per_page: limitNum,
+                    has_next: pageNum < totalPages,
+                    has_prev: pageNum > 1
+                },
+                filters: {
+                    search: search || null
+                }
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in getAvailableClients:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve available clients',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.getAvailableClients = getAvailableClients;
+const selfAssignClient = async (req, res) => {
+    try {
+        const pcoId = req.user.id;
+        const { client_id } = req.body;
+        if (!client_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'client_id is required'
+            });
+        }
+        const clientCheck = await (0, database_1.executeQuery)('SELECT id, company_name, status FROM clients WHERE id = ?', [client_id]);
+        if (clientCheck.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Client not found'
+            });
+        }
+        if (clientCheck[0].status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot assign to inactive client'
+            });
+        }
+        const existingAssignment = await (0, database_1.executeQuery)('SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = ?', [client_id, pcoId, 'active']);
+        if (existingAssignment.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'You are already assigned to this client'
+            });
+        }
+        await (0, database_1.executeQuery)(`INSERT INTO client_pco_assignments 
+       (client_id, pco_id, assigned_by, status, assignment_type) 
+       VALUES (?, ?, ?, 'active', 'self')`, [client_id, pcoId, pcoId]);
+        logger_1.logger.info('PCO self-assigned to client', {
+            pco_id: pcoId,
+            client_id,
+            assignment_type: 'self'
+        });
+        return res.json({
+            success: true,
+            message: 'Successfully assigned to client',
+            data: {
+                client_id,
+                client_name: clientCheck[0].company_name,
+                assignment_type: 'self'
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in selfAssignClient:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to self-assign to client',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.selfAssignClient = selfAssignClient;
 //# sourceMappingURL=pcoSyncController.js.map

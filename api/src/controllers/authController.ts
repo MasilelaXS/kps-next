@@ -488,7 +488,7 @@ export class AuthController {
 
       // Get updated user data
       const updatedUser = await executeQuerySingle(
-        'SELECT id, login_id, first_name, last_name, email, phone, role, created_at, last_login FROM users WHERE id = ?',
+        'SELECT id, pco_number, name, email, phone, role, created_at, updated_at FROM users WHERE id = ?',
         [userId]
       );
 
@@ -639,6 +639,12 @@ export class AuthController {
         });
         return;
       }
+
+      // Invalidate all previous unused tokens for this user (security fix)
+      await executeQuery(
+        'DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL',
+        [user.id]
+      );
 
       // Generate reset token (using SQL from guides)
       const resetToken = generateSessionId();
@@ -996,6 +1002,54 @@ export class AuthController {
       res.status(500).json({
         success: false,
         message: 'Failed to send test email'
+      });
+    }
+  }
+
+  /**
+   * TEMPORARY - Reset all user passwords to ResetPassword123
+   */
+  static tempResetAllPasswords = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // Check if user is admin
+      if (!hasRole(req.user, 'admin')) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied. Admin role required.'
+        });
+        return;
+      }
+
+      const newPassword = 'ResetPassword123';
+      const hashedPassword = await bcrypt.hash(newPassword, config.security.bcryptRounds);
+
+      const result = await executeQuery(
+        'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE status = "active"',
+        [hashedPassword]
+      );
+
+      logger.info('Temporary password reset for all users', { 
+        admin_id: req.user?.id,
+        affected_rows: (result as any).affectedRows 
+      });
+
+      res.json({
+        success: true,
+        message: `Successfully reset passwords for ${(result as any).affectedRows} active users`,
+        data: {
+          affected_users: (result as any).affectedRows,
+          new_password: newPassword
+        }
+      });
+    } catch (error) {
+      logger.error('Temporary password reset error', { 
+        error: error instanceof Error ? error.message : error,
+        admin_id: req.user?.id 
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reset passwords'
       });
     }
   }
