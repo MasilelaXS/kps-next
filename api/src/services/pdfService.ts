@@ -1,20 +1,11 @@
-/**
- * KPS Pest Control Management System - PDF Service
- * 
- * Generates PDF reports for bait inspection and fumigation services
- * 
- * @author KPS Development Team
- * @version 4.0.0 - Server-side PDF generation using PHP dompdf (no Node.js binaries needed)
- */
-
-import { executeQuery, executeQuerySingle } from '../config/database';
-import { logger } from '../config/logger';
 import path from 'path';
 import fs from 'fs/promises';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { executeQuery, executeQuerySingle } from '../config/database';
+import { logger } from '../config/logger';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 interface ReportData {
   report: any;
@@ -28,9 +19,16 @@ interface ReportData {
 
 export class PDFService {
   private tempDir: string;
+  private logoPath: string;
+  private phpBinary: string;
+  private pdfScriptPath: string;
+  private cachedLogoDataUrl: string | null = null;
 
   constructor() {
     this.tempDir = path.join(__dirname, '../../temp/reports');
+    this.logoPath = path.join(__dirname, '../../../public/logo.png');
+    this.phpBinary = process.env.PDF_PHP_PATH || process.env.PHP_PATH || 'php';
+    this.pdfScriptPath = process.env.PDF_SERVICE_SCRIPT || path.join(__dirname, '../../pdf-service/generate-pdf.php');
     this.ensureTempDirectory();
   }
 
@@ -40,7 +38,6 @@ export class PDFService {
       logger.info('Temp directory ensured', { tempDir: this.tempDir });
     } catch (error) {
       logger.error('Failed to create temp directory', { tempDir: this.tempDir, error });
-      throw error; // Throw to prevent further operations
     }
   }
 
@@ -48,12 +45,11 @@ export class PDFService {
     try {
       const files = await fs.readdir(this.tempDir);
       const now = Date.now();
-      const maxAge = 60 * 60 * 1000; // 1 hour
+      const maxAge = 60 * 60 * 1000;
 
       for (const file of files) {
         const filePath = path.join(this.tempDir, file);
         const stats = await fs.stat(filePath);
-        
         if (now - stats.mtimeMs > maxAge) {
           await fs.unlink(filePath);
         }
@@ -63,148 +59,19 @@ export class PDFService {
     }
   }
 
-  private async getLogoBase64(): Promise<string> {
-    try {
-      const logoPath = path.join(__dirname, '../../../public/logo.png');
-      const logoBuffer = await fs.readFile(logoPath);
-      return `data:image/png;base64,${logoBuffer.toString('base64')}`;
-    } catch (error) {
-      logger.error('Failed to load logo', { error });
-      return ''; // Return empty string if logo not found
-    }
-  }
-
-  /**
-   * Generate PDF report for a given report ID
-   */
   async generateReportPDF(reportId: number): Promise<string> {
-    // Ensure temp directory exists before proceeding
     await this.ensureTempDirectory();
     await this.cleanupOldFiles();
 
     try {
-      logger.info('Starting PDF generation', { reportId });
+      logger.info('Starting PDF generation (Dompdf)', { reportId });
       const data = await this.getCompleteReportData(reportId);
-      logger.info('Report data retrieved', { 
-        reportId, 
-        reportType: data.report.report_type,
-        fumigationAreas: data.fumigationAreas?.length || 0,
-        fumigationPests: data.fumigationPests?.length || 0,
-        insectMonitors: data.insectMonitors?.length || 0
-      });
-      
-      // Auto-detect report type if not set
+
       let reportType = data.report.report_type;
       if (!reportType) {
         const hasBaitData = data.baitStations.length > 0;
         const hasFumigationData = data.fumigationTreatments.length > 0 || data.fumigationAreas.length > 0;
-        
-        if (hasBaitData && hasFumigationData) {
-          reportType = 'both';
-        } else if (hasFumigationData) {
-          reportType = 'fumigation';
-        } else {
-          reportType = 'bait_inspection'; // Default
-        }
-        logger.info('Auto-detected report type', { reportId, reportType, hasBaitData, hasFumigationData });
-      }
 
-      const filename = `Report_${reportId}_${Date.now()}.pdf`;
-      const pdfFilePath = path.join(this.tempDir, filename);
-      const htmlFilePath = path.join(this.tempDir, filename.replace('.pdf', '.html'));
-      
-      // Generate HTML based on report type
-      let html: string;
-      if (reportType === 'fumigation') {
-        html = await this.generateFumigationHTML(data);
-      } else if (reportType === 'both') {
-        html = await this.generateCombinedReportHTML(data);
-      } else {
-        html = await this.generateBaitInspectionHTML(data);
-      }
-      
-      // Save HTML to temp file
-      await fs.writeFile(htmlFilePath, html, 'utf-8');
-      logger.info('HTML file created', { reportId, htmlFilePath });
-      
-      // Call PHP script to generate PDF from HTML file
-      const phpScriptPath = path.join(__dirname, '../../pdf-service/generate-pdf.php');
-      const command = `php "${phpScriptPath}" "${htmlFilePath}" "${pdfFilePath}"`;
-      
-      logger.info('Calling PHP PDF service', { reportId, reportType, command });
-      
-      try {
-        const { stdout, stderr } = await execAsync(command, { maxBuffer: 10 * 1024 * 1024 }); // 10MB buffer
-        
-        if (stderr) {
-          logger.warn('PHP script stderr', { reportId, stderr });
-        }
-        
-        logger.info('PHP script output', { reportId, stdout: stdout.trim() });
-      } catch (execError: any) {
-        logger.error('PHP script execution failed', { 
-          reportId, 
-          error: execError.message,
-          stderr: execError.stderr,
-          stdout: execError.stdout
-        });
-        throw new Error(`PDF generation failed: ${execError.message}`);
-      }
-      
-      // Clean up HTML temp file
-      try {
-        await fs.unlink(htmlFilePath);
-        logger.info('HTML temp file cleaned up', { reportId, htmlFilePath });
-      } catch (err) {
-        logger.warn('Failed to delete HTML temp file', { reportId, htmlFilePath, error: err });
-      }
-
-      // Verify PDF was created
-      try {
-        await fs.access(pdfFilePath);
-        const stats = await fs.stat(pdfFilePath);
-        logger.info('PDF file verified', { reportId, filename, size: stats.size });
-      } catch (error) {
-        logger.error('PDF file verification failed', { reportId, pdfFilePath, error });
-        throw new Error('PDF file was not created successfully');
-      }
-
-      logger.info('PDF generated successfully', { reportId, filename });
-      
-      return pdfFilePath;
-
-    } catch (error) {
-      logger.error('PDF generation error', { 
-        reportId, 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Generate HTML for client-side PDF conversion
-   * Returns the HTML string that the frontend can convert to PDF using jsPDF + html2canvas
-   */
-  async generateReportHTML(reportId: number): Promise<string> {
-    try {
-      logger.info('Generating report HTML for client-side PDF', { reportId });
-      const data = await this.getCompleteReportData(reportId);
-      logger.info('Report data retrieved', { 
-        reportId, 
-        reportType: data.report.report_type,
-        fumigationAreas: data.fumigationAreas?.length || 0,
-        fumigationPests: data.fumigationPests?.length || 0,
-        insectMonitors: data.insectMonitors?.length || 0
-      });
-      
-      // Auto-detect report type if not set
-      let reportType = data.report.report_type;
-      if (!reportType) {
-        const hasBaitData = data.baitStations.length > 0;
-        const hasFumigationData = data.fumigationTreatments.length > 0 || data.fumigationAreas.length > 0;
-        
         if (hasBaitData && hasFumigationData) {
           reportType = 'both';
         } else if (hasFumigationData) {
@@ -212,101 +79,637 @@ export class PDFService {
         } else {
           reportType = 'bait_inspection';
         }
-        logger.info('Auto-detected report type', { reportId, reportType, hasBaitData, hasFumigationData });
-      }
-      
-      let html = '';
-
-      // Generate appropriate report based on type
-      if (reportType === 'bait_inspection') {
-        logger.info('Generating bait inspection HTML', { reportId });
-        html = await this.generateBaitInspectionHTML(data);
-      } else if (reportType === 'fumigation') {
-        logger.info('Generating fumigation HTML', { reportId });
-        html = await this.generateFumigationHTML(data);
-      } else if (reportType === 'both') {
-        logger.info('Generating combined report HTML', { reportId });
-        html = await this.generateCombinedReportHTML(data);
-      } else {
-        throw new Error('Invalid report type');
       }
 
-      logger.info('HTML generated successfully for client-side PDF', { reportId, htmlLength: html.length });
-      
-      return html;
+      const filename = `Report_${reportId}_${Date.now()}.pdf`;
+      const pdfPath = path.join(this.tempDir, filename);
+      const htmlPath = path.join(this.tempDir, `Report_${reportId}_${Date.now()}.html`);
 
+      const html = await this.buildReportHtml(data, reportType);
+      await fs.writeFile(htmlPath, html, 'utf8');
+
+      await this.generatePdfFromHtml(htmlPath, pdfPath);
+
+      logger.info('PDF generated successfully', { reportId, filename });
+      return pdfPath;
     } catch (error) {
-      logger.error('HTML generation error', { 
-        reportId, 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
+      logger.error('PDF generation error', {
+        reportId,
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
-      throw new Error(`HTML generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  /**
-   * Generate PDF using DomPDF (PHP service)
-   * Creates actual PDF file on the server
-   */
-  async generateReportPDFWithDomPDF(reportId: number): Promise<string> {
-    try {
-      logger.info('Generating PDF with DomPDF', { reportId });
-      
-      // Generate HTML first
-      const html = await this.generateReportHTML(reportId);
-      
-      // Create temporary HTML file
-      const htmlFileName = `report_${reportId}_${Date.now()}.html`;
-      const htmlFilePath = path.join(this.tempDir, htmlFileName);
-      await fs.writeFile(htmlFilePath, html);
-      
-      // Create PDF file path
-      const pdfFileName = `report_${reportId}_${Date.now()}.pdf`;
-      const pdfFilePath = path.join(this.tempDir, pdfFileName);
-      
-      // Call PHP script to generate PDF
-      const phpScriptPath = path.join(__dirname, '../../pdf-service/generate-pdf.php');
-      const command = `php "${phpScriptPath}" "${htmlFilePath}" "${pdfFilePath}"`;
-      
-      logger.info('Executing PHP PDF generation', { command });
-      
-      const { stdout, stderr } = await execAsync(command);
-      
-      if (stderr) {
-        logger.warn('PHP script stderr', { stderr });
-      }
-      
-      // Verify PDF was created
-      try {
-        await fs.access(pdfFilePath);
-      } catch {
-        throw new Error('PDF file was not created');
-      }
-      
-      // Clean up HTML file
-      try {
-        await fs.unlink(htmlFilePath);
-      } catch (err) {
-        logger.warn('Failed to delete temporary HTML file', { htmlFilePath, error: err });
-      }
-      
-      logger.info('PDF generated successfully with DomPDF', { reportId, pdfFilePath });
-      
-      return pdfFilePath;
-      
-    } catch (error) {
-      logger.error('DomPDF generation error', { 
-        reportId, 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw new Error(`PDF generation with DomPDF failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  async generateReportHTML(reportId: number): Promise<string> {
+    const data = await this.getCompleteReportData(reportId);
+    let reportType = data.report.report_type || 'bait_inspection';
+    if (reportType === 'both') {
+      reportType = 'both';
     }
+    return this.buildReportHtml(data, reportType);
+  }
+
+  private async generatePdfFromHtml(htmlPath: string, pdfPath: string) {
+    await fs.access(this.pdfScriptPath);
+
+    try {
+      const { stdout, stderr } = await execFileAsync(this.phpBinary, [this.pdfScriptPath, htmlPath, pdfPath], {
+        timeout: 120000
+      });
+
+      if (stdout) {
+        logger.info('Dompdf output', { stdout: stdout.toString() });
+      }
+      if (stderr) {
+        logger.warn('Dompdf warnings', { stderr: stderr.toString() });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Dompdf execution failed', { error: message });
+      throw new Error(`Dompdf failed: ${message}`);
+    }
+  }
+
+  private async buildReportHtml(data: ReportData, reportType: string): Promise<string> {
+    const logoDataUrl = await this.getLogoDataUrl();
+    const reportTypeLabel = this.formatReportType(reportType);
+
+    const headerHtml = this.renderHeader(logoDataUrl, reportTypeLabel);
+    const reportInfoHtml = this.renderReportInfo(data.report, reportTypeLabel);
+    const clientPcoHtml = this.renderClientPcoDetails(data.report);
+
+    const baitHtml = this.renderBaitInspection(data);
+    const fumigationHtml = this.renderFumigation(data);
+
+    let bodyHtml = '';
+    if (reportType === 'fumigation') {
+      bodyHtml = `${headerHtml}${reportInfoHtml}${clientPcoHtml}${fumigationHtml}`;
+    } else if (reportType === 'both') {
+      bodyHtml = `${headerHtml}${reportInfoHtml}${clientPcoHtml}${baitHtml}`
+        + '<div class="page-break"></div>'
+        + `${headerHtml}${reportInfoHtml}${clientPcoHtml}${fumigationHtml}`;
+    } else {
+      bodyHtml = `${headerHtml}${reportInfoHtml}${clientPcoHtml}${baitHtml}`;
+    }
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Service Report</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #111; margin: 0; padding: 18px; }
+  .header-table { width: 100%; border-bottom: 2px solid #1f5582; padding-bottom: 6px; margin-bottom: 8px; }
+  .header-left { width: 70%; vertical-align: top; }
+  .header-right { width: 30%; text-align: right; vertical-align: top; font-size: 7pt; color: #666; line-height: 1.2; }
+  .brand-row { display: block; }
+  .brand-row .logo { display: block; margin-bottom: 4px; }
+  .title { display: block; font-size: 12pt; font-weight: bold; color: #1f5582; letter-spacing: 0.2pt; text-align: left; }
+  .section-title { font-size: 8.5pt; font-weight: bold; color: #1f5582; margin: 10px 0 4px; padding-bottom: 2px; border-bottom: 1px solid #c7d6e6; }
+  .section-title-red { background: #7b1e2b; color: #fff; padding: 4px 6px; font-weight: bold; font-size: 8pt; }
+  .info-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .info-cell { background: #f5f5f5; padding: 6px; vertical-align: top; border: 1px solid #e2e2e2; }
+  .info-label { font-weight: bold; }
+  .status-inline { display: inline-flex; align-items: center; gap: 4px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .status-text { font-size: 7pt; font-weight: bold; }
+  .status-approved { background: #28a745; }
+  .status-pending { background: #ffc107; }
+  .status-draft { background: #6c757d; }
+  .status-declined { background: #dc3545; }
+  .two-col { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .two-col td { width: 50%; vertical-align: top; padding-right: 8px; }
+  .summary-table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+  .summary-table td { border: 1px solid #d8d8d8; padding: 6px; text-align: center; font-size: 8pt; background: #f2f6fb; }
+  .summary-number { font-size: 12pt; font-weight: bold; color: #1f5582; }
+  .data-table { width: 100%; border-collapse: collapse; margin: 4px 0 10px; border: 1px solid #d9d9d9; }
+  .data-table th { background: #1f5582; color: #fff; font-size: 7pt; padding: 4px; text-align: left; }
+  .data-table td { border-bottom: 1px solid #e3e3e3; font-size: 7pt; padding: 3px 4px; }
+  .data-table.fumigation-table th { background: #7b1e2b; }
+  .fumigation-label { color: #7b1e2b; font-weight: bold; }
+  .fumigation-note { color: #7b1e2b; font-style: italic; margin: 4px 0; }
+  .data-table tr:nth-child(even) td { background: #f8f8f8; }
+  .badge-row { background: #f5f5f5; }
+  .rodent-table { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+  .rodent-table th { background: #1f5582; color: #fff; font-size: 7pt; padding: 4px; text-align: center; }
+  .rodent-table td { border: 1px solid #e1e1e1; font-size: 7pt; padding: 4px; text-align: center; }
+  .r-low { background: #4caf50; color: #fff; }
+  .r-medium { background: #ffeb3b; color: #111; }
+  .r-high { background: #ff9800; color: #fff; }
+  .r-severe { background: #f44336; color: #fff; }
+  .remarks-box { border: 1px solid #e5e5e5; background: #f9f9f9; padding: 6px; min-height: 28px; }
+  .rec-box { border: 1px solid #f5d89c; background: #fff3cd; padding: 6px; min-height: 28px; }
+  .signature-box { border: 1px solid #ddd; height: 50px; width: 220px; }
+  .page-break { page-break-before: always; }
+  .footer { border-top: 1px solid #999; margin-top: 14px; padding-top: 6px; text-align: center; font-size: 6pt; color: #666; }
+  .logo { height: 36px; }
+</style>
+</head>
+<body>
+${bodyHtml}
+</body>
+</html>`;
+  }
+
+  private renderHeader(logoDataUrl: string | null, reportTypeLabel: string) {
+    const logoHtml = logoDataUrl ? `<img class="logo" src="${logoDataUrl}" />` : '';
+    return `
+<table class="header-table">
+  <tr>
+    <td class="header-left">
+      <div class="brand-row">
+        ${logoHtml}
+        <div class="title">SERVICE REPORT</div>
+      </div>
+    </td>
+    <td class="header-right">
+      <div><strong>KPS Pest Control</strong></div>
+      <div>3B Hamman Street</div>
+      <div>Posbus 247</div>
+      <div>Groblersdal 0470</div>
+      <div>Cell: 082 835 4538</div>
+      <div>Adm/Fin: 084 584 0157</div>
+      <div>kontakkps@gmail.com</div>
+    </td>
+  </tr>
+</table>
+<div class="section-title">${this.escapeHtml(reportTypeLabel)}</div>
+`;
+  }
+
+  private renderReportInfo(report: any, reportTypeLabel: string) {
+    const status = (report.status || 'draft').toLowerCase();
+    const statusClass = status === 'approved'
+      ? 'status-approved'
+      : status === 'pending'
+        ? 'status-pending'
+        : status === 'declined'
+          ? 'status-declined'
+          : 'status-draft';
+
+    const signatureHtml = this.renderSignatureImage(report.pco_signature_data, 160, 40);
+
+    return `
+<table class="info-table">
+  <tr>
+    <td class="info-cell" style="width:75%;">
+      <div><span class="info-label">Report ID:</span> #${report.id}</div>
+      <div><span class="info-label">Report Type:</span> ${this.escapeHtml(reportTypeLabel)}</div>
+      <div><span class="info-label">Report Status:</span> <span class="status-inline"><span class="status-dot ${statusClass}"></span><span class="status-text">${this.escapeHtml(status.toUpperCase())}</span></span></div>
+      <div><span class="info-label">Service Date:</span> ${this.formatDateWithWeek(report.service_date)}</div>
+      <div><span class="info-label">Next Service Date:</span> ${this.formatDate(report.next_service_date) || 'Not scheduled'}</div>
+      <div><span class="info-label">Generated:</span> ${this.formatDateTime(new Date())}</div>
+    </td>
+    <td class="info-cell" style="width:25%; text-align:center;">
+      <div class="info-label">PCO Signature</div>
+      <div style="margin-top:4px;">${signatureHtml || '<div class="signature-box"></div>'}</div>
+      <div style="margin-top:4px;">${this.escapeHtml(report.pco_name || 'N/A')}</div>
+      <div style="font-size:7pt; color:#666;">${this.formatDate(report.service_date)}</div>
+    </td>
+  </tr>
+</table>
+`;
+  }
+
+  private renderClientPcoDetails(report: any) {
+    return `
+<table class="two-col">
+  <tr>
+    <td>
+      <div class="section-title">Client Details</div>
+      <div><strong>${this.escapeHtml(report.client_name || 'N/A')}</strong></div>
+      <div>${this.escapeHtml(report.client_address || 'No address')}</div>
+    </td>
+    <td>
+      <div class="section-title">PCO Details</div>
+      <div><strong>${this.escapeHtml(report.pco_name || 'N/A')}</strong></div>
+      <div>PCO Number: ${this.escapeHtml(report.pco_number || 'N/A')}</div>
+    </td>
+  </tr>
+</table>
+`;
+  }
+
+  private renderBaitInspection(data: ReportData) {
+    const statusSummary = this.calculateStatusSummary(data.baitStations);
+    const analytics = data.analytics;
+
+    return `
+<div class="section-title">BAIT INSPECTION</div>
+<table class="summary-table">
+  <tr>
+    <td><div>Total Stations</div><div class="summary-number">${analytics.totalBaitStations || 0}</div></td>
+    <td><div>Inside Stations</div><div class="summary-number">${analytics.insideBaitStations || 0}</div></td>
+    <td><div>Outside Stations</div><div class="summary-number">${analytics.outsideBaitStations || 0}</div></td>
+    <td><div>Activity Detected</div><div class="summary-number">${analytics.activeBaitStations || 0}</div></td>
+  </tr>
+</table>
+
+<div class="section-title">Bait Status Summary</div>
+<table class="data-table">
+  <tr>
+    <th style="width:60%">Bait Status</th>
+    <th style="width:20%">Count</th>
+    <th style="width:20%">Percentage</th>
+  </tr>
+  ${this.renderStatusRow('Eaten', statusSummary.eaten)}
+  ${this.renderStatusRow('Clean', statusSummary.clean)}
+  ${this.renderStatusRow('Wet', statusSummary.wet)}
+  ${this.renderStatusRow('Old', statusSummary.old)}
+  <tr>
+    <td><strong>Total Accessible Stations</strong></td>
+    <td><strong>${this.formatNumber0(statusSummary.totalAccessible)}</strong></td>
+    <td><strong>100%</strong></td>
+  </tr>
+</table>
+
+<div class="section-title">Rodent Progress Analysis</div>
+<table class="rodent-table">
+  <tr>
+    <th>Location</th>
+    <th>Low (0-5%)</th>
+    <th>Medium (6-10%)</th>
+    <th>High (11-30%)</th>
+    <th>Severe (31%+)</th>
+  </tr>
+  ${this.renderRodentRow('Inside Areas', statusSummary.insideInfectionRate)}
+  ${this.renderRodentRow('Outside Areas', statusSummary.outsideInfectionRate)}
+  ${this.renderRodentRow('Overall Total', statusSummary.infectionRate)}
+</table>
+
+${this.renderBaitStationDetails(data.baitStations)}
+${this.renderChemicalUsage(data.baitStations)}
+${this.renderRemarks(data.report)}
+${this.renderClientSignature(data.report)}
+${this.renderFooter()}
+`;
+  }
+
+  private renderFumigation(data: ReportData) {
+    return `
+${this.renderFumigationTreatment(data.fumigationAreas, data.fumigationPests, data.fumigationTreatments)}
+${this.renderInsectMonitoring(data.insectMonitors)}
+${this.renderRemarks(data.report)}
+${this.renderClientSignature(data.report)}
+${this.renderFooter()}
+`;
+  }
+
+  private renderStatusRow(label: string, statusData: any) {
+    return `
+<tr>
+  <td>${this.escapeHtml(label)}</td>
+  <td>${this.formatNumber0(statusData.total || 0)}</td>
+  <td>${(statusData.totalPercent || 0).toFixed(1)}%</td>
+</tr>`;
+  }
+
+  private renderRodentRow(label: string, rate: number) {
+    const percentage = Number.isFinite(rate) ? rate : 0;
+    const low = percentage <= 5 ? percentage : null;
+    const medium = percentage > 5 && percentage <= 10 ? percentage : null;
+    const high = percentage > 10 && percentage <= 30 ? percentage : null;
+    const severe = percentage > 30 ? percentage : null;
+
+    return `
+<tr>
+  <td>${this.escapeHtml(label)}</td>
+  <td class="${low !== null ? 'r-low' : ''}">${low !== null ? `${percentage.toFixed(1)}%` : '-'}</td>
+  <td class="${medium !== null ? 'r-medium' : ''}">${medium !== null ? `${percentage.toFixed(1)}%` : '-'}</td>
+  <td class="${high !== null ? 'r-high' : ''}">${high !== null ? `${percentage.toFixed(1)}%` : '-'}</td>
+  <td class="${severe !== null ? 'r-severe' : ''}">${severe !== null ? `${percentage.toFixed(1)}%` : '-'}</td>
+</tr>`;
+  }
+
+  private renderBaitStationDetails(stations: any[]) {
+    if (!stations.length) return '';
+
+    const inside = stations.filter(s => (s.location || s.location_type || '').toLowerCase() === 'inside');
+    const outside = stations.filter(s => (s.location || s.location_type || '').toLowerCase() === 'outside');
+
+    return `
+<div class="section-title">BAIT STATION DETAILS - INSIDE (${inside.length})</div>
+${this.renderStationTable(inside)}
+<div class="section-title">BAIT STATION DETAILS - OUTSIDE (${outside.length})</div>
+${this.renderStationTable(outside)}
+`;
+  }
+
+  private renderStationTable(stations: any[]) {
+    if (!stations.length) return '<div>No stations recorded.</div>';
+
+    return `
+<table class="data-table">
+  <tr>
+    <th>No</th>
+    <th>Bait Status</th>
+    <th>Activity</th>
+    <th>Chemical</th>
+    <th>Qty</th>
+    <th>Station Condition</th>
+    <th>Warning Sign</th>
+    <th>Remarks</th>
+  </tr>
+  ${stations.map((station) => this.renderStationRow(station)).join('')}
+</table>`;
+  }
+
+  private renderStationRow(station: any) {
+    const activityText = this.getActivityText(station);
+    const chemicals = Array.isArray(station.station_chemicals) ? station.station_chemicals : [];
+    const chemicalText = chemicals.length > 0
+      ? chemicals.map((chem: any) => this.escapeHtml(chem.chemical_name || '-')).join('<br/>')
+      : this.escapeHtml(station.chemical_name || '-');
+
+    const qtyText = chemicals.length > 0
+      ? chemicals.map((chem: any) => {
+        const hasQty = Number.isFinite(Number(chem.quantity));
+        if (!hasQty) return '-';
+        const qty = this.formatNumber0(chem.quantity);
+        const unit = chem.unit || chem.quantity_unit || '';
+        return `${qty}${unit}`.trim();
+      }).join('<br/>')
+      : station.quantity
+        ? `${this.formatNumber0(station.quantity)}${station.quantity_unit || 'g'}`
+        : '-';
+
+    const warningSign = station.warning_sign_condition || station.warning_sign || '-';
+    const remarks = station.station_remarks || station.remarks || '-';
+
+    const isAccessible = station.is_accessible !== false && station.is_accessible !== 0;
+    if (!isAccessible) {
+      const remarkText = remarks && remarks !== '-' ? `Not accessible - ${this.escapeHtml(remarks)}` : 'Not accessible';
+      return `
+<tr>
+  <td>${this.escapeHtml(station.station_number || '-')}</td>
+  <td colspan="7">${remarkText}</td>
+</tr>`;
+    }
+
+    return `
+<tr>
+  <td>${this.escapeHtml(station.station_number || '-')}</td>
+  <td>${this.escapeHtml(station.bait_status || '-')}</td>
+  <td>${this.escapeHtml(activityText)}</td>
+  <td>${chemicalText}</td>
+  <td>${this.escapeHtml(qtyText)}</td>
+  <td>${this.escapeHtml(station.station_condition || '-')}</td>
+  <td>${this.escapeHtml(warningSign)}</td>
+  <td>${this.escapeHtml(remarks)}</td>
+</tr>`;
+  }
+
+  private renderChemicalUsage(stations: any[]) {
+    const chemicalMap = new Map<string, { lNumber: string; batchNumber: string; quantity: number; unit: string; stations: number }>();
+
+    stations.forEach((station) => {
+      const chemicals = Array.isArray(station.station_chemicals) ? station.station_chemicals : [];
+      chemicals.forEach((chem: any) => {
+        const name = chem.chemical_name || station.chemical_name;
+        if (!name) return;
+        const key = name;
+        if (!chemicalMap.has(key)) {
+          chemicalMap.set(key, {
+            lNumber: chem.l_number || station.l_number || 'N/A',
+            batchNumber: chem.batch_number || station.batch_number || 'N/A',
+            quantity: 0,
+            unit: chem.unit || chem.quantity_unit || station.quantity_unit || 'g',
+            stations: 0
+          });
+        }
+
+        const entry = chemicalMap.get(key)!;
+        const qty = Number(chem.quantity || station.quantity || 0);
+        entry.quantity += Number.isFinite(qty) ? qty : 0;
+        entry.stations += 1;
+      });
+    });
+
+    if (chemicalMap.size === 0) return '';
+
+    const rows = Array.from(chemicalMap.entries()).map(([name, chem]) => {
+      const chemName = chem.lNumber !== 'N/A' ? `${name} (L${chem.lNumber})` : name;
+      return `
+<tr>
+  <td>${this.escapeHtml(chemName)}</td>
+  <td>${this.escapeHtml(chem.batchNumber)}</td>
+  <td>${this.formatNumber0(chem.quantity)} ${this.escapeHtml(chem.unit)}</td>
+  <td>${this.formatNumber0(chem.stations)}</td>
+</tr>`;
+    }).join('');
+
+    return `
+<div class="section-title">Chemical Usage Summary</div>
+<table class="data-table">
+  <tr>
+    <th>Chemical Name</th>
+    <th>Batch Number</th>
+    <th>Total Quantity</th>
+    <th>Stations Used</th>
+  </tr>
+  ${rows}
+</table>`;
+  }
+
+  private renderRemarks(report: any) {
+    if (!report.general_remarks && !report.recommendations && !report.next_service_date) {
+      return '';
+    }
+
+    return `
+<div style="margin-top:10px;"></div>
+<div class="section-title">Overall Remarks & Recommendations</div>
+<div style="margin-bottom:6px;"><strong>Technician Remarks:</strong></div>
+<div class="remarks-box">${this.escapeHtml(report.general_remarks || '')}</div>
+<div style="margin-top:8px; margin-bottom:6px;"><strong>Recommendations:</strong></div>
+<div class="rec-box">${this.escapeHtml(report.recommendations || '')}</div>
+<div style="margin-top:8px;"><strong>Next Service:</strong> ${this.formatDate(report.next_service_date) || 'Not scheduled'}</div>
+`;
+  }
+
+  private renderClientSignature(report: any) {
+    const signatureHtml = this.renderSignatureImage(report.client_signature_data, 190, 40);
+    return `
+<div style="margin-top:12px;">
+  <div><strong>Client Signature:</strong></div>
+  <div style="margin-top:4px;">${signatureHtml || '<div class="signature-box"></div>'}</div>
+  <div style="margin-top:4px;">${this.escapeHtml(report.client_signature_name || 'Name: ___________________________')}</div>
+  <div style="font-size:7pt; color:#666;">Date: ${this.formatDate(new Date())}</div>
+</div>
+`;
+  }
+
+  private renderFooter() {
+    return `
+<div class="footer">
+  <div><strong>KPS Pest Control</strong></div>
+  <div>3B Hamman Street, Posbus 247, Groblersdal 0470</div>
+  <div>Cell: 082 835 4538 | Adm/Fin: 084 584 0157 | Email: kontakkps@gmail.com</div>
+  <div>Generated on ${this.formatDateTime(new Date())}</div>
+</div>`;
+  }
+
+  private renderFumigationTreatment(areas: any[], pests: any[], treatments: any[]) {
+    const areaLines = areas.map((area: any) => `- ${this.escapeHtml(area.is_other ? area.other_description : area.area_name || '-')}`).join('<br/>') || '-';
+    const pestLines = pests.map((pest: any) => `- ${this.escapeHtml(pest.is_other ? pest.other_description : (pest.pest_name || pest.pest_type || 'N/A'))}`).join('<br/>') || '-';
+
+    const treatmentRows = treatments.map((treatment: any) => `
+<tr>
+  <td>${this.escapeHtml(treatment.chemical_name || '-')}</td>
+  <td>${this.escapeHtml(treatment.l_number || '-')}</td>
+  <td>${this.escapeHtml(treatment.quantity || '-')}</td>
+  <td>${this.escapeHtml(treatment.batch_number || '-')}</td>
+</tr>`).join('');
+
+    const noTreatmentNote = treatments.length === 0
+      ? '<div class="fumigation-note">No fumigation treatment was applied.</div>'
+      : '';
+
+    return `
+<div class="section-title-red">FUMIGATION TREATMENT</div>
+${noTreatmentNote}
+<table class="data-table fumigation-table">
+  <tr>
+    <th style="width:50%">Treated Areas</th>
+    <th style="width:50%">Treated For (Target Pests)</th>
+  </tr>
+  <tr>
+    <td>${areaLines}</td>
+    <td>${pestLines}</td>
+  </tr>
+</table>
+<table class="data-table fumigation-table">
+  <tr>
+    <th>Chemical Name</th>
+    <th>L Number</th>
+    <th>Quantity</th>
+    <th>Batch Number</th>
+  </tr>
+  ${treatmentRows || '<tr><td colspan="4">No fumigation treatment was applied.</td></tr>'}
+</table>
+`;
+  }
+
+  private renderInsectMonitoring(monitors: any[]) {
+    const lightMonitors = monitors.filter(m => m.monitor_type?.toLowerCase() === 'light');
+
+    if (!lightMonitors.length) return '';
+
+    const rows = lightMonitors.map((monitor: any) => `
+<tr>
+  <td>${this.escapeHtml(monitor.monitor_number || '-')}</td>
+  <td>${this.escapeHtml(monitor.location || '-')}</td>
+  <td>${this.escapeHtml(monitor.monitor_condition || '-')}</td>
+  <td>${this.escapeHtml(monitor.light_condition || '-')}</td>
+  <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
+  <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
+  <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
+  <td>${monitor.is_new ? 'Yes' : 'No'}</td>
+</tr>`).join('');
+
+    return `
+<div class="section-title-red">INSECT MONITORING</div>
+<div style="margin-top:6px;" class="fumigation-label">LIGHT TRAPS (${lightMonitors.length})</div>
+<table class="data-table fumigation-table">
+  <tr>
+    <th>No</th>
+    <th>Location</th>
+    <th>Condition</th>
+    <th>Light Status</th>
+    <th>Glue Board</th>
+    <th>Warning Sign</th>
+    <th>Serviced</th>
+    <th>New</th>
+  </tr>
+  ${rows}
+</table>
+`;
+  }
+
+  private renderSignatureImage(data: string | null | undefined, width: number, height: number) {
+    const buffer = this.decodeImageData(data || '');
+    if (!buffer) return '';
+    const base64 = buffer.toString('base64');
+    return `<img src="data:image/png;base64,${base64}" style="width:${width}px;height:${height}px;object-fit:contain;" />`;
+  }
+
+  private getActivityText(station: any) {
+    if (station.activity_description) return station.activity_description;
+    if (station.activity_type) return station.activity_type;
+
+    const activityTypes = [];
+    if (station.activity_droppings) activityTypes.push('Droppings');
+    if (station.activity_gnawing) activityTypes.push('Gnawing');
+    if (station.activity_tracks) activityTypes.push('Tracks');
+
+    if (activityTypes.length) return activityTypes.join(', ');
+    return station.activity_detected ? 'Yes' : 'None';
+  }
+
+  private async getLogoDataUrl(): Promise<string | null> {
+    if (this.cachedLogoDataUrl !== null) return this.cachedLogoDataUrl;
+
+    try {
+      const buffer = await fs.readFile(this.logoPath);
+      const base64 = buffer.toString('base64');
+      this.cachedLogoDataUrl = `data:image/png;base64,${base64}`;
+      return this.cachedLogoDataUrl;
+    } catch {
+      this.cachedLogoDataUrl = null;
+      return null;
+    }
+  }
+
+  private formatDate(dateValue: any): string {
+    if (!dateValue) return '';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-ZA');
+  }
+
+  private formatDateWithWeek(dateValue: any): string {
+    const formatted = this.formatDate(dateValue);
+    if (!formatted) return '';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return formatted;
+    const weekNumber = this.getIsoWeekNumber(date);
+    return `${formatted} - week ${weekNumber}`;
+  }
+
+  private formatDateTime(dateValue: any): string {
+    if (!dateValue) return '';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('en-ZA');
+  }
+
+  private getIsoWeekNumber(date: Date): string {
+    const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayOfWeek = utcDate.getUTCDay() || 7;
+    utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayOfWeek);
+    const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+    const weekNumber = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return String(weekNumber).padStart(2, '0');
+  }
+
+  private formatNumber0(value: any): string {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '0';
+    return Math.round(num).toString();
+  }
+
+  private escapeHtml(value: any): string {
+    if (value === null || value === undefined) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private async getCompleteReportData(reportId: number): Promise<ReportData> {
-    // Get main report data
     const report = await executeQuerySingle(`
       SELECT 
         r.*,
@@ -316,80 +719,35 @@ export class PDFService {
         c.city,
         c.state,
         c.postal_code,
-        c.total_bait_stations_inside,
-        c.total_bait_stations_outside,
-        c.total_insect_monitors_light,
-        c.total_insect_monitors_box,
         u.name as pco_name,
         u.pco_number,
-        u.email as pco_email,
         u.phone as pco_phone
       FROM reports r
       INNER JOIN clients c ON r.client_id = c.id
       LEFT JOIN users u ON r.pco_id = u.id
       WHERE r.id = ?
     `, [reportId]);
-
     if (!report) {
       throw new Error('Report not found');
     }
 
-    // Get bait stations with chemicals
-    const baitStations = await executeQuery(`
-      SELECT 
-        bs.*,
-        sc.chemical_id,
-        sc.quantity,
-        sc.batch_number,
-        c.name as chemical_name,
-        c.l_number,
-        c.quantity_unit
-      FROM bait_stations bs
-      LEFT JOIN station_chemicals sc ON bs.id = sc.station_id
-      LEFT JOIN chemicals c ON sc.chemical_id = c.id
-      WHERE bs.report_id = ?
-      ORDER BY bs.location, bs.station_number
-    `, [reportId]);
+    report.client_address = [
+      report.address_line1,
+      report.address_line2,
+      report.city,
+      report.state,
+      report.postal_code
+    ].filter(Boolean).join(', ') || 'No address';
 
-    // Get fumigation chemicals
-    const fumigationTreatments = await executeQuery(`
-      SELECT 
-        fc.*,
-        c.name as chemical_name,
-        c.l_number,
-        c.quantity_unit
-      FROM fumigation_chemicals fc
-      LEFT JOIN chemicals c ON fc.chemical_id = c.id
-      WHERE fc.report_id = ?
-      ORDER BY c.name
-    `, [reportId]);
+    const [baitStations, fumigationTreatments, fumigationAreas, fumigationPests, insectMonitors] = await Promise.all([
+      this.getBaitStations(reportId),
+      this.getFumigationTreatments(reportId),
+      this.getFumigationAreas(reportId),
+      this.getFumigationPests(reportId),
+      this.getInsectMonitors(reportId)
+    ]);
 
-    // Get fumigation areas
-    const fumigationAreas = await executeQuery(`
-      SELECT *
-      FROM fumigation_areas
-      WHERE report_id = ?
-      ORDER BY area_name
-    `, [reportId]);
-
-    // Get fumigation target pests
-    const fumigationPests = await executeQuery(`
-      SELECT *
-      FROM fumigation_target_pests
-      WHERE report_id = ?
-      ORDER BY pest_name
-    `, [reportId]);
-
-    // Get insect monitors
-    const insectMonitors = await executeQuery(`
-      SELECT *
-      FROM insect_monitors
-      WHERE report_id = ?
-      ORDER BY location, monitor_number, monitor_type, id
-    `, [reportId]);
-
-    // Calculate analytics
-    const analytics = this.calculateAnalytics(baitStations, insectMonitors);
+    const analytics = this.calculateAnalytics(baitStations);
 
     return {
       report,
@@ -402,1277 +760,209 @@ export class PDFService {
     };
   }
 
-  private calculateAnalytics(baitStations: any[], insectMonitors: any[]) {
-    const analytics: any = {
-      totalBaitStations: baitStations.length,
-      insideBaitStations: baitStations.filter(bs => bs.location === 'inside').length,
-      outsideBaitStations: baitStations.filter(bs => bs.location === 'outside').length,
-      activeBaitStations: baitStations.filter(bs => bs.bait_status === 'eaten').length,
-      totalInsectMonitors: insectMonitors.length,
-      insideMonitors: insectMonitors.filter(im => im.location?.toLowerCase() === 'inside').length,
-      outsideMonitors: insectMonitors.filter(im => im.location?.toLowerCase() === 'outside').length,
-      baitStatusSummary: {
-        eaten: 0,
-        clean: 0,
-        wet: 0,
-        old: 0
-      },
-      chemicalUsage: {} as Record<string, { quantity: number; unit: string; stations: number }>
-    };
+  private async getBaitStations(reportId: number) {
+    try {
+      const stations = await executeQuery(`
+        SELECT 
+          bs.*
+        FROM bait_stations bs
+        WHERE bs.report_id = ?
+        ORDER BY bs.location, bs.station_number
+      `, [reportId]);
 
-    // Calculate bait status summary
-    baitStations.forEach(station => {
-      const status = station.bait_status || 'clean';
-      if (analytics.baitStatusSummary[status] !== undefined) {
-        analytics.baitStatusSummary[status]++;
+      if (!stations.length) return [];
+
+      const stationIds = stations.map((station: any) => station.id);
+      if (stationIds.length === 0) {
+        return stations.map((station: any) => ({
+          ...station,
+          station_chemicals: []
+        }));
       }
 
-      // Track chemical usage
-      if (station.chemical_name && station.quantity_used > 0) {
-        const key = `${station.chemical_name} (${station.l_number})`;
-        if (!analytics.chemicalUsage[key]) {
-          analytics.chemicalUsage[key] = {
-            quantity: 0,
-            unit: station.quantity_unit || 'g',
-            stations: 0
-          };
+      const placeholders = stationIds.map(() => '?').join(', ');
+      const chemicals = await executeQuery(`
+        SELECT 
+          sc.*,
+          c.name as chemical_name,
+          c.l_number,
+          c.quantity_unit
+        FROM station_chemicals sc
+        LEFT JOIN chemicals c ON sc.chemical_id = c.id
+        WHERE sc.station_id IN (${placeholders})
+      `, stationIds);
+
+      const chemicalsByStation = new Map<number, any[]>();
+      chemicals.forEach((chem: any) => {
+        if (!chemicalsByStation.has(chem.station_id)) {
+          chemicalsByStation.set(chem.station_id, []);
         }
-        analytics.chemicalUsage[key].quantity += parseFloat(station.quantity_used);
-        analytics.chemicalUsage[key].stations++;
-      }
-    });
+        chemicalsByStation.get(chem.station_id)!.push(chem);
+      });
 
-    // Calculate infection rate
-    if (analytics.totalBaitStations > 0) {
-      analytics.infectionRate = ((analytics.activeBaitStations / analytics.totalBaitStations) * 100).toFixed(2);
-    } else {
-      analytics.infectionRate = '0.00';
+      return stations.map((station: any) => ({
+        ...station,
+        station_chemicals: chemicalsByStation.get(station.id) || []
+      }));
+    } catch (error) {
+      logger.warn('bait_stations table query failed', { reportId, error });
+      return [];
     }
-
-    return analytics;
   }
 
-  private calculateBaitStatusSummary(stations: any[]) {
-    const summary: Record<string, number> = {
-      eaten: 0,
-      clean: 0,
-      wet: 0,
-      old: 0,
-      total: 0
-    };
+  private async getFumigationTreatments(reportId: number) {
+    try {
+      return await executeQuery(`
+        SELECT 
+          fc.*,
+          c.name as chemical_name,
+          c.l_number,
+          c.quantity_unit
+        FROM fumigation_chemicals fc
+        LEFT JOIN chemicals c ON fc.chemical_id = c.id
+        WHERE fc.report_id = ?
+        ORDER BY c.name
+      `, [reportId]);
+    } catch (error) {
+      logger.warn('fumigation_treatments table query failed', { reportId, error });
+      return [];
+    }
+  }
 
-    const locationSummary: Record<string, Record<string, number>> = {
-      inside: { eaten: 0, clean: 0, wet: 0, old: 0, total: 0 },
-      outside: { eaten: 0, clean: 0, wet: 0, old: 0, total: 0 }
-    };
+  private async getFumigationAreas(reportId: number) {
+    try {
+      return await executeQuery(`
+        SELECT *
+        FROM fumigation_areas
+        WHERE report_id = ?
+        ORDER BY area_name
+      `, [reportId]);
+    } catch (error) {
+      logger.warn('fumigation_areas table query failed', { reportId, error });
+      return [];
+    }
+  }
 
-    // Count each bait status for accessible stations only
-    stations.forEach(station => {
-      if (station.is_accessible === 1) {
-        const baitStatus = station.bait_status || 'clean';
-        const location = station.location?.toLowerCase() === 'outside' ? 'outside' : 'inside';
+  private async getFumigationPests(reportId: number) {
+    try {
+      return await executeQuery(`
+        SELECT *
+        FROM fumigation_target_pests
+        WHERE report_id = ?
+        ORDER BY pest_name
+      `, [reportId]);
+    } catch (error) {
+      logger.warn('fumigation_pests table query failed', { reportId, error });
+      return [];
+    }
+  }
 
-        if (summary[baitStatus] !== undefined) {
-          summary[baitStatus]++;
-          locationSummary[location][baitStatus]++;
-        }
-        summary.total++;
-        locationSummary[location].total++;
-      }
-    });
+  private async getInsectMonitors(reportId: number) {
+    try {
+      return await executeQuery('SELECT * FROM insect_monitors WHERE report_id = ?', [reportId]);
+    } catch (error) {
+      logger.warn('insect_monitors table query failed', { reportId, error });
+      return [];
+    }
+  }
 
-    // Calculate percentages
-    const percentages: Record<string, number> = {};
-    ['eaten', 'clean', 'wet', 'old'].forEach(status => {
-      percentages[status] = summary.total > 0 
-        ? Math.round((summary[status] / summary.total) * 1000) / 10
-        : 0;
-    });
-
-    // Calculate location-specific percentages
-    const locationPercentages: Record<string, Record<string, number>> = {};
-    ['inside', 'outside'].forEach(location => {
-      locationPercentages[location] = {};
-      ['eaten', 'clean', 'wet', 'old'].forEach(status => {
-        locationPercentages[location][status] = locationSummary[location].total > 0
-          ? Math.round((locationSummary[location][status] / locationSummary[location].total) * 1000) / 10
-          : 0;
-      });
-    });
+  private calculateAnalytics(baitStations: any[]) {
+    const inside = baitStations.filter(s => (s.location || s.location_type || '').toLowerCase() === 'inside').length;
+    const outside = baitStations.filter(s => (s.location || s.location_type || '').toLowerCase() === 'outside').length;
+    const active = baitStations.filter(s => (s.bait_status || '').toLowerCase() === 'eaten' || s.rodent_activity === true || s.rodent_activity === 1).length;
 
     return {
-      counts: summary,
-      percentages,
-      locations: locationSummary,
-      location_percentages: locationPercentages
+      totalBaitStations: baitStations.length,
+      insideBaitStations: inside,
+      outsideBaitStations: outside,
+      activeBaitStations: active
     };
   }
 
-  private getInfectionLevel(rate: number) {
-    if (rate >= 0 && rate <= 5) return { level: 'Low', color: '#28a745' };
-    if (rate >= 6 && rate <= 10) return { level: 'Medium', color: '#ffc107' };
-    if (rate >= 11 && rate <= 30) return { level: 'High', color: '#fd7e14' };
-    return { level: 'Severe', color: '#dc3545' };
-  }
-
-  private formatAreaName(name: string) {
-    // Convert underscore separated names to properly formatted text
-    if (!name) return 'Unknown Area';
-    return name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  }
-
-  private escape(value: any): string {
-    if (value === null || value === undefined) return '';
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
-  private async generateBaitInspectionHTML(data: ReportData): Promise<string> {
-    const { report, baitStations, analytics } = data;
-    const logoBase64 = await this.getLogoBase64();
-    
-    // Calculate comprehensive bait status summary
-    const rawSummary = this.calculateBaitStatusSummary(baitStations);
-    
-    // Transform to easier structure for template
-    const statusSummary = {
-      eaten: {
-        total: rawSummary.counts.eaten,
-        totalPercent: rawSummary.percentages.eaten || 0,
-        inside: rawSummary.locations.inside.eaten,
-        insidePercent: rawSummary.location_percentages.inside.eaten || 0,
-        outside: rawSummary.locations.outside.eaten,
-        outsidePercent: rawSummary.location_percentages.outside.eaten || 0
-      },
-      clean: {
-        total: rawSummary.counts.clean,
-        totalPercent: rawSummary.percentages.clean || 0,
-        inside: rawSummary.locations.inside.clean,
-        insidePercent: rawSummary.location_percentages.inside.clean || 0,
-        outside: rawSummary.locations.outside.clean,
-        outsidePercent: rawSummary.location_percentages.outside.clean || 0
-      },
-      wet: {
-        total: rawSummary.counts.wet,
-        totalPercent: rawSummary.percentages.wet || 0,
-        inside: rawSummary.locations.inside.wet,
-        insidePercent: rawSummary.location_percentages.inside.wet || 0,
-        outside: rawSummary.locations.outside.wet,
-        outsidePercent: rawSummary.location_percentages.outside.wet || 0
-      },
-      old: {
-        total: rawSummary.counts.old,
-        totalPercent: rawSummary.percentages.old || 0,
-        inside: rawSummary.locations.inside.old,
-        insidePercent: rawSummary.location_percentages.inside.old || 0,
-        outside: rawSummary.locations.outside.old,
-        outsidePercent: rawSummary.location_percentages.outside.old || 0
-      },
-      insideTotal: rawSummary.locations.inside.total,
-      insideActive: rawSummary.locations.inside.eaten,
-      insideInfectionRate: rawSummary.locations.inside.total > 0 
-        ? (rawSummary.locations.inside.eaten / rawSummary.locations.inside.total) * 100 
-        : 0,
-      outsideTotal: rawSummary.locations.outside.total,
-      outsideActive: rawSummary.locations.outside.eaten,
-      outsideInfectionRate: rawSummary.locations.outside.total > 0 
-        ? (rawSummary.locations.outside.eaten / rawSummary.locations.outside.total) * 100 
-        : 0,
-      infectionRate: rawSummary.counts.total > 0 
-        ? (rawSummary.counts.eaten / rawSummary.counts.total) * 100 
-        : 0
+  private calculateStatusSummary(stations: any[]) {
+    const summary: any = {
+      eaten: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
+      clean: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
+      wet: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
+      old: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
+      insideTotal: 0,
+      outsideTotal: 0,
+      totalAccessible: 0,
+      infectionRate: 0,
+      insideInfectionRate: 0,
+      outsideInfectionRate: 0
     };
-    
-    const clientAddress = [
-      report.address_line1,
-      report.address_line2,
-      report.city,
-      report.state,
-      report.postal_code
-    ].filter(Boolean).join(', ');
 
-    // Group stations by location (inside/outside)
-    const insideStations = baitStations.filter(s => s.location?.toLowerCase() === 'inside');
-    const outsideStations = baitStations.filter(s => s.location?.toLowerCase() === 'outside');
-    const inaccessibleStations = baitStations.filter(s => !s.is_accessible || s.station_condition?.toLowerCase() === 'inaccessible');
-    
-    // Calculate chemical usage with L-numbers and batch numbers
-    const chemicalUsageMap = new Map();
-    baitStations.forEach(station => {
-      if (station.chemical_name && station.quantity) {
-        const key = station.chemical_name;
-        if (!chemicalUsageMap.has(key)) {
-          chemicalUsageMap.set(key, {
-            name: station.chemical_name,
-            l_number: station.l_number || 'N/A',
-            batch_number: station.batch_number || 'N/A',
-            quantity: 0,
-            unit: station.quantity_unit || 'g',
-            stations: 0
-          });
+    const accessibleStations = stations.filter(s => s.is_accessible !== false && s.is_accessible !== 0);
+    const total = accessibleStations.length || 1;
+    let insideTotal = 0;
+    let outsideTotal = 0;
+    let affectedStations = 0;
+    let insideAffectedStations = 0;
+    let outsideAffectedStations = 0;
+    const affectedStatuses = new Set(['wet', 'eaten', 'old']);
+
+    accessibleStations.forEach(station => {
+      const status = (station.bait_status?.toLowerCase() || 'clean');
+      const location = (station.location || station.location_type || '').toLowerCase();
+      const isAffected = affectedStatuses.has(status);
+
+      if (summary[status]) {
+        summary[status].total++;
+        if (location === 'inside') {
+          summary[status].inside++;
+          insideTotal++;
+          if (isAffected) insideAffectedStations++;
+        } else {
+          summary[status].outside++;
+          outsideTotal++;
+          if (isAffected) outsideAffectedStations++;
         }
-        const usage = chemicalUsageMap.get(key);
-        usage.quantity += parseFloat(station.quantity.toString());
-        usage.stations += 1;
+      }
+
+      if (isAffected) affectedStations++;
+    });
+
+    summary.insideTotal = insideTotal;
+    summary.outsideTotal = outsideTotal;
+    summary.totalAccessible = accessibleStations.length;
+
+    Object.keys(summary).forEach(status => {
+      if (status !== 'insideTotal' && status !== 'outsideTotal' && status !== 'totalAccessible'
+        && status !== 'infectionRate' && status !== 'insideInfectionRate' && status !== 'outsideInfectionRate') {
+        const key = status as keyof typeof summary;
+        summary[key].totalPercent = (summary[key].total / total) * 100;
+        summary[key].insidePercent = insideTotal > 0 ? (summary[key].inside / insideTotal) * 100 : 0;
+        summary[key].outsidePercent = outsideTotal > 0 ? (summary[key].outside / outsideTotal) * 100 : 0;
       }
     });
-    const chemicalUsageArray = Array.from(chemicalUsageMap.values());
 
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>SERVICE REPORT - BAIT INSPECTION #${report.id}</title>
-    <style>
-        body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
-        .header-section { padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
-        .logo-section { float: left; width: 50%; }
-        .logo-section h1 { margin: 0; font-size: 16pt; color: #1f5582; font-weight: bold; }
-        .logo-section h2 { margin: 3px 0 0 0; font-size: 11pt; color: #666; font-weight: normal; }
-        .address-section { float: right; width: 45%; text-align: right; font-size: 8pt; color: #666; }
-        .address-section p { margin: 1px 0; }
-        .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; }
-        .info-row { margin: 3px 0; font-size: 8pt; }
-        .label { font-weight: bold; display: inline-block; width: 130px; }
-        .value { display: inline-block; }
-        .section { margin: 12px 0; page-break-inside: avoid; }
-        .section-title { background: #1f5582; color: white; padding: 6px 10px; margin: 10px 0 8px 0; font-size: 10pt; font-weight: bold; }
-        .grid { width: 100%; margin: 10px 0; overflow: hidden; }
-        .stat-card { float: left; width: 23%; margin-right: 2%; background: #f9f9f9; padding: 8px; text-align: center; border: 1px solid #ddd; box-sizing: border-box; }
-        .stat-card:last-child { margin-right: 0; }
-        .stat-number { font-size: 18pt; font-weight: bold; color: #1f5582; margin: 3px 0; }
-        .stat-label { font-size: 7pt; color: #666; }
-        .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0; }
-        table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 8pt; }
-        th { background: #1f5582; color: white; padding: 5px 6px; text-align: left; font-weight: bold; font-size: 8pt; }
-        td { padding: 4px 6px; border: 1px solid #ddd; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .status-badge { padding: 2px 6px; border-radius: 2px; font-size: 7pt; font-weight: bold; color: white; }
-        .status-approved { background: #28a745; }
-        .status-pending { background: #ffc107; color: #333; }
-        .status-draft { background: #6c757d; }
-        .status-declined { background: #dc3545; }
-        .inaccessible-row { background: #ffebee !important; }
-        .location-group { margin-top: 12px; page-break-inside: avoid; }
-        .location-header { background: #e3f2fd; padding: 5px 8px; font-weight: bold; color: #1f5582; font-size: 9pt; }
-        .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #999; font-size: 7pt; text-align: center; color: #666; }
-        .signature-section { margin: 15px 0; page-break-inside: avoid; }
-        .signature-box { text-align: center; }
-        .signature-line { border-top: 1px solid #333; margin: 5px auto; width: 250px; }
-        h3 { font-size: 10pt; margin: 8px 0 5px 0; color: #1f5582; }
-        h4 { font-size: 9pt; margin: 5px 0; }
-        p { margin: 3px 0; font-size: 8pt; }
-    </style>
-</head>
-<body>
-    <!-- Header with Logo and Address -->
-    <div class="header-section">
-        <div class="logo-section">
-            ${logoBase64 ? `<img src="${logoBase64}" alt="KPS Logo" style="height: 60px; width: auto; margin-bottom: 8px;" />` : ''}
-            <h2>SERVICE REPORT - BAIT INSPECTION</h2>
-        </div>
-        <div class="address-section">
-            <p><strong>KPS Pest Control</strong></p>
-            <p>3B Hamman Street</p>
-            <p>Groblersdal, 0470</p>
-            <p>South Africa</p>
-        </div>
-        <div style="clear: both;"></div>
-    </div>
+    summary.infectionRate = (affectedStations / total) * 100;
+    summary.insideInfectionRate = insideTotal > 0 ? (insideAffectedStations / insideTotal) * 100 : 0;
+    summary.outsideInfectionRate = outsideTotal > 0 ? (outsideAffectedStations / outsideTotal) * 100 : 0;
 
-    <!-- Report Details -->
-    <div class="report-info">
-        <div class="info-row">
-            <span class="label">Report ID:</span>
-            <span class="value">#${this.escape(report.id)}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">Report Status:</span>
-            <span class="value">
-                <span class="status-badge status-${this.escape(report.status)}">
-                    ${this.escape(report.status).toUpperCase()}
-                </span>
-            </span>
-        </div>
-        <div class="info-row">
-            <span class="label">Service Date:</span>
-            <span class="value">${new Date(report.service_date).toLocaleDateString('en-ZA')}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">Next Service Date:</span>
-            <span class="value">${report.next_service_date ? new Date(report.next_service_date).toLocaleDateString('en-ZA') : 'Not scheduled'}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">Generated:</span>
-            <span class="value">${new Date().toLocaleString('en-ZA')}</span>
-        </div>
-    </div>
-
-    <!-- PCO Signature at Top -->
-    <div class="signature-section" style="margin-bottom: 20px;">
-        <div style="display: inline-block; width: 45%; vertical-align: top;">
-            <p style="margin-bottom: 5px; font-weight: bold; font-size: 8pt;">PCO Signature:</p>
-            ${report.pco_signature_data ? `
-                <div style="border: 1px solid #ddd; padding: 5px; height: 50px; display: flex; align-items: center; justify-content: center;">
-                    <img src="${report.pco_signature_data}" alt="PCO Signature" style="max-width: 100%; max-height: 50px; object-fit: contain;" />
-                </div>
-            ` : `
-                <div class="signature-line" style="width: 200px; margin: 0;"></div>
-            `}
-            <p style="margin-top: 3px; font-size: 8pt;">${this.escape(report.pco_name)}</p>
-            <p style="margin-top: 2px; font-size: 7pt; color: #666;">Date: ${new Date(report.service_date).toLocaleDateString('en-ZA')}</p>
-        </div>
-    </div>
-
-    <!-- PCO and Client Details Side-by-Side -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 12px 0;">
-        <div>
-            <h3 style="margin: 0 0 5px 0;">Client Details</h3>
-            <p style="margin: 3px 0; font-weight: bold;">${this.escape(report.client_name)}</p>
-            <p style="margin: 3px 0; font-size: 8pt;">${this.escape(clientAddress)}</p>
-        </div>
-        <div>
-            <h3 style="margin: 0 0 5px 0;">PCO Details</h3>
-            <p style="margin: 3px 0; font-weight: bold;">${this.escape(report.pco_name)}</p>
-            <p style="margin: 3px 0; font-size: 8pt;">PCO Number: ${this.escape(report.pco_number)}</p>
-        </div>
-    </div>
-
-    <!-- Analytics Grid: 4 Columns -->
-    <div class="section-title">INSPECTION SUMMARY</div>
-    <div class="grid">
-        <div class="stat-card">
-            <div class="stat-number">${analytics.totalBaitStations}</div>
-            <div class="stat-label">Total Stations</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${analytics.insideBaitStations}</div>
-            <div class="stat-label">Inside Stations</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${analytics.outsideBaitStations}</div>
-            <div class="stat-label">Outside Stations</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number">${analytics.activeBaitStations}</div>
-            <div class="stat-label">Activity Detected</div>
-        </div>
-    </div>
-
-    <!-- Bait Status Summary: 3 Columns (Status, Count, Percentage) -->
-    <div class="section">
-        <h3 style="color: #1f5582;">Bait Status Summary</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Bait Status</th>
-                    <th style="text-align: center;">Count</th>
-                    <th style="text-align: center;">Percentage</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>Eaten</strong></td>
-                    <td style="text-align: center;">${statusSummary.eaten.total}</td>
-                    <td style="text-align: center;">${statusSummary.eaten.totalPercent.toFixed(1)}%</td>
-                </tr>
-                <tr>
-                    <td><strong>Clean</strong></td>
-                    <td style="text-align: center;">${statusSummary.clean.total}</td>
-                    <td style="text-align: center;">${statusSummary.clean.totalPercent.toFixed(1)}%</td>
-                </tr>
-                <tr>
-                    <td><strong>Wet</strong></td>
-                    <td style="text-align: center;">${statusSummary.wet.total}</td>
-                    <td style="text-align: center;">${statusSummary.wet.totalPercent.toFixed(1)}%</td>
-                </tr>
-                <tr>
-                    <td><strong>Old</strong></td>
-                    <td style="text-align: center;">${statusSummary.old.total}</td>
-                    <td style="text-align: center;">${statusSummary.old.totalPercent.toFixed(1)}%</td>
-                </tr>
-                <tr style="background: #e3f2fd; font-weight: bold;">
-                    <td>TOTAL</td>
-                    <td style="text-align: center;">${statusSummary.eaten.total + statusSummary.clean.total + statusSummary.wet.total + statusSummary.old.total}</td>
-                    <td style="text-align: center;">100.0%</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Location Breakdown: Inside and Outside Side-by-Side -->
-    <div class="section">
-        <h3 style="color: #1f5582;">Location Breakdown</h3>
-        <div class="side-by-side">
-            <div>
-                <h4 style="margin: 5px 0;">Inside Stations</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th style="text-align: center;">Count</th>
-                            <th style="text-align: center;">%</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Eaten</td>
-                            <td style="text-align: center;">${statusSummary.eaten.inside}</td>
-                            <td style="text-align: center;">${statusSummary.eaten.insidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr>
-                            <td>Clean</td>
-                            <td style="text-align: center;">${statusSummary.clean.inside}</td>
-                            <td style="text-align: center;">${statusSummary.clean.insidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr>
-                            <td>Wet</td>
-                            <td style="text-align: center;">${statusSummary.wet.inside}</td>
-                            <td style="text-align: center;">${statusSummary.wet.insidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr>
-                            <td>Old</td>
-                            <td style="text-align: center;">${statusSummary.old.inside}</td>
-                            <td style="text-align: center;">${statusSummary.old.insidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr style="background: #e3f2fd; font-weight: bold;">
-                            <td>TOTAL</td>
-                            <td style="text-align: center;">${statusSummary.insideTotal}</td>
-                            <td style="text-align: center;">100.0%</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div>
-                <h4 style="margin: 5px 0;">Outside Stations</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th style="text-align: center;">Count</th>
-                            <th style="text-align: center;">%</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Eaten</td>
-                            <td style="text-align: center;">${statusSummary.eaten.outside}</td>
-                            <td style="text-align: center;">${statusSummary.eaten.outsidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr>
-                            <td>Clean</td>
-                            <td style="text-align: center;">${statusSummary.clean.outside}</td>
-                            <td style="text-align: center;">${statusSummary.clean.outsidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr>
-                            <td>Wet</td>
-                            <td style="text-align: center;">${statusSummary.wet.outside}</td>
-                            <td style="text-align: center;">${statusSummary.wet.outsidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr>
-                            <td>Old</td>
-                            <td style="text-align: center;">${statusSummary.old.outside}</td>
-                            <td style="text-align: center;">${statusSummary.old.outsidePercent.toFixed(1)}%</td>
-                        </tr>
-                        <tr style="background: #e3f2fd; font-weight: bold;">
-                            <td>TOTAL</td>
-                            <td style="text-align: center;">${statusSummary.outsideTotal}</td>
-                            <td style="text-align: center;">100.0%</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Rodent Progress Analysis: 5 Columns with Color-Coded Severity -->
-    <div class="section">
-        <h3 style="color: #1f5582;">Rodent Progress Analysis</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Location</th>
-                    <th style="text-align: center;">Low (0-5%)</th>
-                    <th style="text-align: center;">Medium (6-10%)</th>
-                    <th style="text-align: center;">High (11-30%)</th>
-                    <th style="text-align: center;">Severe (31%+)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>Overall</strong></td>
-                    <td style="text-align: center; background-color: ${statusSummary.infectionRate <= 5 ? '#4caf50' : '#fff'}; color: ${statusSummary.infectionRate <= 5 ? '#fff' : '#333'};">
-                        ${statusSummary.infectionRate <= 5 ? statusSummary.infectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.infectionRate > 5 && statusSummary.infectionRate <= 10 ? '#ffeb3b' : '#fff'}; color: ${statusSummary.infectionRate > 5 && statusSummary.infectionRate <= 10 ? '#333' : '#333'};">
-                        ${statusSummary.infectionRate > 5 && statusSummary.infectionRate <= 10 ? statusSummary.infectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.infectionRate > 10 && statusSummary.infectionRate <= 30 ? '#ff9800' : '#fff'}; color: ${statusSummary.infectionRate > 10 && statusSummary.infectionRate <= 30 ? '#fff' : '#333'};">
-                        ${statusSummary.infectionRate > 10 && statusSummary.infectionRate <= 30 ? statusSummary.infectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.infectionRate > 30 ? '#f44336' : '#fff'}; color: ${statusSummary.infectionRate > 30 ? '#fff' : '#333'};">
-                        ${statusSummary.infectionRate > 30 ? statusSummary.infectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                </tr>
-                <tr>
-                    <td><strong>Inside</strong></td>
-                    <td style="text-align: center; background-color: ${statusSummary.insideInfectionRate <= 5 ? '#4caf50' : '#fff'}; color: ${statusSummary.insideInfectionRate <= 5 ? '#fff' : '#333'};">
-                        ${statusSummary.insideInfectionRate <= 5 ? statusSummary.insideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.insideInfectionRate > 5 && statusSummary.insideInfectionRate <= 10 ? '#ffeb3b' : '#fff'};">
-                        ${statusSummary.insideInfectionRate > 5 && statusSummary.insideInfectionRate <= 10 ? statusSummary.insideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.insideInfectionRate > 10 && statusSummary.insideInfectionRate <= 30 ? '#ff9800' : '#fff'}; color: ${statusSummary.insideInfectionRate > 10 && statusSummary.insideInfectionRate <= 30 ? '#fff' : '#333'};">
-                        ${statusSummary.insideInfectionRate > 10 && statusSummary.insideInfectionRate <= 30 ? statusSummary.insideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.insideInfectionRate > 30 ? '#f44336' : '#fff'}; color: ${statusSummary.insideInfectionRate > 30 ? '#fff' : '#333'};">
-                        ${statusSummary.insideInfectionRate > 30 ? statusSummary.insideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                </tr>
-                <tr>
-                    <td><strong>Outside</strong></td>
-                    <td style="text-align: center; background-color: ${statusSummary.outsideInfectionRate <= 5 ? '#4caf50' : '#fff'}; color: ${statusSummary.outsideInfectionRate <= 5 ? '#fff' : '#333'};">
-                        ${statusSummary.outsideInfectionRate <= 5 ? statusSummary.outsideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.outsideInfectionRate > 5 && statusSummary.outsideInfectionRate <= 10 ? '#ffeb3b' : '#fff'};">
-                        ${statusSummary.outsideInfectionRate > 5 && statusSummary.outsideInfectionRate <= 10 ? statusSummary.outsideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.outsideInfectionRate > 10 && statusSummary.outsideInfectionRate <= 30 ? '#ff9800' : '#fff'}; color: ${statusSummary.outsideInfectionRate > 10 && statusSummary.outsideInfectionRate <= 30 ? '#fff' : '#333'};">
-                        ${statusSummary.outsideInfectionRate > 10 && statusSummary.outsideInfectionRate <= 30 ? statusSummary.outsideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                    <td style="text-align: center; background-color: ${statusSummary.outsideInfectionRate > 30 ? '#f44336' : '#fff'}; color: ${statusSummary.outsideInfectionRate > 30 ? '#fff' : '#333'};">
-                        ${statusSummary.outsideInfectionRate > 30 ? statusSummary.outsideInfectionRate.toFixed(1) + '%' : '-'}
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Bait Station Details Grouped by Location -->
-    ${baitStations.length > 0 ? `
-    <div class="section">
-        <div class="section-title">BAIT STATION DETAILS</div>
-        
-        ${insideStations.length > 0 ? `
-        <div class="location-group">
-            <div class="location-header">BAIT STATIONS - INSIDE (${insideStations.length})</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Bait Status</th>
-                        <th>Activity</th>
-                        <th>Chemical</th>
-                        <th style="text-align: center;">Qty</th>
-                        <th>Condition</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${insideStations.filter(s => s.is_accessible).map(station => {
-                      const activityTypes = [];
-                      if (station.activity_droppings) activityTypes.push('Droppings');
-                      if (station.activity_gnawing) activityTypes.push('Gnawing');
-                      if (station.activity_tracks) activityTypes.push('Tracks');
-                      const activityText = activityTypes.length > 0 ? activityTypes.join(', ') : (station.activity_detected ? 'Yes' : 'None');
-                      
-                      return `
-                    <tr>
-                        <td>${this.escape(station.station_number)}</td>
-                        <td>${this.escape(station.bait_status || '-')}</td>
-                        <td>${activityText}</td>
-                        <td>${this.escape(station.chemical_name || '-')}</td>
-                        <td style="text-align: center;">${station.quantity ? `${station.quantity} ${station.quantity_unit || 'g'}` : '-'}</td>
-                        <td>${this.escape(station.station_condition || '-')}</td>
-                    </tr>
-                      `;
-                    }).join('')}
-                    ${insideStations.filter(s => !s.is_accessible).map(station => `
-                    <tr class="inaccessible-row">
-                        <td>${this.escape(station.station_number)}</td>
-                        <td>Unknown</td>
-                        <td colspan="4" style="font-weight: bold; color: #d32f2f;">INACCESSIBLE - ${this.escape(station.inaccessible_reason || 'Reason not specified')}</td>
-                    </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-        ` : ''}
-        
-        ${outsideStations.length > 0 ? `
-        <div class="location-group">
-            <div class="location-header">BAIT STATIONS - OUTSIDE (${outsideStations.length})</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Bait Status</th>
-                        <th>Activity</th>
-                        <th>Chemical</th>
-                        <th style="text-align: center;">Qty</th>
-                        <th>Condition</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${outsideStations.filter(s => s.is_accessible).map(station => {
-                      const activityTypes = [];
-                      if (station.activity_droppings) activityTypes.push('Droppings');
-                      if (station.activity_gnawing) activityTypes.push('Gnawing');
-                      if (station.activity_tracks) activityTypes.push('Tracks');
-                      const activityText = activityTypes.length > 0 ? activityTypes.join(', ') : (station.activity_detected ? 'Yes' : 'None');
-                      
-                      return `
-                    <tr>
-                        <td>${this.escape(station.station_number)}</td>
-                        <td>${this.escape(station.bait_status || '-')}</td>
-                        <td>${activityText}</td>
-                        <td>${this.escape(station.chemical_name || '-')}</td>
-                        <td style="text-align: center;">${station.quantity ? `${station.quantity} ${station.quantity_unit || 'g'}` : '-'}</td>
-                        <td>${this.escape(station.station_condition || '-')}</td>
-                    </tr>
-                      `;
-                    }).join('')}
-                    ${outsideStations.filter(s => !s.is_accessible).map(station => `
-                    <tr class="inaccessible-row">
-                        <td>${this.escape(station.station_number)}</td>
-                        <td>Unknown</td>
-                        <td colspan="4" style="font-weight: bold; color: #d32f2f;">INACCESSIBLE - ${this.escape(station.inaccessible_reason || 'Reason not specified')}</td>
-                    </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-        ` : ''}
-    </div>
-    ` : ''}
-
-    <!-- Chemical Usage Summary with L-numbers and Batch Numbers -->
-    ${chemicalUsageArray.length > 0 ? `
-    <div class="section">
-        <h3 style="color: #1f5582;">Chemical Usage Summary</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Chemical Name</th>
-                    <th style="text-align: center;">Batch Number</th>
-                    <th style="text-align: center;">Total Quantity</th>
-                    <th style="text-align: center;">Stations Used</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${chemicalUsageArray.map(chem => `
-                <tr>
-                    <td>${this.escape(chem.name)}${chem.l_number !== 'N/A' ? ` (L${chem.l_number})` : ''}</td>
-                    <td style="text-align: center;">${this.escape(chem.batch_number)}</td>
-                    <td style="text-align: center;">${chem.quantity.toFixed(2)} ${chem.unit}</td>
-                    <td style="text-align: center;">${chem.stations}</td>
-                </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
-    ` : ''}
-
-    <!-- Remarks and Recommendations -->
-    ${report.general_remarks || report.recommendations ? `
-    <div class="section">
-        ${report.general_remarks ? `
-        <h3 style="color: #1f5582;">Technician Remarks</h3>
-        <p style="padding: 10px; background: #f9f9f9; margin-bottom: 15px;">
-            ${this.escape(report.general_remarks)}
-        </p>
-        ` : ''}
-        
-        ${report.recommendations ? `
-        <h3 style="color: #1f5582;">Recommendations</h3>
-        <p style="padding: 10px; background: #fff3cd; margin-bottom: 15px;">
-            ${this.escape(report.recommendations)}
-        </p>
-        ` : ''}
-        
-        ${report.next_service_date ? `
-        <p style="font-weight: bold; color: #1f5582; font-size: 8pt;">
-            Next Service Scheduled: ${new Date(report.next_service_date).toLocaleDateString('en-ZA')}
-        </p>
-        ` : ''}
-    </div>
-    ` : ''}
-
-    <!-- Client Signature Section -->
-    <div class="signature-section" style="margin-top: 25px;">
-        <div style="display: inline-block; width: 45%; vertical-align: top;">
-            <p style="margin-bottom: 5px; font-weight: bold; font-size: 8pt;">Client Signature:</p>
-            ${report.client_signature_data ? `
-                <div style="border: 1px solid #ddd; padding: 5px; height: 50px; display: flex; align-items: center; justify-content: center;">
-                    <img src="${report.client_signature_data}" alt="Client Signature" style="max-width: 100%; max-height: 50px; object-fit: contain;" />
-                </div>
-            ` : `
-                <div class="signature-line" style="width: 200px; margin: 0;"></div>
-            `}
-            <p style="margin-top: 3px; font-size: 8pt;">${this.escape(report.client_signature_name || 'Name: ___________________________')}</p>
-            <p style="margin-top: 2px; font-size: 7pt; color: #666;">Date: ${new Date().toLocaleDateString('en-ZA')}</p>
-        </div>
-    </div>
-
-    <div class="footer">
-        <p><strong>KPS Pest Control</strong> | 3B Hamman Street, Groblersdal, 0470</p>
-        <p>Email: info@kpspestcontrol.co.za</p>
-        <p>Generated on ${new Date().toLocaleString('en-ZA')}</p>
-    </div>
-</body>
-</html>
-`;
+    return summary;
   }
 
-  private async generateFumigationHTML(data: ReportData): Promise<string> {
-    const { report, fumigationTreatments, fumigationAreas, fumigationPests, insectMonitors } = data;
-    const logoBase64 = await this.getLogoBase64();
-    
-    logger.info('Fumigation data destructured', {
-      areasCount: fumigationAreas?.length,
-      pestsCount: fumigationPests?.length,
-      treatmentsCount: fumigationTreatments?.length,
-      monitorsCount: insectMonitors?.length,
-      firstArea: fumigationAreas?.[0]
-    });
-    
-    const clientAddress = [
-      report.address_line1,
-      report.address_line2,
-      report.city,
-      report.state,
-      report.postal_code
-    ].filter(Boolean).join(', ');
+  private decodeImageData(data: string): Buffer | null {
+    if (!data || typeof data !== 'string') return null;
+    const trimmed = data.trim();
+    const match = trimmed.match(/^data:image\/\w+;base64,(.+)$/i);
+    const base64 = match ? match[1] : trimmed;
 
-    // Group treatments by areas and pests (using new structure)
-    const treatmentsByArea = new Map();
-    
-    // Build treatments from separate areas, pests, and chemicals tables
-    fumigationAreas.forEach(area => {
-      const areaName = area.is_other ? area.other_description : area.area_name;
-      if (!treatmentsByArea.has(areaName)) {
-        treatmentsByArea.set(areaName, {
-          area: areaName,
-          pests: new Set(),
-          chemicals: []
-        });
-      }
-    });
-    
-    // Add all pests to each area (pests are not area-specific in new structure)
-    fumigationPests.forEach(pest => {
-      const pestName = pest.is_other ? pest.other_description : pest.pest_name;
-      treatmentsByArea.forEach(areaData => {
-        areaData.pests.add(pestName);
-      });
-    });
-    
-    // Add all chemicals to each area (chemicals are not area-specific in new structure)
-    fumigationTreatments.forEach(treatment => {
-      if (treatment.chemical_name) {
-        treatmentsByArea.forEach(areaData => {
-          areaData.chemicals.push({
-            name: treatment.chemical_name,
-            l_number: treatment.l_number || 'N/A',
-            batch_number: treatment.batch_number || 'N/A',
-            quantity: treatment.quantity,
-            unit: treatment.quantity_unit || 'L',
-            method: null // application_method not stored in new structure
-          });
-        });
-      }
-    });
-    
-    // Calculate chemical usage
-    const chemicalUsageMap = new Map();
-    fumigationTreatments.forEach(treatment => {
-      if (treatment.chemical_name && treatment.quantity_used) {
-        const key = treatment.chemical_name;
-        if (!chemicalUsageMap.has(key)) {
-          chemicalUsageMap.set(key, {
-            name: treatment.chemical_name,
-            l_number: treatment.l_number || 'N/A',
-            batch_number: treatment.batch_number || 'N/A',
-            quantity: 0,
-            unit: treatment.quantity_unit || 'L',
-            usageCount: 0
-          });
-        }
-        const usage = chemicalUsageMap.get(key);
-        usage.quantity += parseFloat(treatment.quantity_used.toString());
-        usage.usageCount += 1;
-      }
-    });
-    const chemicalUsageArray = Array.from(chemicalUsageMap.values());
-    
-    // Calculate insect monitor statistics
-    const monitorStats = {
-      total: insectMonitors?.length || 0,
-      byType: {
-        box: insectMonitors?.filter(m => m.monitor_type?.toLowerCase() === 'box').length || 0,
-        light: insectMonitors?.filter(m => m.monitor_type?.toLowerCase() === 'light').length || 0,
-        tube: 0 // No tube type in current schema
-      },
-      serviced: insectMonitors?.filter(m => m.monitor_serviced).length || 0,
-      glueBoardsReplaced: insectMonitors?.filter(m => m.glue_board_replaced).length || 0,
-      tubesReplaced: insectMonitors?.filter(m => m.tubes_replaced).length || 0,
-      goodCondition: insectMonitors?.filter(m => m.monitor_condition?.toLowerCase() === 'good').length || 0,
-      replaced: insectMonitors?.filter(m => m.monitor_condition?.toLowerCase() === 'replaced').length || 0,
-      repaired: insectMonitors?.filter(m => m.monitor_condition?.toLowerCase() === 'repaired').length || 0,
-      lightsFaulty: insectMonitors?.filter(m => m.light_condition?.toLowerCase() === 'faulty').length || 0
-    };
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>SERVICE REPORT - FUMIGATION #${report.id}</title>
-    <style>
-        body { font-family: 'Calibri', Arial, sans-serif; font-size: 9pt; line-height: 1.3; margin: 0; padding: 20px; color: #000; }
-        .header-section { padding: 10px 0; border-bottom: 2px solid #1f5582; margin-bottom: 15px; }
-        .logo-section { float: left; width: 50%; }
-        .logo-section h1 { margin: 0; font-size: 16pt; color: #1f5582; font-weight: bold; }
-        .logo-section h2 { margin: 3px 0 0 0; font-size: 11pt; color: #666; font-weight: normal; }
-        .address-section { float: right; width: 45%; text-align: right; font-size: 8pt; color: #666; }
-        .address-section p { margin: 1px 0; }
-        .report-info { background: #f5f5f5; padding: 8px; margin-bottom: 12px; }
-        .info-row { margin: 3px 0; font-size: 8pt; }
-        .label { font-weight: bold; display: inline-block; width: 130px; }
-        .value { display: inline-block; }
-        .section { margin: 12px 0; page-break-inside: avoid; }
-        .section-title { background: #1f5582; color: white; padding: 6px 10px; margin: 10px 0 8px 0; font-size: 10pt; font-weight: bold; }
-        .treatment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
-        .treatment-card { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; page-break-inside: avoid; }
-        .treatment-header { font-size: 9pt; font-weight: bold; color: #1f5582; margin-bottom: 5px; }
-        .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0; }
-        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #f9f9f9; padding: 10px; border: 1px solid #ddd; }
-        .stat-item { padding: 4px; text-align: center; }
-        .stat-label { font-size: 6.5pt; color: #666; }
-        .stat-value { font-size: 11pt; font-weight: bold; color: #1f5582; }
-        table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 8pt; }
-        th { background: #1f5582; color: white; padding: 5px 6px; text-align: left; font-weight: bold; font-size: 8pt; }
-        td { padding: 4px 6px; border: 1px solid #ddd; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .status-badge { padding: 2px 6px; border-radius: 2px; font-size: 7pt; font-weight: bold; color: white; }
-        .status-approved { background: #28a745; }
-        .status-pending { background: #ffc107; color: #333; }
-        .status-draft { background: #6c757d; }
-        .status-declined { background: #dc3545; }
-        .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #999; font-size: 7pt; text-align: center; color: #666; }
-        .signature-section { margin: 15px 0; page-break-inside: avoid; }
-        .signature-box { text-align: center; }
-        .signature-line { border-top: 1px solid #333; margin: 5px auto; width: 250px; }
-        h3 { font-size: 10pt; margin: 8px 0 5px 0; color: #1f5582; }
-        h4 { font-size: 9pt; margin: 5px 0; }
-        p { margin: 3px 0; font-size: 8pt; }
-        ul { margin: 3px 0; padding-left: 18px; }
-        li { margin: 2px 0; font-size: 8pt; }
-    </style>
-</head>
-<body>
-    <!-- Header with Logo and Address -->
-    <div class="header-section">
-        <div class="logo-section">
-            ${logoBase64 ? `<img src="${logoBase64}" alt="KPS Logo" style="height: 60px; width: auto; margin-bottom: 8px;" />` : ''}
-            <h2>SERVICE REPORT - FUMIGATION</h2>
-        </div>
-        <div class="address-section">
-            <p><strong>KPS Pest Control</strong></p>
-            <p>3B Hamman Street</p>
-            <p>Groblersdal, 0470</p>
-            <p>South Africa</p>
-        </div>
-    </div>
-
-    <!-- Report Details -->
-    <div class="report-info">
-        <div class="info-row">
-            <span class="label">Report ID:</span>
-            <span class="value">#${this.escape(report.id)}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">Report Status:</span>
-            <span class="value">
-                <span class="status-badge status-${this.escape(report.status)}">
-                    ${this.escape(report.status).toUpperCase()}
-                </span>
-            </span>
-        </div>
-        <div class="info-row">
-            <span class="label">Service Date:</span>
-            <span class="value">${new Date(report.service_date).toLocaleDateString('en-ZA')}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">Next Service Date:</span>
-            <span class="value">${report.next_service_date ? new Date(report.next_service_date).toLocaleDateString('en-ZA') : 'Not scheduled'}</span>
-        </div>
-        <div class="info-row">
-            <span class="label">Generated:</span>
-            <span class="value">${new Date().toLocaleString('en-ZA')}</span>
-        </div>
-    </div>
-
-    <!-- PCO Signature at Top -->
-    <div class="signature-section" style="margin-bottom: 20px;">
-        <div style="display: inline-block; width: 45%; vertical-align: top;">
-            <p style="margin-bottom: 5px; font-weight: bold; font-size: 8pt;">PCO Signature:</p>
-            ${report.pco_signature_data ? `
-                <div style="border: 1px solid #ddd; padding: 5px; height: 50px; display: flex; align-items: center; justify-content: center;">
-                    <img src="${report.pco_signature_data}" alt="PCO Signature" style="max-width: 100%; max-height: 50px; object-fit: contain;" />
-                </div>
-                <p style="font-size: 7pt; margin-top: 3px;">${this.escape(report.pco_name)}</p>
-                <p style="font-size: 7pt;">Date: ${new Date(report.service_date).toLocaleDateString('en-ZA')}</p>
-            ` : '<p style="font-size: 7pt;">No signature</p>'}
-        </div>
-    </div>
-
-    <!-- PCO and Client Details Side-by-Side -->
-    <div class="side-by-side">
-        <div>
-            <h3>Client Details</h3>
-            <p><strong>${this.escape(report.client_name)}</strong></p>
-            <p>${this.escape(clientAddress)}</p>
-        </div>
-        <div>
-            <h3>PCO Details</h3>
-            <p><strong>${this.escape(report.pco_name)}</strong></p>
-            <p>PCO Number: ${this.escape(report.pco_number)}</p>
-            <p>${this.escape(report.pco_phone || '')}</p>
-        </div>
-    </div>
-
-    <!-- Treatment Cards by Area (2 per row) -->
-    ${treatmentsByArea.size > 0 ? `
-    <div class="section">
-        <div class="section-title">FUMIGATION TREATMENTS</div>
-        <div class="treatment-grid">
-        ${Array.from(treatmentsByArea.values()).map(areaData => `
-            <div class="treatment-card">
-                <div class="treatment-header">${this.formatAreaName(areaData.area)}</div>
-                <p style="margin: 3px 0; font-size: 7pt;">
-                    <strong>Target Pests:</strong> ${Array.from(areaData.pests).join(', ') || 'Not specified'}
-                </p>
-                ${areaData.chemicals.length > 0 ? `
-                <p style="margin: 3px 0; font-size: 7pt;"><strong>Chemicals Applied:</strong></p>
-                <ul style="margin: 3px 0; padding-left: 15px; font-size: 7pt;">
-                    ${areaData.chemicals.map((chem: any) => `
-                    <li>
-                        ${this.escape(chem.name)}${chem.l_number !== 'N/A' ? ` (L${chem.l_number})` : ''}
-                        - ${chem.quantity} ${chem.unit}
-                    </li>
-                    `).join('')}
-                </ul>
-                ` : ''}
-            </div>
-        `).join('')}
-        </div>
-    </div>
-    ` : ''}
-
-    <!-- Chemical Usage Summary -->
-    ${chemicalUsageArray.length > 0 ? `
-    <div class="section">
-        <h3 style="color: #8b2635;">Chemical Usage Summary</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Chemical Name</th>
-                    <th style="text-align: center;">Batch Number</th>
-                    <th style="text-align: center;">Total Quantity</th>
-                    <th style="text-align: center;">Applications</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${chemicalUsageArray.map(chem => `
-                <tr>
-                    <td>${this.escape(chem.name)}${chem.l_number !== 'N/A' ? ` (L${chem.l_number})` : ''}</td>
-                    <td style="text-align: center;">${this.escape(chem.batch_number)}</td>
-                    <td style="text-align: center;">${chem.quantity.toFixed(2)} ${chem.unit}</td>
-                    <td style="text-align: center;">${chem.usageCount}</td>
-                </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
-    ` : ''}
-
-    <!-- Insect Monitors - Light Type -->
-    ${insectMonitors && insectMonitors.filter(m => m.monitor_type === 'light').length > 0 ? `
-    <div class="section">
-        <div class="section-title">LIGHT MONITORS</div>
-        <table style="font-size: 9px;">
-            <thead>
-                <tr>
-                    <th>Monitor #</th>
-                    <th>Location</th>
-                    <th>Monitor<br/>Condition</th>
-                    <th>Warning<br/>Sign</th>
-                    <th>Light<br/>Condition</th>
-                    <th>Glue Board<br/>Replaced</th>
-                    <th>Tubes<br/>Replaced</th>
-                    <th>Serviced</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${insectMonitors
-                  .filter(m => m.monitor_type === 'light')
-                  .sort((a, b) => {
-                    const numA = a.monitor_number || '';
-                    const numB = b.monitor_number || '';
-                    return numA.localeCompare(numB, undefined, { numeric: true });
-                  })
-                  .map(monitor => {
-                  const monitorCond = monitor.monitor_condition === 'other' && monitor.monitor_condition_other 
-                    ? monitor.monitor_condition_other 
-                    : monitor.monitor_condition || '-';
-                  const lightCond = monitor.light_condition === 'faulty' && monitor.light_faulty_type
-                    ? `Faulty (${monitor.light_faulty_type}${monitor.light_faulty_type === 'other' && monitor.light_faulty_other ? ': ' + monitor.light_faulty_other : ''})`
-                    : (monitor.light_condition || '-');
-                  
-                  return `
-                <tr>
-                    <td><strong>${this.escape(monitor.monitor_number || '-')}</strong></td>
-                    <td>${this.escape(monitor.location || '-')}</td>
-                    <td style="text-align: center;">${this.escape(monitorCond)}</td>
-                    <td style="text-align: center;">${this.escape(monitor.warning_sign_condition || '-')}</td>
-                    <td style="text-align: center;">${this.escape(lightCond)}</td>
-                    <td style="text-align: center;">${monitor.glue_board_replaced ? '✓' : '-'}</td>
-                    <td style="text-align: center;">${monitor.tubes_replaced ? '✓' : '-'}</td>
-                    <td style="text-align: center;">${monitor.monitor_serviced ? '✓' : '-'}</td>
-                </tr>
-                `;
-                }).join('')}
-            </tbody>
-        </table>
-    </div>
-    ` : ''}
-
-    <!-- Insect Monitors - Box Type -->
-    ${insectMonitors && insectMonitors.filter(m => m.monitor_type === 'box').length > 0 ? `
-    <div class="section">
-        <div class="section-title">BOX MONITORS</div>
-        <table style="font-size: 9px;">
-            <thead>
-                <tr>
-                    <th>Monitor #</th>
-                    <th>Location</th>
-                    <th>Monitor<br/>Condition</th>
-                    <th>Warning<br/>Sign</th>
-                    <th>Glue Board<br/>Replaced</th>
-                    <th>Serviced</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${insectMonitors
-                  .filter(m => m.monitor_type === 'box')
-                  .sort((a, b) => {
-                    const numA = a.monitor_number || '';
-                    const numB = b.monitor_number || '';
-                    return numA.localeCompare(numB, undefined, { numeric: true });
-                  })
-                  .map(monitor => {
-                  const monitorCond = monitor.monitor_condition === 'other' && monitor.monitor_condition_other 
-                    ? monitor.monitor_condition_other 
-                    : monitor.monitor_condition || '-';
-                  
-                  return `
-                <tr>
-                    <td><strong>${this.escape(monitor.monitor_number || '-')}</strong></td>
-                    <td>${this.escape(monitor.location || '-')}</td>
-                    <td style="text-align: center;">${this.escape(monitorCond)}</td>
-                    <td style="text-align: center;">${this.escape(monitor.warning_sign_condition || '-')}</td>
-                    <td style="text-align: center;">${monitor.glue_board_replaced ? '✓' : '-'}</td>
-                    <td style="text-align: center;">${monitor.monitor_serviced ? '✓' : '-'}</td>
-                </tr>
-                `;
-                }).join('')}
-            </tbody>
-        </table>
-    </div>
-    ` : ''}
-
-    <!-- Monitor Summary Statistics - Split by Type -->
-    ${insectMonitors && insectMonitors.length > 0 ? `
-    <div class="section">
-        <h3 style="color: #1f5582;">Monitor Summary</h3>
-        <div class="side-by-side">
-            <!-- Light Monitors Summary -->
-            ${monitorStats.byType.light > 0 ? `
-            <div>
-                <h4 style="margin: 5px 0;">Light Monitors (${monitorStats.byType.light})</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Metric</th>
-                            <th style="text-align: center;">Count</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Serviced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_serviced).length}</td>
-                        </tr>
-                        <tr>
-                            <td>Good Condition</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'good').length}</td>
-                        </tr>
-                        <tr>
-                            <td>Replaced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'replaced').length}</td>
-                        </tr>
-                        <tr>
-                            <td>Repaired</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.monitor_condition === 'repaired').length}</td>
-                        </tr>
-                        <tr>
-                            <td>Glue Boards Replaced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.glue_board_replaced).length}</td>
-                        </tr>
-                        <tr>
-                            <td>Tubes Replaced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.tubes_replaced).length}</td>
-                        </tr>
-                        <tr>
-                            <td>Faulty Lights</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'light' && m.light_condition === 'faulty').length}</td>
-                        </tr>
-                        <tr style="background: #e3f2fd; font-weight: bold;">
-                            <td>TOTAL</td>
-                            <td style="text-align: center;">${monitorStats.byType.light}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            ` : ''}
-            
-            <!-- Box Monitors Summary -->
-            ${monitorStats.byType.box > 0 ? `
-            <div>
-                <h4 style="margin: 5px 0;">Box Monitors (${monitorStats.byType.box})</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Metric</th>
-                            <th style="text-align: center;">Count</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Serviced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_serviced).length}</td>
-                        </tr>
-                        <tr>
-                            <td>Good Condition</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'good').length}</td>
-                        </tr>
-                        <tr>
-                            <td>Replaced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'replaced').length}</td>
-                        </tr>
-                        <tr>
-                            <td>Repaired</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.monitor_condition === 'repaired').length}</td>
-                        </tr>
-                        <tr>
-                            <td>Glue Boards Replaced</td>
-                            <td style="text-align: center;">${insectMonitors.filter(m => m.monitor_type === 'box' && m.glue_board_replaced).length}</td>
-                        </tr>
-                        <tr style="background: #e3f2fd; font-weight: bold;">
-                            <td>TOTAL</td>
-                            <td style="text-align: center;">${monitorStats.byType.box}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            ` : ''}
-        </div>
-    </div>
-    ` : ''}
-
-    <!-- Remarks and Recommendations -->
-    ${report.general_remarks || report.recommendations ? `
-    <div class="section">
-        ${report.general_remarks ? `
-        <h3 style="color: #1f5582;">Technician Remarks</h3>
-        <p style="padding: 10px; background: #f9f9f9; margin-bottom: 15px;">
-            ${this.escape(report.general_remarks)}
-        </p>
-        ` : ''}
-        
-        ${report.recommendations ? `
-        <h3 style="color: #1f5582;">Recommendations</h3>
-        <p style="padding: 10px; background: #fff3cd; margin-bottom: 15px;">
-            ${this.escape(report.recommendations)}
-        </p>
-        ` : ''}
-        
-        ${report.next_service_date ? `
-        <p style="font-weight: bold; color: #1f5582; font-size: 8pt;">
-            Next Service Scheduled: ${new Date(report.next_service_date).toLocaleDateString('en-ZA')}
-        </p>
-        ` : ''}
-    </div>
-    ` : ''}
-
-    <!-- Client Signature Section -->
-    <div class="signature-section" style="margin-top: 25px;">
-        <div style="display: inline-block; width: 45%; vertical-align: top;">
-            <p style="margin-bottom: 5px; font-weight: bold; font-size: 8pt;">Client Signature:</p>
-            ${report.client_signature_data ? `
-                <div style="border: 1px solid #ddd; padding: 5px; height: 50px; display: flex; align-items: center; justify-content: center;">
-                    <img src="${report.client_signature_data}" alt="Client Signature" style="max-width: 100%; max-height: 50px; object-fit: contain;" />
-                </div>
-            ` : `
-                <div class="signature-line" style="width: 200px; margin: 0;"></div>
-            `}
-            <p style="margin-top: 3px; font-size: 8pt;">${this.escape(report.client_signature_name || 'Name: ___________________________')}</p>
-            <p style="margin-top: 2px; font-size: 7pt; color: #666;">Date: ${new Date().toLocaleDateString('en-ZA')}</p>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-        <p><strong>KPS Pest Control</strong> | 3B Hamman Street, Groblersdal, 0470</p>
-        <p>Tel: +27 11 123 4567 | Email: info@kpspestcontrol.co.za</p>
-        <p>Generated on ${new Date().toLocaleString('en-ZA')}</p>
-    </div>
-</body>
-</html>
-`;
+    try {
+      return Buffer.from(base64, 'base64');
+    } catch {
+      return null;
+    }
   }
 
-  // Combined report for report_type = 'both'
-  private async generateCombinedReportHTML(data: ReportData): Promise<string> {
-    const baitHTML = await this.generateBaitInspectionHTML(data);
-    const fumigationHTML = await this.generateFumigationHTML(data);
-    
-    // Extract body content from each (remove DOCTYPE, html, head, body tags)
-    const baitBody = baitHTML.match(/<body>([\s\S]*)<\/body>/)?.[1] || '';
-    const fumigationBody = fumigationHTML.match(/<body>([\s\S]*)<\/body>/)?.[1] || '';
-    
-    // Get style from bait inspection (they should be the same now)
-    const style = baitHTML.match(/<style>([\s\S]*)<\/style>/)?.[1] || '';
-    
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Complete Report #${data.report.id}</title>
-    <style>${style}</style>
-</head>
-<body>
-    ${baitBody}
-    <div style="page-break-before: always;"></div>
-    ${fumigationBody}
-</body>
-</html>
-`;
+  private formatReportType(reportType: string | null | undefined): string {
+    if (!reportType) return 'Bait Inspection';
+    if (reportType === 'both') return 'Rodent Inspection & Fumigation';
+    if (reportType === 'bait_inspection') return 'Bait Inspection';
+    if (reportType === 'fumigation') return 'Fumigation';
+    return reportType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }
 

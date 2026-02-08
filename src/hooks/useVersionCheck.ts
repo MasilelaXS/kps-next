@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { buildApiUrl } from '@/lib/api';
+import { preloadCache } from '@/lib/preloadCache';
 
 interface UseVersionCheckReturn {
   needsUpdate: boolean;
@@ -12,7 +13,7 @@ interface UseVersionCheckReturn {
   dismissUpdate: () => void;
 }
 
-const CURRENT_APP_VERSION = '1.0.0'; // Update this with each release
+const DEFAULT_APP_VERSION = 'dev';
 const VERSION_CHECK_INTERVAL = 300000; // 5 minutes
 
 export function useVersionCheck(): UseVersionCheckReturn {
@@ -21,12 +22,63 @@ export function useVersionCheck(): UseVersionCheckReturn {
   const [latestVersion, setLatestVersion] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
   const [dismissed, setDismissed] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(DEFAULT_APP_VERSION);
+  const [updateHandled, setUpdateHandled] = useState(false);
+
+  const fetchLocalVersion = async (): Promise<string> => {
+    try {
+      const cacheBuster = `?_t=${Date.now()}`;
+      const response = await fetch(`/api/version${cacheBuster}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Version endpoint failed');
+      const data = await response.json();
+      return data?.version || DEFAULT_APP_VERSION;
+    } catch {
+      try {
+        const response = await fetch(`/version.json?_t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return DEFAULT_APP_VERSION;
+        const data = await response.json();
+        return data?.version || DEFAULT_APP_VERSION;
+      } catch {
+        return DEFAULT_APP_VERSION;
+      }
+    }
+  };
+
+  const refreshCaches = async (): Promise<void> => {
+    try {
+      // Ask service worker to update
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          await registration.update();
+          if (registration.waiting) {
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }
+      }
+
+      // Clear cached assets
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames
+            .filter((name) => name.startsWith('kps-'))
+            .map((name) => caches.delete(name))
+        );
+      }
+
+      // Refresh data caches in background
+      await preloadCache.forcePreload('both');
+    } catch (error) {
+      console.warn('Cache refresh failed:', error);
+    }
+  };
 
   const checkVersion = async () => {
     try {
       // Add cache-busting parameter to ensure fresh data
       const timestamp = new Date().getTime();
-      const response = await fetch(buildApiUrl(`/api/version/current?current_version=${CURRENT_APP_VERSION}&platform=web&_t=${timestamp}`), {
+      const response = await fetch(buildApiUrl(`/api/version/current?current_version=${currentVersion}&platform=web&_t=${timestamp}`), {
         cache: 'no-store'
       });
       
@@ -56,9 +108,18 @@ export function useVersionCheck(): UseVersionCheckReturn {
         setNeedsUpdate(updateAvailable && !dismissed);
         setForceUpdate(forceUpdateRequired);
 
+        if (updateAvailable && !updateHandled) {
+          await refreshCaches();
+          setUpdateHandled(true);
+
+          if (forceUpdateRequired) {
+            window.location.reload();
+          }
+        }
+
         // Log version check
         console.log('Version Check:', {
-          current: CURRENT_APP_VERSION,
+          current: currentVersion,
           latest: latestVer,
           updateAvailable,
           forceUpdate: forceUpdateRequired,
@@ -71,14 +132,19 @@ export function useVersionCheck(): UseVersionCheckReturn {
   };
 
   useEffect(() => {
-    // Check immediately on mount
+    fetchLocalVersion().then((version) => {
+      setCurrentVersion(version);
+    });
+  }, []);
+
+  useEffect(() => {
     checkVersion();
 
     // Set up periodic checking
     const interval = setInterval(checkVersion, VERSION_CHECK_INTERVAL);
 
     return () => clearInterval(interval);
-  }, [dismissed]);
+  }, [dismissed, currentVersion]);
 
   const dismissUpdate = () => {
     if (!forceUpdate) {
@@ -90,7 +156,7 @@ export function useVersionCheck(): UseVersionCheckReturn {
   return {
     needsUpdate: needsUpdate && !dismissed,
     forceUpdate,
-    currentVersion: CURRENT_APP_VERSION,
+    currentVersion,
     latestVersion,
     updateMessage,
     dismissUpdate

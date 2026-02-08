@@ -71,7 +71,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }, 1000);
 
     // Fetch app version
-    fetch('/api/version')
+    fetch(`/api/version?_t=${Date.now()}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => setAppVersion(data.version || 'dev'))
       .catch(() => setAppVersion('dev'));

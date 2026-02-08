@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
 import Loading from '@/components/Loading';
-import { apiCall } from '@/lib/api';
+import { apiCall, offlineAwareApiCall } from '@/lib/api';
 import { useNotification } from '@/contexts/NotificationContext';
-import { Building2, MapPin, Search, Users, AlertCircle, Check } from 'lucide-react';
+import { clientCache, type CachedClient } from '@/lib/clientCache';
+import Link from 'next/link';
+import { Building2, MapPin, Search, Users, AlertCircle, Check, WifiOff, RefreshCw, Download, Plus } from 'lucide-react';
 
 interface AvailableClient {
   id: number;
   company_name: string;
   address_line1: string;
-  address_line2: string;
+  address_line2?: string;
   city: string;
   state: string;
   postal_code: string;
@@ -43,6 +45,23 @@ export default function BrowseClientsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [assigningClientId, setAssigningClientId] = useState<number | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const [downloadingCache, setDownloadingCache] = useState(false);
+
+  // Detect online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    setIsOffline(!navigator.onLine);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     fetchAvailableClients(1, searchQuery);
@@ -52,6 +71,31 @@ export default function BrowseClientsPage() {
     try {
       setLoading(true);
       
+      // Check if offline - use cached data
+      if (!navigator.onLine) {
+        console.log('[Browse] Offline - using cached clients');
+        const cachedClients = clientCache.getAvailableClients(search);
+        
+        // Transform cached clients to match AvailableClient interface
+        const transformedClients: AvailableClient[] = cachedClients.map(c => ({
+          ...c,
+          assignment_status: 'unassigned' as const
+        }));
+        
+        setClients(transformedClients);
+        setPagination({
+          current_page: 1,
+          total_pages: 1,
+          total_clients: transformedClients.length,
+          per_page: transformedClients.length,
+          has_next: false,
+          has_prev: false
+        });
+        setLoading(false);
+        return;
+      }
+      
+      // Online - fetch from API
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '25'
@@ -72,9 +116,44 @@ export default function BrowseClientsPage() {
       }
     } catch (error) {
       console.error('Error fetching available clients:', error);
-      notification.error('Failed to load available clients');
+      
+      // Fallback to cache on error
+      const cachedClients = clientCache.getAvailableClients(search);
+      if (cachedClients.length > 0) {
+        console.log('[Browse] API error - falling back to cached clients');
+        const transformedClients: AvailableClient[] = cachedClients.map(c => ({
+          ...c,
+          assignment_status: 'unassigned' as const
+        }));
+        setClients(transformedClients);
+        notification.info('Showing cached clients (offline mode)');
+      } else {
+        notification.error('Failed to load available clients');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadCache = async () => {
+    try {
+      setDownloadingCache(true);
+      notification.info('Downloading clients for offline use...');
+      
+      const result = await clientCache.downloadAllClients();
+      
+      if (result.success) {
+        notification.success(
+          `Downloaded ${result.totalClients} clients (${result.assignedCount} assigned, ${result.availableCount} available) for offline use`
+        );
+      } else {
+        notification.error(result.error || 'Failed to download clients');
+      }
+    } catch (error) {
+      console.error('Error downloading cache:', error);
+      notification.error('Failed to download clients');
+    } finally {
+      setDownloadingCache(false);
     }
   };
 
@@ -87,15 +166,28 @@ export default function BrowseClientsPage() {
     try {
       setAssigningClientId(client.id);
       
-      const response = await apiCall('/api/pco/assignments/self-assign', {
+      const response = await offlineAwareApiCall('/api/pco/assignments/self-assign', {
         method: 'POST',
-        body: JSON.stringify({ client_id: client.id })
+        body: JSON.stringify({ client_id: client.id }),
+        type: 'assignment',
+        queueIfOffline: true
       });
 
       if (response.success) {
-        notification.success(`Successfully assigned to ${client.company_name}`);
+        if (response.queued) {
+          notification.success(`Assignment queued - will sync when online`);
+        } else {
+          notification.success(`Successfully assigned to ${client.company_name}`);
+        }
         
-        // Remove from available list
+        // Update cache - remove from available, add to assigned
+        clientCache.removeFromAvailableCache(client.id);
+        clientCache.addToAssignedCache({
+          ...client,
+          status: 'active'
+        });
+        
+        // Remove from current list
         setClients(prev => prev.filter(c => c.id !== client.id));
         
         // Optionally navigate to schedule
@@ -139,12 +231,42 @@ export default function BrowseClientsPage() {
     <PcoDashboardLayout>
       <div className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Browse Clients</h1>
             <p className="text-sm text-gray-500 mt-1">
               {pagination ? `${pagination.total_clients} available clients` : 'Loading...'}
             </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/pco/clients/new"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Client
+            </Link>
+
+            {!isOffline && (
+              <button
+                onClick={handleDownloadCache}
+                disabled={downloadingCache}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {downloadingCache ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download for Offline
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

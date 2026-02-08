@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
 import UpdateModal from '@/components/UpdateModal';
 import Loading from '@/components/Loading';
-import Button from '@/components/Button';
 import ReportImport from '@/components/ReportImport';
 import { useVersionCheck } from '@/hooks/useVersionCheck';
 import { API_CONFIG, apiCall } from '@/lib/api';
 import { cachedApiCall } from '@/lib/cache';
+import { clientCache } from '@/lib/clientCache';
+import { useNotification } from '@/contexts/NotificationContext';
 import { 
   Building2, 
   FileText, 
@@ -16,7 +17,8 @@ import {
   Clock, 
   TrendingUp,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
 
 interface PCOStats {
@@ -58,15 +60,32 @@ interface RecentActivity {
 
 
 export default function PCODashboard() {
+  const notification = useNotification();
   const [stats, setStats] = useState<PCOStats | null>(null);
   const [activities, setActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadingCache, setDownloadingCache] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const { needsUpdate, forceUpdate, currentVersion, latestVersion, updateMessage, dismissUpdate } = useVersionCheck();
 
   useEffect(() => {
     fetchDashboardData();
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const fetchDashboardData = async (isRefresh = false) => {
@@ -161,6 +180,28 @@ export default function PCODashboard() {
     fetchDashboardData(true);
   };
 
+  const handleDownloadOffline = async () => {
+    try {
+      setDownloadingCache(true);
+      notification.info('Downloading data for offline use...');
+
+      const result = await clientCache.downloadAllClients();
+
+      if (result.success) {
+        notification.success(
+          `Downloaded ${result.totalClients} clients (${result.assignedCount} assigned, ${result.availableCount} available) and ${result.chemicalsCount} chemicals`
+        );
+      } else {
+        notification.error(result.error || 'Failed to download data');
+      }
+    } catch (error) {
+      console.error('Error downloading offline data:', error);
+      notification.error('Failed to download data');
+    } finally {
+      setDownloadingCache(false);
+    }
+  };
+
   const handleUpdate = () => {
     // Redirect to app store or trigger PWA update
     window.location.reload();
@@ -204,32 +245,56 @@ export default function PCODashboard() {
         <div className="space-y-6">
           {/* Welcome Header - Mobile Optimized */}
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-bold mb-2">Welcome Back!</h1>
                 <p className="text-blue-100">Here's your overview for today</p>
               </div>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="p-2 bg-white/20 rounded-lg hover:bg-white/30 active:scale-95 transition-all disabled:opacity-50"
-                title="Refresh data"
-              >
-                <svg
-                  className={`w-5 h-5 text-white ${refreshing ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="flex items-center gap-2">
+                {isOnline && (
+                  <button
+                    onClick={handleDownloadOffline}
+                    disabled={downloadingCache}
+                    className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/15 text-white text-xs font-medium hover:bg-white/25 active:scale-95 transition-all disabled:opacity-50"
+                    title="Download data for offline use"
+                  >
+                    <Download className={`w-4 h-4 ${downloadingCache ? 'animate-pulse' : ''}`} />
+                    {downloadingCache ? 'Downloading...' : 'Download Offline'}
+                  </button>
+                )}
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="p-2 bg-white/20 rounded-lg hover:bg-white/30 active:scale-95 transition-all disabled:opacity-50"
+                  title="Refresh data"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className={`w-5 h-5 text-white ${refreshing ? 'animate-spin' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
+            {isOnline && (
+              <button
+                onClick={handleDownloadOffline}
+                disabled={downloadingCache}
+                className="mt-4 w-full sm:hidden inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white/15 text-white text-sm font-semibold hover:bg-white/25 active:scale-95 transition-all disabled:opacity-50"
+                title="Download data for offline use"
+              >
+                <Download className={`w-4 h-4 ${downloadingCache ? 'animate-pulse' : ''}`} />
+                {downloadingCache ? 'Downloading offline data...' : 'Download for Offline'}
+              </button>
+            )}
           </div>
 
           {/* Import Report Section - Moved to bottom */}

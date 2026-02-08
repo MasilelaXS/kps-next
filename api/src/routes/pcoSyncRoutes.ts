@@ -27,12 +27,14 @@ import {
   getAvailableClients,
   selfAssignClient
 } from '../controllers/pcoSyncController';
+import { ClientController } from '../controllers/clientController';
 import { ChemicalController } from '../controllers/chemicalController';
 import {
   uploadReportsSchema,
   syncQuerySchema,
   updateClientCountsSchema
 } from '../validation/syncValidation';
+import { validateClientInput } from '../middleware/clientValidation';
 
 const router = Router();
 
@@ -126,6 +128,12 @@ router.get('/pco/reports/last-for-client/:clientId', authenticateToken, async (r
  * - limit (number) - Results per page (default: 25)
  */
 router.get('/pco/clients/available', authenticateToken, getAvailableClients);
+
+/**
+ * POST /api/pco/clients
+ * Create new client (PCO portal)
+ */
+router.post('/pco/clients', authenticateToken, validateClientInput, ClientController.createClient);
 
 /**
  * POST /api/pco/assignments/self-assign

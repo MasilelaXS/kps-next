@@ -67,11 +67,11 @@ export class ClientController {
    */
   static async getClientList(req: Request, res: Response): Promise<void> {
     try {
-      // Check if user is admin
-      if (!hasRole(req.user, 'admin')) {
+      // Allow admin or PCO to create clients
+      if (!hasRole(req.user, 'admin') && !hasRole(req.user, 'pco')) {
         res.status(403).json({
           success: false,
-          message: 'Admin access required'
+          message: 'Admin or PCO access required'
         });
         return;
       }
@@ -233,11 +233,11 @@ export class ClientController {
    */
   static async createClient(req: Request, res: Response): Promise<void> {
     try {
-      // Check if user is admin
-      if (!hasRole(req.user, 'admin')) {
+      // Allow admin or PCO to create clients
+      if (!hasRole(req.user, 'admin') && !hasRole(req.user, 'pco')) {
         res.status(403).json({
           success: false,
-          message: 'Admin access required'
+          message: 'Admin or PCO access required'
         });
         return;
       }
@@ -254,28 +254,50 @@ export class ClientController {
         total_bait_stations_outside = 0,
         total_insect_monitors_light = 0,
         total_insect_monitors_box = 0,
+        service_notes,
         contacts = [] // Optional contacts array
       } = req.body;
 
+      // Helper for NOT NULL database fields - returns 'N/A' if empty (address_line1, city, country)
+      const normalizeRequiredText = (value: string | null | undefined): string => {
+        if (!value) return 'N/A';
+        const trimmed = value.toString().trim();
+        return trimmed.length > 0 ? trimmed : 'N/A';
+      };
+
+      // Helper for NULLABLE database fields - returns null if empty (state, postal_code, address_line2)
+      const normalizeOptionalText = (value: string | null | undefined): string | null => {
+        if (!value) return null;
+        const trimmed = value.toString().trim();
+        return trimmed.length > 0 ? trimmed : null;
+      };
+
+      // Company name is required and must not be empty
+      const normalizedCompanyName = company_name?.toString().trim();
+      // NOT NULL fields in DB - use 'N/A' default
+      const normalizedAddressLine1 = normalizeRequiredText(address_line1);
+      const normalizedCity = normalizeRequiredText(city);
+      const normalizedCountry = normalizeRequiredText(country);
+      // NULLABLE fields in DB - can be null
+      const normalizedAddressLine2 = normalizeOptionalText(address_line2);
+      const normalizedState = normalizeOptionalText(state);
+      const normalizedPostalCode = normalizeOptionalText(postal_code);
+
       // Validation
-      if (!company_name || !address_line1 || !city || !state || !postal_code) {
+      if (!normalizedCompanyName || normalizedCompanyName.length < 2) {
         res.status(400).json({
           success: false,
           message: 'Missing required fields',
           errors: [
-            { field: 'company_name', message: !company_name ? 'Company name is required' : undefined },
-            { field: 'address_line1', message: !address_line1 ? 'Address is required' : undefined },
-            { field: 'city', message: !city ? 'City is required' : undefined },
-            { field: 'state', message: !state ? 'State is required' : undefined },
-            { field: 'postal_code', message: !postal_code ? 'Postal code is required' : undefined }
-          ].filter(e => e.message)
+            { field: 'company_name', message: 'Company name is required and must be at least 2 characters' }
+          ]
         });
         return;
       }
 
       logger.info('Creating client', { 
-        company_name, 
-        city, 
+        company_name: normalizedCompanyName, 
+        city: normalizedCity, 
         equipment: { 
           bait_inside: total_bait_stations_inside, 
           bait_outside: total_bait_stations_outside,
@@ -288,7 +310,7 @@ export class ClientController {
       // Check for duplicate company name
       const existingClient = await executeQuerySingle(
         'SELECT id FROM clients WHERE company_name = ? AND deleted_at IS NULL',
-        [company_name]
+        [normalizedCompanyName]
       );
 
       if (existingClient) {
@@ -309,22 +331,24 @@ export class ClientController {
           state, 
           postal_code,
           country,
+          service_notes,
           total_bait_stations_inside,
           total_bait_stations_outside,
           total_insect_monitors_light,
           total_insect_monitors_box,
           status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
       `;
 
       const result = await executeQuery(insertQuery, [
-        company_name,
-        address_line1,
-        address_line2 || null,
-        city,
-        state,
-        postal_code,
-        country,
+        normalizedCompanyName,
+        normalizedAddressLine1,
+        normalizedAddressLine2,
+        normalizedCity,
+        normalizedState,
+        normalizedPostalCode,
+        normalizedCountry,
+        service_notes || null,
         total_bait_stations_inside,
         total_bait_stations_outside,
         total_insect_monitors_light,
@@ -336,6 +360,16 @@ export class ClientController {
       // Add contacts if provided
       if (contacts.length > 0) {
         for (const contact of contacts) {
+          const hasAnyContactInfo =
+            (contact?.name && contact.name.toString().trim()) ||
+            (contact?.email && contact.email.toString().trim()) ||
+            (contact?.phone && contact.phone.toString().trim()) ||
+            (contact?.role && contact.role.toString().trim());
+
+          if (!hasAnyContactInfo) {
+            continue;
+          }
+
           await executeQuery(`
             INSERT INTO client_contacts (
               client_id, 
@@ -347,8 +381,8 @@ export class ClientController {
             ) VALUES (?, ?, ?, ?, ?, ?)
           `, [
             clientId,
-            contact.name,
-            contact.role,
+            normalizeRequiredText(contact.name),
+            contact.role && contact.role.toString().trim() ? contact.role : 'other',
             contact.phone || null,
             contact.email || null,
             contact.is_primary || false

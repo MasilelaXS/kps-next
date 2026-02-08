@@ -175,11 +175,6 @@ export default function ReportsPage() {
   const [cleaningUp, setCleaningUp] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   
-  // Email modal state
-  const [clientContacts, setClientContacts] = useState<any[]>([]);
-  const [emailRecipients, setEmailRecipients] = useState<string>('');
-  const [emailCC, setEmailCC] = useState<string>('');
-  const [emailMessage, setEmailMessage] = useState<string>('');
 
   // Helper function to handle 401 Unauthorized errors
   const handleUnauthorized = () => {
@@ -582,51 +577,12 @@ export default function ReportsPage() {
     }
   }, [notification]);
 
-  const openEmailModal = useCallback(async (report: Report) => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('kps_token');
-      
-      if (!token) {
-        handleUnauthorized();
-        return;
-      }
+  const openEmailModal = useCallback((report: Report) => {
+    setSelectedReport(report);
+    setShowEmailModal(true);
+  }, []);
 
-      // Fetch client contacts
-      const response = await fetch(buildApiUrl(`/api/admin/clients/${report.client_id}`), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-
-      const data = await response.json();
-
-      if (response.ok && data.success && data.data?.contacts) {
-        setClientContacts(data.data.contacts);
-        
-        // Set primary contact as default recipient
-        const primaryContact = data.data.contacts.find((c: any) => c.is_primary);
-        if (primaryContact?.email) {
-          setEmailRecipients(primaryContact.email);
-        }
-      }
-
-      setSelectedReport(report);
-      setShowEmailModal(true);
-    } catch (error) {
-      console.error('Error loading client contacts:', error);
-      notification.error('Failed to Load', 'Could not load client contact information');
-    } finally {
-      setLoading(false);
-    }
-  }, [notification, handleUnauthorized]);
-
-  const handleSendEmail = useCallback(async () => {
+  const handleMarkEmailed = useCallback(async () => {
     if (!selectedReport) return;
 
     try {
@@ -638,25 +594,14 @@ export default function ReportsPage() {
         return;
       }
 
-      // Validate recipients
-      if (!emailRecipients.trim()) {
-        notification.error('Validation Error', 'Please specify at least one recipient');
-        return;
-      }
+      notification.info('Updating Report', 'Marking report as emailed...');
 
-      notification.info('Sending Email', 'Please wait while we send the report...');
-      
-      const response = await fetch(buildApiUrl(`/api/admin/reports/${selectedReport.id}/email`), {
+      const response = await fetch(buildApiUrl(`/api/admin/reports/${selectedReport.id}/mark-emailed`), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          recipients: emailRecipients.split(',').map(e => e.trim()).filter(Boolean),
-          cc: emailCC ? emailCC.split(',').map(e => e.trim()).filter(Boolean) : undefined,
-          additionalMessage: emailMessage.trim() || undefined
-        })
+        }
       });
 
       if (response.status === 401) {
@@ -667,28 +612,24 @@ export default function ReportsPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error('Email API error response:', data);
-        throw new Error(data.message || 'Failed to email report');
+        console.error('Mark emailed API error response:', data);
+        throw new Error(data.message || 'Failed to mark report as emailed');
       }
 
-      notification.success('Email Sent', data.message || 'Report has been emailed successfully');
+      notification.success('Report Updated', data.message || 'Report marked as emailed');
       
       // Close modal and reset form
       setShowEmailModal(false);
-      setEmailRecipients('');
-      setEmailCC('');
-      setEmailMessage('');
-      setClientContacts([]);
       
       // Refresh reports to update emailed_at timestamp
       fetchReports();
     } catch (error) {
-      console.error('Error emailing PDF:', error);
-      notification.error('Email Failed', error instanceof Error ? error.message : 'Failed to email report');
+      console.error('Error marking report as emailed:', error);
+      notification.error('Update Failed', error instanceof Error ? error.message : 'Failed to mark report as emailed');
     } finally {
       setSubmitting(false);
     }
-  }, [selectedReport, emailRecipients, emailCC, emailMessage, notification, handleUnauthorized, fetchReports]);
+  }, [selectedReport, notification, handleUnauthorized, fetchReports]);
 
   const openApproveModal = useCallback(async (report: Report) => {
     try {
@@ -990,7 +931,7 @@ export default function ReportsPage() {
           <Search className="w-4 h-4 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search client or PCO name..."
+            placeholder="Search report ID, client, or PCO..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -1160,7 +1101,7 @@ export default function ReportsPage() {
                       className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs bg-green-50 text-green-600 rounded-lg hover:bg-green-100 active:scale-95 transition-all"
                     >
                       <Mail className="w-3.5 h-3.5" />
-                      Email
+                      Mark Emailed
                     </button>
                   </>
                 )}
@@ -1307,7 +1248,7 @@ export default function ReportsPage() {
                             <button 
                               onClick={() => openEmailModal(report)}
                               className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Email Report to Client"
+                              title="Mark Report as Emailed"
                             >
                               <Mail className="w-3.5 h-3.5" />
                             </button>
@@ -1920,7 +1861,7 @@ export default function ReportsPage() {
                   className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Mail className="w-4 h-4" />
-                  Email Client
+                  Mark as Emailed
                 </button>
               </div>
             </div>
@@ -1961,7 +1902,7 @@ export default function ReportsPage() {
               
               <div className="bg-green-50 rounded-lg p-3">
                 <p className="text-xs text-green-800">
-                  Once approved, this report will be finalized and can be emailed to the client.
+                  Once approved, this report will be finalized and can be marked as emailed.
                 </p>
               </div>
             </div>
@@ -2123,7 +2064,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Email Report Modal */}
+      {/* Mark Report as Emailed Modal */}
       {showEmailModal && selectedReport && (
         <div className="fixed inset-0 bg-black/25 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -2133,124 +2074,20 @@ export default function ReportsPage() {
                   <Mail className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Email Report to Client</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Mark Report as Emailed</h2>
                   <p className="text-xs text-gray-500">Report #{selectedReport.id} - {selectedReport.client_name}</p>
                 </div>
               </div>
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Client Contacts Section */}
-              {clientContacts.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Client Contacts
-                  </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {clientContacts.map((contact) => (
-                      <button
-                        key={contact.id}
-                        onClick={() => {
-                          if (contact.email) {
-                            const currentRecipients = emailRecipients.split(',').map(e => e.trim()).filter(Boolean);
-                            if (!currentRecipients.includes(contact.email)) {
-                              setEmailRecipients(prev => prev ? `${prev}, ${contact.email}` : contact.email);
-                            }
-                          }
-                        }}
-                        disabled={!contact.email}
-                        className={`text-left p-3 rounded-lg border transition-colors ${
-                          contact.email 
-                            ? 'border-gray-200 hover:border-green-500 hover:bg-green-50 cursor-pointer' 
-                            : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-60'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {contact.name}
-                              {contact.is_primary && (
-                                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Primary</span>
-                              )}
-                            </p>
-                            {contact.email ? (
-                              <p className="text-xs text-gray-600 truncate">{contact.email}</p>
-                            ) : (
-                              <p className="text-xs text-red-500">No email</p>
-                            )}
-                            {contact.role && (
-                              <p className="text-xs text-gray-500 capitalize">{contact.role.replace('_', ' ')}</p>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    💡 Click on a contact to add their email to recipients
-                  </p>
-                </div>
-              )}
-
-              {/* Recipients Field */}
-              <div>
-                <label htmlFor="recipients" className="block text-sm font-medium text-gray-700 mb-1">
-                  Recipients <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="recipients"
-                  type="text"
-                  value={emailRecipients}
-                  onChange={(e) => setEmailRecipients(e.target.value)}
-                  placeholder="email1@example.com, email2@example.com"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Separate multiple email addresses with commas
-                </p>
-              </div>
-
-              {/* CC Field */}
-              <div>
-                <label htmlFor="cc" className="block text-sm font-medium text-gray-700 mb-1">
-                  CC (Optional)
-                </label>
-                <input
-                  id="cc"
-                  type="text"
-                  value={emailCC}
-                  onChange={(e) => setEmailCC(e.target.value)}
-                  placeholder="cc1@example.com, cc2@example.com"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-
-              {/* Additional Message */}
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
-                  Additional Message (Optional)
-                </label>
-                <textarea
-                  id="message"
-                  value={emailMessage}
-                  onChange={(e) => setEmailMessage(e.target.value)}
-                  placeholder="Add any additional information or notes for the client..."
-                  rows={4}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-                />
-              </div>
-
               {/* Info Box */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <div className="flex gap-2">
                   <Mail className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div className="text-xs text-blue-800">
-                    <p className="font-medium mb-1">What will be sent:</p>
-                    <ul className="list-disc list-inside space-y-1 ml-2">
-                      <li>Professional PDF report attached</li>
-                      <li>Service details and report summary</li>
-                      <li>Your additional message (if provided)</li>
-                    </ul>
+                    <p className="font-medium mb-1">No email will be sent</p>
+                    <p>This will only mark the report as emailed for tracking purposes.</p>
                   </div>
                 </div>
               </div>
@@ -2260,10 +2097,6 @@ export default function ReportsPage() {
               <button
                 onClick={() => {
                   setShowEmailModal(false);
-                  setEmailRecipients('');
-                  setEmailCC('');
-                  setEmailMessage('');
-                  setClientContacts([]);
                 }}
                 disabled={submitting}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
@@ -2271,19 +2104,19 @@ export default function ReportsPage() {
                 Cancel
               </button>
               <button
-                onClick={handleSendEmail}
-                disabled={submitting || !emailRecipients.trim()}
+                onClick={handleMarkEmailed}
+                disabled={submitting}
                 className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {submitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Sending Email...
+                    Updating...
                   </>
                 ) : (
                   <>
                     <Mail className="w-4 h-4" />
-                    Send Email
+                    Mark as Emailed
                   </>
                 )}
               </button>

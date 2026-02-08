@@ -72,7 +72,7 @@ const router = express.Router();
  *     tags:
  *       - Clients
  *     summary: Create new client
- *     description: Create a new client with contacts (Admin only)
+ *     description: Create a new client with contacts (Admin or PCO)
  *     requestBody:
  *       required: true
  *       content:

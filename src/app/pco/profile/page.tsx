@@ -22,12 +22,18 @@ export default function PCOProfile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [appVersion, setAppVersion] = useState('...');
 
   useEffect(() => {
     const userData = localStorage.getItem('kps_user');
     if (userData) {
       setUser(JSON.parse(userData));
     }
+
+    fetch(`/api/version?_t=${Date.now()}`, { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => setAppVersion(data.version || 'dev'))
+      .catch(() => setAppVersion('dev'));
   }, []);
 
   const handleChangePassword = async () => {
@@ -314,7 +320,7 @@ export default function PCOProfile() {
         {/* App Info */}
         <div className="text-center text-sm text-gray-500 pt-4">
           <p>KPS PCO Portal</p>
-          <p className="text-xs">Version 1.0.0</p>
+          <p className="text-xs">Version {appVersion}</p>
         </div>
       </div>
     </PcoDashboardLayout>

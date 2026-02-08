@@ -57,7 +57,8 @@ import {
   // PDF Generation
   adminDownloadReportPDF,
   adminGetReportHTML,
-  adminEmailReportPDF
+  adminEmailReportPDF,
+  adminMarkReportEmailed
 } from '../controllers/reportController';
 import {
   createReportSchema,
@@ -408,6 +409,17 @@ router.post(
   '/admin/reports/:id/email',
   authenticateToken,
   adminEmailReportPDF
+);
+
+/**
+ * POST /api/admin/reports/:id/mark-emailed
+ * Mark report as emailed (no email sent)
+ * Business Rule: Admin only
+ */
+router.post(
+  '/admin/reports/:id/mark-emailed',
+  authenticateToken,
+  adminMarkReportEmailed
 );
 
 // ============================================================================

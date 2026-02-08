@@ -162,6 +162,13 @@ export const getPCOReports = async (req: Request, res: Response) => {
  */
 export const getAdminReports = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 25;
     const offset = (page - 1) * limit;
@@ -219,10 +226,17 @@ export const getAdminReports = async (req: Request, res: Response) => {
       queryParams.push(reportType);
     }
 
-    // Search filtering (client name or PCO name)
+    // Search filtering (client name, PCO name, or report/client ID)
     if (search) {
-      whereConditions.push('(c.company_name LIKE ? OR u.name LIKE ?)');
-      queryParams.push(`%${search}%`, `%${search}%`);
+      const searchId = parseInt(search, 10);
+
+      if (!isNaN(searchId)) {
+        whereConditions.push('(c.company_name LIKE ? OR u.name LIKE ? OR r.id = ? OR r.client_id = ?)');
+        queryParams.push(`%${search}%`, `%${search}%`, searchId, searchId);
+      } else {
+        whereConditions.push('(c.company_name LIKE ? OR u.name LIKE ?)');
+        queryParams.push(`%${search}%`, `%${search}%`);
+      }
     }
 
     if (pcoId) {
@@ -349,6 +363,13 @@ export const getAdminReports = async (req: Request, res: Response) => {
  */
 export const getPendingReports = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const query = `
       SELECT 
         r.id,
@@ -475,10 +496,14 @@ export const getReportById = async (req: Request, res: Response) => {
 
     const baitStations = await executeQuery<RowDataPacket[]>(baitStationsQuery, [reportId]);
 
-    // Parse chemicals JSON
+    // Parse chemicals JSON and normalize boolean fields to 'yes'/'no' for frontend
     const parsedBaitStations = baitStations.map(station => ({
       ...station,
-      chemicals: (station as any).chemicals ? JSON.parse(`[${(station as any).chemicals}]`) : []
+      chemicals: (station as any).chemicals ? JSON.parse(`[${(station as any).chemicals}]`) : [],
+      // Convert database booleans to 'yes'/'no' strings for frontend select components
+      accessible: (station as any).is_accessible === 1 || (station as any).is_accessible === true ? 'yes' : 'no',
+      activity_detected: (station as any).activity_detected === 1 || (station as any).activity_detected === true ? 'yes' : 'no',
+      not_accessible_reason: (station as any).inaccessible_reason || ''
     }));
 
     // Get fumigation data
@@ -913,6 +938,13 @@ export const submitReport = async (req: Request, res: Response) => {
  */
 export const approveReport = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
     const adminId = req.user!.id;
     const { admin_notes, recommendations } = req.body;
@@ -994,6 +1026,13 @@ export const approveReport = async (req: Request, res: Response) => {
  */
 export const declineReport = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
     const adminId = req.user!.id;
     const { admin_notes } = req.body;
@@ -1120,6 +1159,13 @@ export const declineReport = async (req: Request, res: Response) => {
  */
 export const forceDeclineReport = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
     const adminId = req.user!.id;
     const { admin_notes } = req.body;
@@ -1910,6 +1956,13 @@ export const getPreFillData = async (req: Request, res: Response) => {
  */
 export const archiveReport = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
     const adminId = req.user!.id;
 
@@ -2003,6 +2056,13 @@ export const adminUpdateReport = async (req: Request, res: Response) => {
   const connection = await pool.getConnection();
   
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
     const adminId = req.user!.id;
     const updateData = req.body;
@@ -3727,6 +3787,13 @@ export const updateCompleteReport = async (req: Request, res: Response) => {
  */
 export const adminDownloadReportPDF = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
 
     if (isNaN(reportId)) {
@@ -3798,6 +3865,13 @@ export const adminDownloadReportPDF = async (req: Request, res: Response) => {
  */
 export const adminGetReportHTML = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
 
     if (isNaN(reportId)) {
@@ -3822,6 +3896,14 @@ export const adminGetReportHTML = async (req: Request, res: Response) => {
 
     logger.info(`Generating HTML for client-side PDF conversion, report ${reportId}`);
 
+    // NOTE: This endpoint is deprecated - we now use server-side PDFKit generation
+    // If you need HTML, the PDF is generated server-side via generateReportPDF()
+    return res.status(501).json({
+      success: false,
+      message: 'HTML generation endpoint deprecated - use PDF download endpoint instead'
+    });
+
+    /* OLD CODE - disabled for PDFKit implementation
     // Generate HTML
     const html = await pdfService.generateReportHTML(reportId);
 
@@ -3831,6 +3913,7 @@ export const adminGetReportHTML = async (req: Request, res: Response) => {
       html: html,
       reportId: reportId
     });
+    */
 
   } catch (error) {
     logger.error('Error in adminGetReportHTML:', error);
@@ -3860,6 +3943,13 @@ export const adminGetReportHTML = async (req: Request, res: Response) => {
  */
 export const adminEmailReportPDF = async (req: Request, res: Response) => {
   try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
     const reportId = parseInt(req.params.id);
     const { recipients, cc, additionalMessage } = req.body;
 
@@ -4001,6 +4091,66 @@ export const adminEmailReportPDF = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to email PDF',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
+ * POST /api/admin/reports/:id/mark-emailed
+ * Mark report as emailed without sending an email
+ * 
+ * Business Rules:
+ * - Admin only
+ * - Updates emailed_at timestamp
+ */
+export const adminMarkReportEmailed = async (req: Request, res: Response) => {
+  try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const reportId = parseInt(req.params.id);
+
+    if (isNaN(reportId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid report ID'
+      });
+    }
+
+    const report = await executeQuerySingle(
+      'SELECT id FROM reports WHERE id = ?',
+      [reportId]
+    );
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: 'Report not found'
+      });
+    }
+
+    await executeQuery(
+      'UPDATE reports SET emailed_at = NOW() WHERE id = ?',
+      [reportId]
+    );
+
+    logger.info(`Report ${reportId} marked as emailed`);
+
+    return res.json({
+      success: true,
+      message: 'Report marked as emailed',
+      emailed_at: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error in adminMarkReportEmailed:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to mark report as emailed',
       error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
     });
   }

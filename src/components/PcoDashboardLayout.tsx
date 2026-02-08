@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
   LayoutDashboard, 
-  Building2, 
   FileText, 
   Calendar, 
   CalendarDays,
@@ -29,6 +28,30 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // Detect online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      // When coming back online, refresh the cache in background
+      console.log('[PCO Dashboard] Back online - refreshing offline cache');
+      setTimeout(() => {
+        preloadCache.preloadForRole('pco');
+      }, 2000); // Wait 2 seconds to let other sync processes complete
+    };
+    
+    const handleOffline = () => setIsOffline(true);
+    
+    setIsOffline(!navigator.onLine);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Enable browser notifications automatically
   useBrowserNotifications();
@@ -103,7 +126,11 @@ export default function PcoDashboardLayout({ children }: PcoDashboardLayoutProps
       {/* Mobile Header - Fixed at top */}
       <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-30">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg"></div>
+          <div className={`w-8 h-8 rounded-lg transition-all ${
+            isOffline 
+              ? 'bg-gray-400' 
+              : 'bg-gradient-to-br from-purple-600 to-blue-600'
+          }`}></div>
           <h1 className="text-lg font-semibold text-gray-900">PCO Portal</h1>
         </div>
         <div className="flex items-center gap-2">
