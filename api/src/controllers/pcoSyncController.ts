@@ -19,6 +19,7 @@ import { hasRole } from '../middleware/auth';
 import { executeQuery } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import { logger } from '../config/logger';
+import { config } from '../config/env';
 
 /**
  * GET /api/pco/sync/full
@@ -682,7 +683,7 @@ export const exportData = async (req: Request, res: Response) => {
 
     const exportData = {
       export_date: new Date().toISOString(),
-      app_version: '1.0.0',
+      app_version: config.server.version,
       pco: userProfile[0],
       clients: clients.map((c: any) => ({ ...c, contacts: JSON.parse(c.contacts || '[]') })),
       chemicals: chemicals,

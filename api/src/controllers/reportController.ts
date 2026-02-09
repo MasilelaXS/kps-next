@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { hasRole } from '../middleware/auth';
 import { executeQuery, executeQuerySingle, pool } from '../config/database';
 import { logger } from '../config/logger';
+import { config } from '../config/env';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { createNotification } from './notificationController';
 import { pdfService } from '../services/pdfService';
@@ -2650,7 +2651,7 @@ export const exportReportAsJSON = async (req: Request, res: Response) => {
       export_metadata: {
         export_date: new Date().toISOString(),
         exported_by: userId,
-        app_version: '1.0.0',
+        app_version: config.server.version,
         schema_version: '1.0'
       },
       report: {

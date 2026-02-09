@@ -5,13 +5,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.swaggerSpec = void 0;
 const swagger_jsdoc_1 = __importDefault(require("swagger-jsdoc"));
-const package_json_1 = require("../../package.json");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const getVersion = () => {
+    try {
+        const pkgPath = path_1.default.join(__dirname, '../../package.json');
+        const pkg = JSON.parse(fs_1.default.readFileSync(pkgPath, 'utf8'));
+        return pkg.version || '1.0.0';
+    }
+    catch {
+        return '1.0.0';
+    }
+};
 const options = {
     definition: {
         openapi: '3.0.0',
         info: {
             title: 'KPS Pest Control API',
-            version: package_json_1.version,
+            version: getVersion(),
             description: 'Complete API documentation for KPS Pest Control Management System',
             contact: {
                 name: 'KPS Pest Control',

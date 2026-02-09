@@ -8,6 +8,7 @@
  */
 
 import { Router } from 'express';
+import { config } from '../config/env';
 import authRoutes from './auth';
 import versionRoutes from './versionRoutes';
 import userRoutes from './userRoutes';
@@ -35,13 +36,13 @@ router.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
+    version: config.server.version
   });
 });
 
 // Simple version endpoint for frontend
 router.get('/version', (req, res) => {
-  res.json({ version: '1.0.0' });
+  res.json({ version: config.server.version });
 });
 
 // API Version and Info endpoint
@@ -49,7 +50,7 @@ router.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Welcome to KPS Pest Control Management API',
-    version: '1.0.0',
+    version: config.server.version,
     timestamp: new Date().toISOString(),
     endpoints: {
       authentication: '/api/auth',

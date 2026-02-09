@@ -6,8 +6,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTest = exports.isProduction = exports.isDevelopment = exports.config = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const production_config_1 = require("./production.config");
 dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), '.env') });
+const getVersionFromPackageJson = () => {
+    try {
+        const packagePath = path_1.default.resolve(process.cwd(), 'package.json');
+        const packageJson = JSON.parse(fs_1.default.readFileSync(packagePath, 'utf8'));
+        return packageJson.version || '1.0.0';
+    }
+    catch {
+        return '1.0.0';
+    }
+};
 const useProductionConfig = process.env.NODE_ENV === 'production';
 if (!useProductionConfig) {
     const requiredEnvVars = [
@@ -30,7 +41,7 @@ exports.config = useProductionConfig ? production_config_1.productionConfig : {
         port: parseInt(process.env.PORT || '3001', 10),
         host: process.env.HOST || '0.0.0.0',
         name: 'KPS Pest Control API',
-        version: process.env.API_VERSION || '1.0.0'
+        version: getVersionFromPackageJson()
     },
     database: {
         host: process.env.DB_HOST,

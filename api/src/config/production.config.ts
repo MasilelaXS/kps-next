@@ -6,6 +6,20 @@
  * @version 1.0.0
  */
 
+import fs from 'fs';
+import path from 'path';
+
+// Read version from package.json
+const getVersionFromPackageJson = (): string => {
+  try {
+    const packagePath = path.resolve(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    return packageJson.version || '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+};
+
 export const productionConfig = {
   // Server configuration
   server: {
@@ -13,7 +27,7 @@ export const productionConfig = {
     port: 3001,
     host: '0.0.0.0',
     name: 'KPS Pest Control API',
-    version: '1.0.0'
+    version: getVersionFromPackageJson()
   },
 
   // Database configuration

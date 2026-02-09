@@ -1,12 +1,24 @@
 import swaggerJsdoc from 'swagger-jsdoc';
-import { version } from '../../package.json';
+import fs from 'fs';
+import path from 'path';
+
+// Read version from package.json
+const getVersion = (): string => {
+  try {
+    const pkgPath = path.join(__dirname, '../../package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return pkg.version || '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+};
 
 const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
       title: 'KPS Pest Control API',
-      version: version,
+      version: getVersion(),
       description: 'Complete API documentation for KPS Pest Control Management System',
       contact: {
         name: 'KPS Pest Control',

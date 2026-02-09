@@ -40,6 +40,7 @@ exports.cleanupOldDrafts = exports.adminMarkReportEmailed = exports.adminEmailRe
 const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
+const env_1 = require("../config/env");
 const notificationController_1 = require("./notificationController");
 const pdfService_1 = require("../services/pdfService");
 const emailService_1 = require("../services/emailService");
@@ -1764,7 +1765,7 @@ const exportReportAsJSON = async (req, res) => {
             export_metadata: {
                 export_date: new Date().toISOString(),
                 exported_by: userId,
-                app_version: '1.0.0',
+                app_version: env_1.config.server.version,
                 schema_version: '1.0'
             },
             report: {

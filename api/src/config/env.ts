@@ -10,10 +10,22 @@
 
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { productionConfig } from './production.config';
 
 // Load environment variables - use process.cwd() which is the api folder
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+// Read version from package.json
+const getVersionFromPackageJson = (): string => {
+  try {
+    const packagePath = path.resolve(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    return packageJson.version || '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+};
 
 // Check if we're in production and should use hardcoded config
 const useProductionConfig = process.env.NODE_ENV === 'production';
@@ -45,7 +57,7 @@ export const config = useProductionConfig ? productionConfig : {
     port: parseInt(process.env.PORT || '3001', 10),
     host: process.env.HOST || '0.0.0.0',
     name: 'KPS Pest Control API',
-    version: process.env.API_VERSION || '1.0.0'
+    version: getVersionFromPackageJson()
   },
 
   // Database configuration

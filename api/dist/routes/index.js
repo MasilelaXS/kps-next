@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const env_1 = require("../config/env");
 const auth_1 = __importDefault(require("./auth"));
 const versionRoutes_1 = __importDefault(require("./versionRoutes"));
 const userRoutes_1 = __importDefault(require("./userRoutes"));
@@ -28,17 +29,17 @@ router.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || 'development',
-        version: '1.0.0'
+        version: env_1.config.server.version
     });
 });
 router.get('/version', (req, res) => {
-    res.json({ version: '1.0.0' });
+    res.json({ version: env_1.config.server.version });
 });
 router.get('/', (req, res) => {
     res.json({
         success: true,
         message: 'Welcome to KPS Pest Control Management API',
-        version: '1.0.0',
+        version: env_1.config.server.version,
         timestamp: new Date().toISOString(),
         endpoints: {
             authentication: '/api/auth',

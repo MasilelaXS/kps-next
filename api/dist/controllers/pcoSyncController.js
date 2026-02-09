@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.selfAssignClient = exports.getAvailableClients = exports.getLastReportForClient = exports.updateClientCounts = exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
+const env_1 = require("../config/env");
 const getFullSync = async (req, res) => {
     try {
         const pcoId = req.user.id;
@@ -476,7 +477,7 @@ const exportData = async (req, res) => {
        WHERE r.rn <= 10`, [pcoId]);
         const exportData = {
             export_date: new Date().toISOString(),
-            app_version: '1.0.0',
+            app_version: env_1.config.server.version,
             pco: userProfile[0],
             clients: clients.map((c) => ({ ...c, contacts: JSON.parse(c.contacts || '[]') })),
             chemicals: chemicals,
