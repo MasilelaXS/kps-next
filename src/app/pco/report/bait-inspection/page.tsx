@@ -8,6 +8,7 @@ import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
 import { apiCall } from '@/lib/api';
+import { clientCache } from '@/lib/clientCache';
 import { Plus, MapPin, AlertCircle } from 'lucide-react';
 
 interface BaitStation {
@@ -152,10 +153,21 @@ function BaitInspectionContent() {
         setStations(transformedStations);
       }
 
-      // Fetch chemicals
-      const chemicalsResponse = await apiCall('/api/pco/sync/chemicals');
-      if (chemicalsResponse.success && Array.isArray(chemicalsResponse.data)) {
-        setChemicals(chemicalsResponse.data);
+      // Fetch chemicals (use cached version when offline)
+      try {
+        const chemicalsResponse = await apiCall('/api/pco/sync/chemicals');
+        if (chemicalsResponse.success && Array.isArray(chemicalsResponse.data)) {
+          setChemicals(chemicalsResponse.data);
+        }
+      } catch (chemicalsError) {
+        // If API call fails (likely offline), use cached chemicals
+        console.log('[BaitInspection] Using cached chemicals for offline mode');
+        const cachedChemicals = clientCache.getChemicals();
+        if (cachedChemicals.length > 0) {
+          setChemicals(cachedChemicals);
+        } else {
+          console.warn('[BaitInspection] No cached chemicals available');
+        }
       }
 
       // Fetch previous report data for pre-filling (only if not in edit mode)

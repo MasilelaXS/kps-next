@@ -9,6 +9,7 @@ import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
 import { API_CONFIG, apiCall } from '@/lib/api';
+import { clientCache } from '@/lib/clientCache';
 import { Plus, X, AlertCircle } from 'lucide-react';
 
 interface Chemical {
@@ -113,8 +114,18 @@ function FumigationContent() {
         }
       } catch (chemError) {
         console.error('Error fetching chemicals:', chemError);
-        // Continue without chemicals - user can still create report
-        setChemicals([]);
+        // If API call fails (likely offline), use cached chemicals filtered for fumigation
+        console.log('[Fumigation] Using cached chemicals for offline mode');
+        const cachedChemicals = clientCache.getChemicals();
+        const fumigationChemicals = cachedChemicals.filter(
+          c => c.usage_type === 'fumigation' || c.usage_type === 'multi_purpose'
+        );
+        if (fumigationChemicals.length > 0) {
+          setChemicals(fumigationChemicals);
+        } else {
+          console.warn('[Fumigation] No cached fumigation chemicals available');
+          setChemicals([]);
+        }
       }
 
       // Get expected monitor count from client

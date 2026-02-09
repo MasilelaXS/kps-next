@@ -1,6 +1,30 @@
+/**
+ * Detect API URL based on current hostname (runtime detection, no .env needed)
+ * Works on cPanel without environment variables
+ */
+function getApiBaseUrl(): string {
+  // Server-side rendering: use production URL
+  if (typeof window === 'undefined') {
+    return 'https://app.kpspestcontrol.co.za';
+  }
+  
+  // Client-side: detect based on hostname
+  const hostname = window.location.hostname;
+  
+  // Production: app.kpspestcontrol.co.za
+  if (hostname.includes('kpspestcontrol.co.za') || hostname.includes('app.kpspestcontrol')) {
+    return 'https://app.kpspestcontrol.co.za';
+  }
+  
+  // Development: localhost or local IP
+  return 'http://localhost:3005';
+}
+
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://app.kpspestcontrol.co.za',
+  get BASE_URL() {
+    return getApiBaseUrl();
+  },
   ENDPOINTS: {
     // Auth
     LOGIN: '/api/auth/login',
@@ -161,39 +185,46 @@ export const apiCall = async (
 };
 
 /**
- * Offline-aware API call for report submissions
- * Queues reports when offline using IndexedDB and syncs when connection is restored
+ * Offline-aware API call for submissions (reports and assignments)
+ * Queues items when offline using IndexedDB and syncs when connection is restored
  */
 export const offlineAwareApiCall = async (
   endpoint: string,
   options: RequestInit & {
     queueIfOffline?: boolean;
     priority?: 'high' | 'normal' | 'low';
-    type?: 'report' | 'signature' | 'profile' | 'other';
+    type?: 'report' | 'assignment' | 'signature' | 'profile' | 'other';
   } = {}
 ): Promise<any> => {
   const method = (options.method || 'GET').toUpperCase();
   const isReportSubmission = options.type === 'report' && (method === 'POST' || method === 'PUT');
-  const shouldQueue = options.queueIfOffline !== false && isReportSubmission;
+  const isAssignmentSubmission = options.type === 'assignment' && (method === 'POST' || method === 'PUT');
+  const shouldQueue = options.queueIfOffline !== false && (isReportSubmission || isAssignmentSubmission);
 
   // Check if we're offline
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
   
-  // If offline and should queue, queue the report immediately
+  // If offline and should queue, queue the item immediately
   if (!isOnline && shouldQueue) {
-    console.log('[API] Offline detected - queuing report');
+    console.log(`[API] Offline detected - queuing ${options.type}`);
     if (typeof window !== 'undefined') {
-      const { getOfflineReportManager } = await import('./offlineSync');
-      const manager = getOfflineReportManager();
+      const { getOfflineQueueManager } = await import('./offlineSync');
+      const manager = getOfflineQueueManager();
       
       const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-      const reportId = await manager.queueReport(endpoint, method as 'POST' | 'PUT', body);
+      
+      let itemId: string;
+      if (options.type === 'assignment') {
+        itemId = await manager.queueAssignment(endpoint, method as 'POST' | 'PUT', body);
+      } else {
+        itemId = await manager.queueReport(endpoint, method as 'POST' | 'PUT', body);
+      }
       
       return {
         success: true,
         queued: true,
-        message: 'Report queued for submission when online',
-        reportId
+        message: `${options.type || 'Item'} queued for submission when online`,
+        itemId
       };
     }
   }
@@ -215,18 +246,24 @@ export const offlineAwareApiCall = async (
         errorMessage.includes('timeout');
 
       if (isNetworkError && typeof window !== 'undefined') {
-        console.log('[API] Network error - queuing report');
-        const { getOfflineReportManager } = await import('./offlineSync');
-        const manager = getOfflineReportManager();
+        console.log(`[API] Network error - queuing ${options.type}`);
+        const { getOfflineQueueManager } = await import('./offlineSync');
+        const manager = getOfflineQueueManager();
         
         const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-        const reportId = await manager.queueReport(endpoint, method as 'POST' | 'PUT', body);
+        
+        let itemId: string;
+        if (options.type === 'assignment') {
+          itemId = await manager.queueAssignment(endpoint, method as 'POST' | 'PUT', body);
+        } else {
+          itemId = await manager.queueReport(endpoint, method as 'POST' | 'PUT', body);
+        }
         
         return {
           success: true,
           queued: true,
-          message: 'Network error - report queued for submission',
-          reportId
+          message: `Network error - ${options.type || 'item'} queued for submission`,
+          itemId
         };
       }
 
@@ -235,6 +272,6 @@ export const offlineAwareApiCall = async (
     }
   }
 
-  // For non-report requests, just call normally
+  // For non-queueable requests, just call normally
   return apiCall(endpoint, options);
 };

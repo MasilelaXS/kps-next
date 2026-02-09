@@ -43,10 +43,10 @@ class ClientController {
     }
     static async getClientList(req, res) {
         try {
-            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
+            if (!(0, auth_1.hasRole)(req.user, 'admin') && !(0, auth_1.hasRole)(req.user, 'pco')) {
                 res.status(403).json({
                     success: false,
-                    message: 'Admin access required'
+                    message: 'Admin or PCO access required'
                 });
                 return;
             }
@@ -167,31 +167,46 @@ class ClientController {
     }
     static async createClient(req, res) {
         try {
-            if (!(0, auth_1.hasRole)(req.user, 'admin')) {
+            if (!(0, auth_1.hasRole)(req.user, 'admin') && !(0, auth_1.hasRole)(req.user, 'pco')) {
                 res.status(403).json({
                     success: false,
-                    message: 'Admin access required'
+                    message: 'Admin or PCO access required'
                 });
                 return;
             }
-            const { company_name, address_line1, address_line2, city, state, postal_code, country = 'South Africa', total_bait_stations_inside = 0, total_bait_stations_outside = 0, total_insect_monitors_light = 0, total_insect_monitors_box = 0, contacts = [] } = req.body;
-            if (!company_name || !address_line1 || !city || !state || !postal_code) {
+            const { company_name, address_line1, address_line2, city, state, postal_code, country = 'South Africa', total_bait_stations_inside = 0, total_bait_stations_outside = 0, total_insect_monitors_light = 0, total_insect_monitors_box = 0, service_notes, contacts = [] } = req.body;
+            const normalizeRequiredText = (value) => {
+                if (!value)
+                    return 'N/A';
+                const trimmed = value.toString().trim();
+                return trimmed.length > 0 ? trimmed : 'N/A';
+            };
+            const normalizeOptionalText = (value) => {
+                if (!value)
+                    return null;
+                const trimmed = value.toString().trim();
+                return trimmed.length > 0 ? trimmed : null;
+            };
+            const normalizedCompanyName = company_name?.toString().trim();
+            const normalizedAddressLine1 = normalizeRequiredText(address_line1);
+            const normalizedCity = normalizeRequiredText(city);
+            const normalizedCountry = normalizeRequiredText(country);
+            const normalizedAddressLine2 = normalizeOptionalText(address_line2);
+            const normalizedState = normalizeOptionalText(state);
+            const normalizedPostalCode = normalizeOptionalText(postal_code);
+            if (!normalizedCompanyName || normalizedCompanyName.length < 2) {
                 res.status(400).json({
                     success: false,
                     message: 'Missing required fields',
                     errors: [
-                        { field: 'company_name', message: !company_name ? 'Company name is required' : undefined },
-                        { field: 'address_line1', message: !address_line1 ? 'Address is required' : undefined },
-                        { field: 'city', message: !city ? 'City is required' : undefined },
-                        { field: 'state', message: !state ? 'State is required' : undefined },
-                        { field: 'postal_code', message: !postal_code ? 'Postal code is required' : undefined }
-                    ].filter(e => e.message)
+                        { field: 'company_name', message: 'Company name is required and must be at least 2 characters' }
+                    ]
                 });
                 return;
             }
             logger_1.logger.info('Creating client', {
-                company_name,
-                city,
+                company_name: normalizedCompanyName,
+                city: normalizedCity,
                 equipment: {
                     bait_inside: total_bait_stations_inside,
                     bait_outside: total_bait_stations_outside,
@@ -200,7 +215,7 @@ class ClientController {
                 },
                 contacts: contacts.length
             });
-            const existingClient = await (0, database_1.executeQuerySingle)('SELECT id FROM clients WHERE company_name = ? AND deleted_at IS NULL', [company_name]);
+            const existingClient = await (0, database_1.executeQuerySingle)('SELECT id FROM clients WHERE company_name = ? AND deleted_at IS NULL', [normalizedCompanyName]);
             if (existingClient) {
                 res.status(409).json({
                     success: false,
@@ -217,21 +232,23 @@ class ClientController {
           state, 
           postal_code,
           country,
+          service_notes,
           total_bait_stations_inside,
           total_bait_stations_outside,
           total_insect_monitors_light,
           total_insect_monitors_box,
           status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
       `;
             const result = await (0, database_1.executeQuery)(insertQuery, [
-                company_name,
-                address_line1,
-                address_line2 || null,
-                city,
-                state,
-                postal_code,
-                country,
+                normalizedCompanyName,
+                normalizedAddressLine1,
+                normalizedAddressLine2,
+                normalizedCity,
+                normalizedState,
+                normalizedPostalCode,
+                normalizedCountry,
+                service_notes || null,
                 total_bait_stations_inside,
                 total_bait_stations_outside,
                 total_insect_monitors_light,
@@ -240,6 +257,13 @@ class ClientController {
             const clientId = result.insertId;
             if (contacts.length > 0) {
                 for (const contact of contacts) {
+                    const hasAnyContactInfo = (contact?.name && contact.name.toString().trim()) ||
+                        (contact?.email && contact.email.toString().trim()) ||
+                        (contact?.phone && contact.phone.toString().trim()) ||
+                        (contact?.role && contact.role.toString().trim());
+                    if (!hasAnyContactInfo) {
+                        continue;
+                    }
                     await (0, database_1.executeQuery)(`
             INSERT INTO client_contacts (
               client_id, 
@@ -251,8 +275,8 @@ class ClientController {
             ) VALUES (?, ?, ?, ?, ?, ?)
           `, [
                         clientId,
-                        contact.name,
-                        contact.role,
+                        normalizeRequiredText(contact.name),
+                        contact.role && contact.role.toString().trim() ? contact.role : 'other',
                         contact.phone || null,
                         contact.email || null,
                         contact.is_primary || false

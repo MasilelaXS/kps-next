@@ -9,7 +9,14 @@ const isProduction = process.env.NODE_ENV === 'production';
 // API Base URLs
 export const API_CONFIG = {
   // Backend API base URL
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://app.kpspestcontrol.co.za',
+  // Runtime detection: works on cPanel without .env files
+  get BASE_URL() {
+    if (typeof window === 'undefined') return 'https://app.kpspestcontrol.co.za';
+    const hostname = window.location.hostname;
+    return hostname.includes('kpspestcontrol.co.za') || hostname.includes('app.kpspestcontrol')
+      ? 'https://app.kpspestcontrol.co.za'
+      : 'http://localhost:3001';
+  },
   
   // API endpoints
   ENDPOINTS: {

@@ -42,7 +42,29 @@ class VersionController {
                 params.push(platform);
             }
             query += ` ORDER BY release_date DESC LIMIT 1`;
-            const latestVersion = await (0, database_1.executeQuerySingle)(query, params);
+            let latestVersion = await (0, database_1.executeQuerySingle)(query, params);
+            if (!latestVersion) {
+                const fallbackPlatform = (platform && platform !== 'all') ? platform : 'web';
+                const currentVersionValue = typeof current_version === 'string' ? current_version : null;
+                if (currentVersionValue && isValidSemanticVersion(currentVersionValue)) {
+                    await (0, database_1.executeQuery)('UPDATE app_versions SET is_active = 0 WHERE platform = ? OR platform = ?', [fallbackPlatform, 'all']);
+                    await (0, database_1.executeQuery)(`INSERT INTO app_versions (
+              version,
+              platform,
+              release_date,
+              force_update,
+              release_notes,
+              is_active
+            ) VALUES (?, ?, ?, ?, ?, 1)`, [
+                        currentVersionValue,
+                        fallbackPlatform,
+                        new Date().toISOString().slice(0, 10),
+                        false,
+                        `Auto-synced build version ${currentVersionValue}`
+                    ]);
+                    latestVersion = await (0, database_1.executeQuerySingle)(query, params);
+                }
+            }
             if (!latestVersion) {
                 res.status(404).json({
                     success: false,
@@ -293,6 +315,94 @@ class VersionController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to update version status'
+            });
+        }
+    }
+    static async syncVersionToDatabase() {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const pkgPath = path.join(__dirname, '../../package.json');
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            const currentVersion = pkg.version;
+            if (!isValidSemanticVersion(currentVersion)) {
+                logger_1.logger.warn('Invalid version in package.json', { version: currentVersion });
+                return;
+            }
+            const existingVersion = await (0, database_1.executeQuerySingle)('SELECT * FROM app_versions WHERE version = ? AND platform = ?', [currentVersion, 'web']);
+            if (existingVersion) {
+                if (!existingVersion.is_active) {
+                    await (0, database_1.executeQuery)('UPDATE app_versions SET is_active = 0 WHERE platform = ?', ['web']);
+                    await (0, database_1.executeQuery)('UPDATE app_versions SET is_active = 1 WHERE id = ?', [existingVersion.id]);
+                    logger_1.logger.info('Activated existing version in database', { version: currentVersion });
+                }
+                else {
+                    logger_1.logger.info('Database version already up to date', { version: currentVersion });
+                }
+                return;
+            }
+            await (0, database_1.executeQuery)('UPDATE app_versions SET is_active = 0 WHERE platform = ?', ['web']);
+            await (0, database_1.executeQuery)(`INSERT INTO app_versions (
+          version,
+          platform,
+          release_date,
+          force_update,
+          release_notes,
+          is_active
+        ) VALUES (?, ?, ?, ?, ?, 1)`, [
+                currentVersion,
+                'web',
+                new Date().toISOString().slice(0, 10),
+                false,
+                `Production build version ${currentVersion}`
+            ]);
+            logger_1.logger.info('Synced new version to database', { version: currentVersion });
+        }
+        catch (error) {
+            logger_1.logger.error('Version sync error', {
+                error: error instanceof Error ? error.message : error
+            });
+        }
+    }
+    static async getDiagnosticInfo(req, res) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            let packageVersion = 'unknown';
+            let packageError = null;
+            try {
+                const pkgPath = path.join(__dirname, '../../package.json');
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                packageVersion = pkg.version;
+            }
+            catch (error) {
+                packageError = error instanceof Error ? error.message : 'Failed to read package.json';
+            }
+            const activeVersion = await (0, database_1.executeQuerySingle)('SELECT * FROM app_versions WHERE is_active = 1 AND platform = ? ORDER BY created_at DESC LIMIT 1', ['web']);
+            const allVersions = await (0, database_1.executeQuery)('SELECT version, platform, is_active, created_at FROM app_versions ORDER BY created_at DESC LIMIT 5', []);
+            res.json({
+                success: true,
+                data: {
+                    package_json_version: packageVersion,
+                    package_error: packageError,
+                    active_database_version: activeVersion?.version || 'none',
+                    versions_match: packageVersion === activeVersion?.version,
+                    database_active_version: activeVersion,
+                    recent_versions: allVersions,
+                    recommendation: packageVersion !== activeVersion?.version
+                        ? `Version mismatch! Package.json has ${packageVersion} but database has ${activeVersion?.version || 'none'}. Restart backend to auto-sync.`
+                        : 'Versions are in sync ✓'
+                }
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Diagnostic info error', {
+                error: error instanceof Error ? error.message : error
+            });
+            res.status(500).json({
+                success: false,
+                message: 'Failed to get diagnostic info',
+                error: error instanceof Error ? error.message : 'Unknown error'
             });
         }
     }

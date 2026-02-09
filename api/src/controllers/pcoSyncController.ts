@@ -1082,9 +1082,10 @@ export const getAvailableClients = async (req: Request, res: Response) => {
  * 
  * Business rules:
  * - Client must be active
- * - Client must not already be assigned to this PCO
+ * - Idempotent: If already assigned, return success (for offline sync)
  * - If client is assigned to another PCO, allow (backup/coverage scenario)
  * - Creates assignment with assignment_type='self'
+ * - Admin assignments take precedence (check on report submission)
  */
 export const selfAssignClient = async (req: Request, res: Response) => {
   try {
@@ -1118,16 +1119,50 @@ export const selfAssignClient = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if already assigned to this PCO
+    // Check if already assigned to this PCO (IDEMPOTENT)
     const existingAssignment = await executeQuery<RowDataPacket[]>(
-      'SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = ?',
+      'SELECT id, assignment_type FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = ?',
       [client_id, pcoId, 'active']
     );
 
     if (existingAssignment.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'You are already assigned to this client'
+      const assignmentType = (existingAssignment[0] as any).assignment_type;
+      
+      // If admin assignment exists, respect it
+      if (assignmentType === 'admin') {
+        logger.info('Self-assignment attempt for admin-assigned client', {
+          pco_id: pcoId,
+          client_id,
+          existing_type: 'admin'
+        });
+        
+        return res.json({
+          success: true,
+          message: 'Already assigned to this client by admin',
+          data: {
+            client_id,
+            client_name: (clientCheck[0] as any).company_name,
+            assignment_type: 'admin',
+            note: 'Admin assignment takes precedence'
+          }
+        });
+      }
+      
+      // Self-assignment already exists - idempotent success
+      logger.info('Duplicate self-assignment attempt (idempotent)', {
+        pco_id: pcoId,
+        client_id
+      });
+      
+      return res.json({
+        success: true,
+        message: 'Already assigned to this client',
+        data: {
+          client_id,
+          client_name: (clientCheck[0] as any).company_name,
+          assignment_type: 'self',
+          note: 'Assignment already exists'
+        }
       });
     }
 

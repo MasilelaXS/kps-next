@@ -13,29 +13,21 @@ const clientInputSchema = joi_1.default.object({
         'string.min': 'Company name must be at least 2 characters',
         'string.max': 'Company name cannot exceed 255 characters'
     }),
-    address_line1: joi_1.default.string().trim().min(5).max(255).required()
+    address_line1: joi_1.default.string().trim().min(1).max(255).allow('', null).optional().default('N/A')
         .messages({
-        'string.empty': 'Address line 1 is required',
-        'string.min': 'Address must be at least 5 characters',
         'string.max': 'Address line 1 cannot exceed 255 characters'
     }),
     address_line2: joi_1.default.string().trim().max(255).allow('', null).optional(),
-    city: joi_1.default.string().trim().min(2).max(100).required()
+    city: joi_1.default.string().trim().min(1).max(100).allow('', null).optional().default('N/A')
         .messages({
-        'string.empty': 'City is required',
-        'string.min': 'City must be at least 2 characters',
         'string.max': 'City cannot exceed 100 characters'
     }),
-    state: joi_1.default.string().trim().min(2).max(100).required()
+    state: joi_1.default.string().trim().min(1).max(100).allow('', null).optional()
         .messages({
-        'string.empty': 'State/Province is required',
-        'string.min': 'State must be at least 2 characters',
         'string.max': 'State cannot exceed 100 characters'
     }),
-    postal_code: joi_1.default.string().trim().min(3).max(20).required()
+    postal_code: joi_1.default.string().trim().min(1).max(20).allow('', null).optional()
         .messages({
-        'string.empty': 'Postal code is required',
-        'string.min': 'Postal code must be at least 3 characters',
         'string.max': 'Postal code cannot exceed 20 characters'
     }),
     country: joi_1.default.string().trim().max(100).optional().default('South Africa')
@@ -71,12 +63,12 @@ const clientInputSchema = joi_1.default.object({
         'number.min': 'Box insect monitors cannot be negative'
     }),
     contacts: joi_1.default.array().items(joi_1.default.object({
-        name: joi_1.default.string().trim().min(2).max(100).required()
+        name: joi_1.default.string().trim().max(100).allow('', null).optional().default('N/A')
             .messages({
-            'string.empty': 'Contact name is required',
-            'string.min': 'Contact name must be at least 2 characters'
+            'string.max': 'Contact name cannot exceed 100 characters'
         }),
-        role: joi_1.default.string().valid('primary', 'billing', 'site_manager', 'emergency', 'other').required()
+        role: joi_1.default.string().valid('primary', 'billing', 'site_manager', 'emergency', 'other')
+            .allow('', null).optional().default('other')
             .messages({
             'any.only': 'Contact role must be one of: primary, billing, site_manager, emergency, other'
         }),

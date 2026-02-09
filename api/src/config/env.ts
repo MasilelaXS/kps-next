@@ -12,11 +12,11 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { productionConfig } from './production.config';
 
-// Load environment variables (only for development)
-dotenv.config();
+// Load environment variables - use process.cwd() which is the api folder
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // Check if we're in production and should use hardcoded config
-const useProductionConfig = process.env.NODE_ENV === 'production' || !process.env.NODE_ENV;
+const useProductionConfig = process.env.NODE_ENV === 'production';
 
 // Environment validation (only for development)
 if (!useProductionConfig) {

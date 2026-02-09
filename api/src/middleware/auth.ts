@@ -28,6 +28,7 @@ export interface AuthenticatedUser {
   id: number;
   login_id: string;
   role: 'admin' | 'pco' | 'both';
+  role_context?: 'admin' | 'pco';
   first_name: string;
   last_name: string;
   email: string;
@@ -40,7 +41,10 @@ export interface AuthenticatedUser {
  */
 export const hasRole = (user: AuthenticatedUser | undefined, requiredRole: 'admin' | 'pco'): boolean => {
   if (!user) return false;
-  return user.role === 'both' || user.role === requiredRole;
+  if (user.role === 'both') {
+    return user.role_context ? user.role_context === requiredRole : false;
+  }
+  return user.role === requiredRole;
 };
 
 // JWT payload interface
@@ -143,6 +147,7 @@ export const authenticateToken = async (
       id: session.user_id,
       login_id: session.pco_number,
       role: session.role, // Always use actual role, not role_context
+      role_context: session.role_context,
       first_name: session.name,
       last_name: '',
       email: session.email,

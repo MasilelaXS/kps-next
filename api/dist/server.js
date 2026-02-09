@@ -8,10 +8,13 @@ const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const database_1 = require("./config/database");
 const cron_1 = require("./config/cron");
+const versionController_1 = __importDefault(require("./controllers/versionController"));
 const startServer = async () => {
     try {
         logger_1.logger.info('🔄 Testing database connection...');
         await (0, database_1.testConnection)();
+        logger_1.logger.info('🔄 Syncing version to database...');
+        await versionController_1.default.syncVersionToDatabase();
         logger_1.logger.info('⏰ Initializing scheduled tasks...');
         (0, cron_1.initializeCronJobs)();
         const server = app_1.default.listen(env_1.config.server.port, '0.0.0.0', () => {

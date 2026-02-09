@@ -29,7 +29,7 @@ interface Contact {
   name: string;
   email: string;
   phone: string;
-  role: string;
+  role?: string;
   is_primary: boolean;
 }
 
@@ -63,7 +63,7 @@ interface NewContact {
   name: string;
   email: string;
   phone: string;
-  role: string;
+  role?: string;
   is_primary: boolean;
 }
 
@@ -115,7 +115,7 @@ export default function ClientsPage() {
     total_bait_stations_outside: 0,
     total_insect_monitors_light: 0,
     total_insect_monitors_box: 0,
-    contacts: [{ name: '', email: '', phone: '', role: '', is_primary: true }]
+    contacts: [{ name: '', email: '', phone: '', is_primary: true }]
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -229,7 +229,7 @@ export default function ClientsPage() {
   const addContact = () => {
     setFormData({
       ...formData,
-      contacts: [...formData.contacts, { name: '', email: '', phone: '', role: '', is_primary: false }]
+      contacts: [...formData.contacts, { name: '', email: '', phone: '', is_primary: false }]
     });
   };
 
@@ -245,32 +245,6 @@ export default function ClientsPage() {
 
     if (!formData.company_name.trim()) {
       errors.company_name = 'Company name is required';
-    }
-    if (!formData.address_line1.trim()) {
-      errors.address_line1 = 'Address is required';
-    }
-    if (!formData.city.trim()) {
-      errors.city = 'City is required';
-    }
-    if (!formData.state.trim()) {
-      errors.state = 'State/Province is required';
-    }
-    if (!formData.postal_code.trim()) {
-      errors.postal_code = 'Postal code is required';
-    }
-
-    // Validate at least one contact
-    if (formData.contacts.length === 0) {
-      errors.contacts = 'At least one contact is required';
-    } else {
-      formData.contacts.forEach((contact, index) => {
-        if (!contact.name.trim()) {
-          errors[`contact_${index}_name`] = 'Contact name is required';
-        }
-        if (!contact.role.trim()) {
-          errors[`contact_${index}_role`] = 'Contact role is required';
-        }
-      });
     }
 
     setFormErrors(errors);
@@ -318,7 +292,7 @@ export default function ClientsPage() {
           total_bait_stations_outside: 0,
           total_insect_monitors_light: 0,
           total_insect_monitors_box: 0,
-          contacts: [{ name: '', email: '', phone: '', role: '', is_primary: true }]
+          contacts: [{ name: '', email: '', phone: '', is_primary: true }]
         });
         fetchClients(); // Refresh the list
       } else {
@@ -369,7 +343,7 @@ export default function ClientsPage() {
       total_bait_stations_outside: 0,
       total_insect_monitors_light: 0,
       total_insect_monitors_box: 0,
-      contacts: [{ name: '', email: '', phone: '', role: '', is_primary: true }]
+      contacts: [{ name: '', email: '', phone: '', is_primary: true }]
     });
     setFormErrors({});
     setShowCreateModal(false);
@@ -436,7 +410,7 @@ export default function ClientsPage() {
         total_insect_monitors_box: details.total_insect_monitors_box || 0,
         contacts: details.contacts && details.contacts.length > 0 
           ? details.contacts 
-          : [{ name: '', email: '', phone: '', role: '', is_primary: true }]
+          : [{ name: '', email: '', phone: '', is_primary: true }]
       });
       setShowEditModal(true);
     }
@@ -1053,7 +1027,7 @@ export default function ClientsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Address Line 1 <span className="text-red-500">*</span>
+                        Address Line 1
                       </label>
                       <input
                         type="text"
@@ -1249,43 +1223,15 @@ export default function ClientsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Name <span className="text-red-500">*</span>
+                            Name
                           </label>
                           <input
                             type="text"
                             value={contact.name}
                             onChange={(e) => handleContactChange(index, 'name', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                              formErrors[`contact_${index}_name`] ? 'border-red-500' : 'border-gray-300'
-                            }`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                             placeholder="John Doe"
                           />
-                          {formErrors[`contact_${index}_name`] && (
-                            <p className="mt-1 text-xs text-red-500">{formErrors[`contact_${index}_name`]}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Role <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            value={contact.role}
-                            onChange={(e) => handleContactChange(index, 'role', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                              formErrors[`contact_${index}_role`] ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                          >
-                            <option value="">Select Role</option>
-                            <option value="primary">Primary Contact</option>
-                            <option value="billing">Billing Contact</option>
-                            <option value="site_manager">Site Manager</option>
-                            <option value="emergency">Emergency Contact</option>
-                            <option value="other">Other</option>
-                          </select>
-                          {formErrors[`contact_${index}_role`] && (
-                            <p className="mt-1 text-xs text-red-500">{formErrors[`contact_${index}_role`]}</p>
-                          )}
                         </div>
 
                         <div>
@@ -1485,7 +1431,6 @@ export default function ClientsPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-gray-600">{contact.role}</p>
                             {contact.email && (
                               <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
                                 <Mail className="w-3 h-3" />
@@ -1798,43 +1743,15 @@ export default function ClientsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Name <span className="text-red-500">*</span>
+                            Name
                           </label>
                           <input
                             type="text"
                             value={contact.name}
                             onChange={(e) => handleContactChange(index, 'name', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                              formErrors[`contact_${index}_name`] ? 'border-red-500' : 'border-gray-300'
-                            }`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                             placeholder="John Doe"
                           />
-                          {formErrors[`contact_${index}_name`] && (
-                            <p className="mt-1 text-xs text-red-500">{formErrors[`contact_${index}_name`]}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Role <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            value={contact.role}
-                            onChange={(e) => handleContactChange(index, 'role', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                              formErrors[`contact_${index}_role`] ? 'border-red-500' : 'border-gray-300'
-                            }`}
-                          >
-                            <option value="">Select Role</option>
-                            <option value="primary">Primary Contact</option>
-                            <option value="billing">Billing Contact</option>
-                            <option value="site_manager">Site Manager</option>
-                            <option value="emergency">Emergency Contact</option>
-                            <option value="other">Other</option>
-                          </select>
-                          {formErrors[`contact_${index}_role`] && (
-                            <p className="mt-1 text-xs text-red-500">{formErrors[`contact_${index}_role`]}</p>
-                          )}
                         </div>
 
                         <div>

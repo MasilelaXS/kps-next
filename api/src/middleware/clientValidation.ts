@@ -20,33 +20,25 @@ const clientInputSchema = Joi.object({
       'string.max': 'Company name cannot exceed 255 characters'
     }),
   
-  address_line1: Joi.string().trim().min(5).max(255).required()
+  address_line1: Joi.string().trim().min(1).max(255).allow('', null).optional().default('N/A')
     .messages({
-      'string.empty': 'Address line 1 is required',
-      'string.min': 'Address must be at least 5 characters',
       'string.max': 'Address line 1 cannot exceed 255 characters'
     }),
   
   address_line2: Joi.string().trim().max(255).allow('', null).optional(),
   
-  city: Joi.string().trim().min(2).max(100).required()
+  city: Joi.string().trim().min(1).max(100).allow('', null).optional().default('N/A')
     .messages({
-      'string.empty': 'City is required',
-      'string.min': 'City must be at least 2 characters',
       'string.max': 'City cannot exceed 100 characters'
     }),
   
-  state: Joi.string().trim().min(2).max(100).required()
+  state: Joi.string().trim().min(1).max(100).allow('', null).optional()
     .messages({
-      'string.empty': 'State/Province is required',
-      'string.min': 'State must be at least 2 characters',
       'string.max': 'State cannot exceed 100 characters'
     }),
   
-  postal_code: Joi.string().trim().min(3).max(20).required()
+  postal_code: Joi.string().trim().min(1).max(20).allow('', null).optional()
     .messages({
-      'string.empty': 'Postal code is required',
-      'string.min': 'Postal code must be at least 3 characters',
       'string.max': 'Postal code cannot exceed 20 characters'
     }),
   
@@ -91,13 +83,13 @@ const clientInputSchema = Joi.object({
   
   contacts: Joi.array().items(
     Joi.object({
-      name: Joi.string().trim().min(2).max(100).required()
+      name: Joi.string().trim().max(100).allow('', null).optional().default('N/A')
         .messages({
-          'string.empty': 'Contact name is required',
-          'string.min': 'Contact name must be at least 2 characters'
+          'string.max': 'Contact name cannot exceed 100 characters'
         }),
       
-      role: Joi.string().valid('primary', 'billing', 'site_manager', 'emergency', 'other').required()
+      role: Joi.string().valid('primary', 'billing', 'site_manager', 'emergency', 'other')
+        .allow('', null).optional().default('other')
         .messages({
           'any.only': 'Contact role must be one of: primary, billing, site_manager, emergency, other'
         }),

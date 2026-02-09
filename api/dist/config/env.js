@@ -5,9 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTest = exports.isProduction = exports.isDevelopment = exports.config = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 const production_config_1 = require("./production.config");
-dotenv_1.default.config();
-const useProductionConfig = process.env.NODE_ENV === 'production' || !process.env.NODE_ENV;
+dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), '.env') });
+const useProductionConfig = process.env.NODE_ENV === 'production';
 if (!useProductionConfig) {
     const requiredEnvVars = [
         'NODE_ENV',

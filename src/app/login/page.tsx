@@ -35,7 +35,10 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          login_id: formData.login_id.toLowerCase(),
+          password: formData.password
+        })
       });
 
       const data = await response.json();
@@ -106,7 +109,7 @@ export default function LoginPage() {
                 label="PCO Number"
                 placeholder="PCO Number (e.g., admin12345 or pco67890)"
                 value={formData.login_id}
-                onChange={(e) => setFormData({ ...formData, login_id: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, login_id: e.target.value.toLowerCase() })}
                 icon={<User className="w-4 h-4 text-gray-400" />}
               />
             </div>

@@ -20,8 +20,10 @@ import NotificationBell from './NotificationBell';
 import BottomNav from './BottomNav';
 import Loading from './Loading';
 import Button from './Button';
+import UpdateModal from './UpdateModal';
 import { preloadCache } from '@/lib/preloadCache';
 import { useBrowserNotifications } from '@/hooks/useBrowserNotifications';
+import { useVersionCheck } from '@/hooks/useVersionCheck';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -34,6 +36,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false); // Default to closed
   const [mounted, setMounted] = useState(false);
   const [appVersion, setAppVersion] = useState<string>('...');
+  const { needsUpdate, forceUpdate, currentVersion, latestVersion, updateMessage, dismissUpdate, handleUpdate } = useVersionCheck();
 
   // Enable browser notifications automatically
   useBrowserNotifications();
@@ -278,6 +281,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Bottom Navigation - Visible on mobile, hidden on desktop */}
       <BottomNav />
+
+      {/* Version Check Modal */}
+      <UpdateModal
+        isOpen={needsUpdate || forceUpdate}
+        forceUpdate={forceUpdate}
+        currentVersion={currentVersion}
+        latestVersion={latestVersion}
+        message={updateMessage}
+        onDismiss={dismissUpdate}
+        onUpdate={handleUpdate}
+      />
     </div>
   );
 }

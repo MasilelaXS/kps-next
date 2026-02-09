@@ -11,6 +11,7 @@ export interface AuthenticatedUser {
     id: number;
     login_id: string;
     role: 'admin' | 'pco' | 'both';
+    role_context?: 'admin' | 'pco';
     first_name: string;
     last_name: string;
     email: string;

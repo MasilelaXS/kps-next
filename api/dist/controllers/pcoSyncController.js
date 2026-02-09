@@ -778,11 +778,39 @@ const selfAssignClient = async (req, res) => {
                 message: 'Cannot assign to inactive client'
             });
         }
-        const existingAssignment = await (0, database_1.executeQuery)('SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = ?', [client_id, pcoId, 'active']);
+        const existingAssignment = await (0, database_1.executeQuery)('SELECT id, assignment_type FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = ?', [client_id, pcoId, 'active']);
         if (existingAssignment.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'You are already assigned to this client'
+            const assignmentType = existingAssignment[0].assignment_type;
+            if (assignmentType === 'admin') {
+                logger_1.logger.info('Self-assignment attempt for admin-assigned client', {
+                    pco_id: pcoId,
+                    client_id,
+                    existing_type: 'admin'
+                });
+                return res.json({
+                    success: true,
+                    message: 'Already assigned to this client by admin',
+                    data: {
+                        client_id,
+                        client_name: clientCheck[0].company_name,
+                        assignment_type: 'admin',
+                        note: 'Admin assignment takes precedence'
+                    }
+                });
+            }
+            logger_1.logger.info('Duplicate self-assignment attempt (idempotent)', {
+                pco_id: pcoId,
+                client_id
+            });
+            return res.json({
+                success: true,
+                message: 'Already assigned to this client',
+                data: {
+                    client_id,
+                    client_name: clientCheck[0].company_name,
+                    assignment_type: 'self',
+                    note: 'Assignment already exists'
+                }
             });
         }
         await (0, database_1.executeQuery)(`INSERT INTO client_pco_assignments 

@@ -22,6 +22,9 @@ const router = express.Router();
 // Get current app version - used by mobile apps for update checking
 router.get('/current', VersionController.getCurrentVersion);
 
+// Diagnostic endpoint - shows version info from package.json and database
+router.get('/diagnostic', VersionController.getDiagnosticInfo);
+
 /**
  * Protected Admin Routes (Authentication required)
  * Used by developers/admins for version management

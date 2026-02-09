@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PcoDashboardLayout from '@/components/PcoDashboardLayout';
 import Loading from '@/components/Loading';
 import { API_CONFIG, apiCall } from '@/lib/api';
+import { clientCache } from '@/lib/clientCache';
 import { Building2, MapPin, Phone, ChevronRight, AlertCircle, Search } from 'lucide-react';
 
 interface AssignedClient {
@@ -31,12 +32,38 @@ export default function SchedulePage() {
       setLoading(true);
       setError(null);
       
-      // Fetch assigned clients from sync endpoint
-      const response = await apiCall('/api/pco/sync/clients?include_contacts=false');
+      // Try to fetch from API first
+      try {
+        const response = await apiCall('/api/pco/sync/clients?include_contacts=false');
+        
+        if (response.success && Array.isArray(response.data)) {
+          // Map the response to match our interface
+          const mappedClients = response.data.map((client: any) => ({
+            id: client.id,
+            company_name: client.company_name,
+            address: [
+              client.address_line1,
+              client.address_line2,
+              client.city,
+              client.state,
+              client.postal_code
+            ].filter(Boolean).join(', '),
+            is_active: client.status === 'active',
+            assignment_type: client.assignment_type || 'admin'
+          }));
+          setClients(mappedClients);
+          return;
+        }
+      } catch (apiError) {
+        console.log('[Schedule] API failed, trying cache...', apiError);
+      }
       
-      if (response.success && Array.isArray(response.data)) {
-        // Map the response to match our interface
-        const mappedClients = response.data.map((client: any) => ({
+      // Fallback to cache if API fails (offline)
+      console.log('[Schedule] Using cached assigned clients');
+      const cachedClients = clientCache.getAssignedClients();
+      
+      if (cachedClients.length > 0) {
+        const mappedClients = cachedClients.map((client: any) => ({
           id: client.id,
           company_name: client.company_name,
           address: [

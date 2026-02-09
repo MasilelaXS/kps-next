@@ -33,7 +33,7 @@ const PRECACHE_ASSETS = [
 // Helper to fetch version from server
 const fetchAppVersion = async () => {
   try {
-    const resp = await fetch('/api/version');
+    const resp = await fetch('/version.json', { cache: 'no-store' });
     if (!resp.ok) return 'dev';
     const json = await resp.json();
     return json.version || 'dev';
@@ -42,6 +42,13 @@ const fetchAppVersion = async () => {
     return 'dev';
   }
 };
+
+// Allow the app to trigger immediate activation
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // Install event - precache assets
 self.addEventListener('install', (event) => {

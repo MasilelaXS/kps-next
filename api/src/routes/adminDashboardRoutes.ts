@@ -13,6 +13,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth';
 import {
+  getOverview,
   getMetrics,
   getActivity,
   getStats,
@@ -21,6 +22,12 @@ import {
 } from '../controllers/adminDashboardController';
 
 const router = Router();
+
+/**
+ * GET /api/admin/dashboard/overview
+ * Dashboard overview payload (counts + flow + recent approvals)
+ */
+router.get('/admin/dashboard/overview', authenticateToken, getOverview);
 
 /**
  * GET /api/admin/dashboard/metrics

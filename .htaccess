@@ -1,0 +1,22 @@
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/kpspestcontrol/app.kpspestcontrol.co.za"
+PassengerNodejs "/home/kpspestcontrol/nodevenv/app.kpspestcontrol.co.za/22/bin/node"
+PassengerAppType node
+PassengerStartupFile server.js
+PassengerEnabled on
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# Disable directory listing
+Options -Indexes
+
+# Set production environment
+SetEnv NODE_ENV production
+SetEnv NEXT_PUBLIC_API_URL https://app.kpspestcontrol.co.za/api
+
+# CORS headers
+<IfModule mod_headers.c>
+  Header always set Access-Control-Allow-Origin "*"
+  Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+  Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+  Header always set Access-Control-Allow-Credentials "true"
+</IfModule>

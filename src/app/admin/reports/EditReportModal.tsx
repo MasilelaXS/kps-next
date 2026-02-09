@@ -132,7 +132,21 @@ export default function EditReportModal({
   submitting
 }: EditReportModalProps) {
   const alert = useAlert();
-  const [editedReport, setEditedReport] = useState<Report>(JSON.parse(JSON.stringify(report)));
+  
+  // Normalize report data to fix boolean/number to 'yes'/'no' conversion
+  const normalizeReport = (r: Report): Report => {
+    const normalized = JSON.parse(JSON.stringify(r));
+    if (normalized.bait_stations) {
+      normalized.bait_stations = normalized.bait_stations.map((s: BaitStation) => ({
+        ...s,
+        activity_detected: (s.activity_detected as any) === true || (s.activity_detected as any) === 1 || s.activity_detected === 'yes' ? 'yes' : 'no',
+        accessible: (s.accessible as any) === true || (s.accessible as any) === 1 || s.accessible === 'yes' || ((s as any).is_accessible as any) === true || ((s as any).is_accessible as any) === 1 ? 'yes' : 'no'
+      }));
+    }
+    return normalized;
+  };
+  
+  const [editedReport, setEditedReport] = useState<Report>(normalizeReport(report));
   const [editingStationId, setEditingStationId] = useState<number | null>(null);
   const [editingMonitorId, setEditingMonitorId] = useState<number | null>(null);
 

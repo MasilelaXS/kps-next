@@ -9,6 +9,7 @@ const auth_1 = require("../middleware/auth");
 const validation_1 = require("../middleware/validation");
 const router = express_1.default.Router();
 router.get('/current', versionController_1.VersionController.getCurrentVersion);
+router.get('/diagnostic', versionController_1.VersionController.getDiagnosticInfo);
 router.post('/admin/release', auth_1.authenticateToken, validation_1.validateVersionInput, versionController_1.VersionController.releaseVersion);
 router.get('/admin/versions', auth_1.authenticateToken, versionController_1.VersionController.getVersionHistory);
 router.put('/admin/versions/:id/status', auth_1.authenticateToken, versionController_1.VersionController.updateVersionStatus);

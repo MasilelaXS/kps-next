@@ -4,8 +4,10 @@ const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
 const validation_1 = require("../middleware/validation");
 const pcoSyncController_1 = require("../controllers/pcoSyncController");
+const clientController_1 = require("../controllers/clientController");
 const chemicalController_1 = require("../controllers/chemicalController");
 const syncValidation_1 = require("../validation/syncValidation");
+const clientValidation_1 = require("../middleware/clientValidation");
 const router = (0, express_1.Router)();
 router.get('/pco/sync/full', auth_1.authenticateToken, pcoSyncController_1.getFullSync);
 router.get('/pco/sync/clients', auth_1.authenticateToken, (0, validation_1.validateRequest)(syncValidation_1.syncQuerySchema, 'query'), pcoSyncController_1.syncClients);
@@ -20,6 +22,7 @@ router.get('/pco/reports/last-for-client/:clientId', auth_1.authenticateToken, a
     return getLastReportForClient(req, res, next);
 });
 router.get('/pco/clients/available', auth_1.authenticateToken, pcoSyncController_1.getAvailableClients);
+router.post('/pco/clients', auth_1.authenticateToken, clientValidation_1.validateClientInput, clientController_1.ClientController.createClient);
 router.post('/pco/assignments/self-assign', auth_1.authenticateToken, pcoSyncController_1.selfAssignClient);
 exports.default = router;
 //# sourceMappingURL=pcoSyncRoutes.js.map

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.refreshCache = exports.getPerformance = exports.getStats = exports.getActivity = exports.getMetrics = void 0;
+exports.refreshCache = exports.getPerformance = exports.getStats = exports.getActivity = exports.getOverview = exports.getMetrics = void 0;
 const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
@@ -154,6 +154,78 @@ const getMetrics = async (req, res) => {
     }
 };
 exports.getMetrics = getMetrics;
+const getOverview = async (req, res) => {
+    try {
+        if (!(0, auth_1.hasRole)(req.user, 'admin')) {
+            return res.status(403).json({
+                success: false,
+                message: 'Admin access required'
+            });
+        }
+        const [summary, flow, recentApprovals] = await Promise.all([
+            (0, database_1.executeQuerySingle)(`SELECT
+          (SELECT COUNT(*) FROM clients WHERE deleted_at IS NULL) as total_clients,
+          (SELECT COUNT(*) FROM users WHERE status = 'active' AND role IN ('pco', 'both') AND deleted_at IS NULL) as active_pcos,
+          (SELECT COUNT(*) FROM reports WHERE status = 'pending') as pending_reports,
+          (SELECT COUNT(*) FROM reports WHERE status = 'approved') as approved_total,
+          (SELECT COUNT(*) FROM reports WHERE status = 'approved' AND reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) as approved_this_month
+        `),
+            (0, database_1.executeQuery)(`WITH RECURSIVE dates AS (
+           SELECT CURDATE() as date_key
+           UNION ALL
+           SELECT DATE_SUB(date_key, INTERVAL 1 DAY)
+           FROM dates
+           WHERE date_key > DATE_SUB(CURDATE(), INTERVAL 13 DAY)
+         )
+         SELECT
+           DATE_FORMAT(d.date_key, '%Y-%m-%d') as date,
+           COALESCE(SUM(r.status = 'approved'), 0) as approved,
+           COALESCE(SUM(r.status = 'pending'), 0) as pending,
+           COALESCE(SUM(r.status = 'declined'), 0) as declined
+         FROM dates d
+         LEFT JOIN reports r
+           ON DATE(COALESCE(r.reviewed_at, r.submitted_at, r.created_at)) = d.date_key
+           AND r.status IN ('approved', 'pending', 'declined')
+         GROUP BY d.date_key
+         ORDER BY d.date_key ASC`),
+            (0, database_1.executeQuery)(`SELECT
+           r.id as report_id,
+           r.reviewed_at,
+           r.report_type,
+           c.company_name as client_name,
+           u.name as pco_name
+         FROM reports r
+         JOIN clients c ON r.client_id = c.id
+         JOIN users u ON r.pco_id = u.id
+         WHERE r.status = 'approved'
+        ORDER BY r.reviewed_at DESC
+        LIMIT 3`)
+        ]);
+        return res.json({
+            success: true,
+            data: {
+                summary: {
+                    total_clients: parseInt(summary?.total_clients || 0),
+                    active_pcos: parseInt(summary?.active_pcos || 0),
+                    pending_reports: parseInt(summary?.pending_reports || 0),
+                    approved_total: parseInt(summary?.approved_total || 0),
+                    approved_this_month: parseInt(summary?.approved_this_month || 0)
+                },
+                flow,
+                recent_approvals: recentApprovals
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error in getOverview:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve dashboard overview',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+exports.getOverview = getOverview;
 const getActivity = async (req, res) => {
     try {
         if (!(0, auth_1.hasRole)(req.user, 'admin')) {
@@ -312,14 +384,40 @@ const getStats = async (req, res) => {
             else if (period === '1y')
                 daysBack = 365;
             const reportTrends = await (0, database_1.executeQuery)(`SELECT 
-            DATE(submitted_at) as date,
+            DATE(COALESCE(reviewed_at, submitted_at, created_at)) as date,
             COUNT(*) as count,
             status
           FROM reports
-          WHERE submitted_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+          WHERE COALESCE(reviewed_at, submitted_at, created_at) >= DATE_SUB(NOW(), INTERVAL ? DAY)
             AND status IN ('pending', 'approved', 'declined')
-          GROUP BY DATE(submitted_at), status
+          GROUP BY DATE(COALESCE(reviewed_at, submitted_at, created_at)), status
           ORDER BY date DESC`, [daysBack]);
+            const reportTrendsDaily = await (0, database_1.executeQuery)(`WITH RECURSIVE date_series AS (
+             SELECT DATE(NOW()) as date_key, 0 as day_offset
+             UNION ALL
+             SELECT DATE_SUB(date_key, INTERVAL 1 DAY), day_offset + 1
+             FROM date_series
+             WHERE day_offset < 13
+           ),
+           report_counts AS (
+             SELECT 
+               DATE(COALESCE(reviewed_at, submitted_at, created_at)) as date_key,
+               SUM(status = 'approved') as approved,
+               SUM(status = 'pending') as pending,
+               SUM(status = 'declined') as declined
+             FROM reports
+             WHERE COALESCE(reviewed_at, submitted_at, created_at) >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+               AND status IN ('pending', 'approved', 'declined')
+             GROUP BY DATE(COALESCE(reviewed_at, submitted_at, created_at))
+           )
+           SELECT 
+             DATE_FORMAT(ds.date_key, '%Y-%m-%d') as date,
+             COALESCE(rc.approved, 0) as approved,
+             COALESCE(rc.pending, 0) as pending,
+             COALESCE(rc.declined, 0) as declined
+           FROM date_series ds
+           LEFT JOIN report_counts rc ON rc.date_key = ds.date_key
+           ORDER BY ds.date_key ASC`);
             const approvalStats = await (0, database_1.executeQuerySingle)(`SELECT 
             COUNT(*) as total_reviewed,
             SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
@@ -383,6 +481,7 @@ const getStats = async (req, res) => {
                     end_date: new Date().toISOString().split('T')[0]
                 },
                 report_trends: reportTrends,
+                report_trends_daily: reportTrendsDaily,
                 approval_stats: {
                     total_reviewed: parseInt(approvalStats?.total_reviewed || 0),
                     approved: parseInt(approvalStats?.approved_count || 0),

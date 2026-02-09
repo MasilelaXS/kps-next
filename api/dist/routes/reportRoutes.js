@@ -34,6 +34,7 @@ router.post('/admin/reports/:id/archive', auth_1.authenticateToken, reportContro
 router.get('/admin/reports/:id/download', auth_1.authenticateToken, reportController_1.adminDownloadReportPDF);
 router.get('/admin/reports/:id/html', auth_1.authenticateToken, reportController_1.adminGetReportHTML);
 router.post('/admin/reports/:id/email', auth_1.authenticateToken, reportController_1.adminEmailReportPDF);
+router.post('/admin/reports/:id/mark-emailed', auth_1.authenticateToken, reportController_1.adminMarkReportEmailed);
 router.get('/pco/reports/:id/export-json', auth_1.authenticateToken, reportController_1.exportReportAsJSON);
 router.post('/admin/reports/import-json', auth_1.authenticateToken, reportController_1.importReportFromJSON);
 exports.default = router;

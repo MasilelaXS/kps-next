@@ -169,6 +169,11 @@ export default function EditReportPage() {
   const [fumigationPests, setFumigationPests] = useState<FumigationTargetPest[]>([]);
   const [fumigationChemicals, setFumigationChemicals] = useState<FumigationChemical[]>([]);
   const [insectMonitors, setInsectMonitors] = useState<InsectMonitor[]>([]);
+  
+  // Bait stations UI state
+  const [activeTab, setActiveTab] = useState<'inside' | 'outside'>('inside');
+  const [searchStationNumber, setSearchStationNumber] = useState('');
+  const [expandedStationIds, setExpandedStationIds] = useState<Set<number>>(new Set());
 
   // ============================================================================
   // DATA LOADING
@@ -219,9 +224,24 @@ export default function EditReportPage() {
           not_accessible_reason: s.not_accessible_reason || '',
           activity_other_description: s.activity_other_description || '',
           station_remarks: s.station_remarks || '',
-          action_taken: s.action_taken || ''
+          action_taken: s.action_taken || '',
+          // Convert boolean/number to 'yes'/'no' for select
+          activity_detected: (s.activity_detected as any) === true || (s.activity_detected as any) === 1 || s.activity_detected === 'yes' ? 'yes' : 'no',
+          accessible: (s.accessible as any) === true || (s.accessible as any) === 1 || s.accessible === 'yes' || ((s as any).is_accessible as any) === true || ((s as any).is_accessible as any) === 1 ? 'yes' : 'no'
         }));
-        setBaitStations(normalizedStations);
+        // Sort stations: inside first, then outside, then by station_number within each group (numeric)
+        const sortedStations = normalizedStations.sort((stationA: BaitStation, stationB: BaitStation) => {
+          if (stationA.location !== stationB.location) {
+            return stationA.location === 'inside' ? -1 : 1;
+          }
+          // Extract numeric values from station numbers for proper numeric sorting
+          const getNumericValue = (stationNum: string) => {
+            const match = stationNum.match(/\d+/);
+            return match ? parseInt(match[0]) : 0;
+          };
+          return getNumericValue(stationA.station_number || '') - getNumericValue(stationB.station_number || '');
+        });
+        setBaitStations(sortedStations);
         
         // Normalize insect monitors to ensure no null values in input fields
         const normalizedMonitors = (reportData.insect_monitors || []).map((m: InsectMonitor) => ({
@@ -538,26 +558,61 @@ export default function EditReportPage() {
                 <h2 className="text-lg font-semibold text-gray-900">
                   Bait Stations
                 </h2>
-                <button
-                  onClick={() => {
-                    const newStation: BaitStation = {
-                      location: 'inside',
-                      station_number: '',
-                      accessible: 'yes',
-                      activity_detected: 'no',
-                      bait_status: 'clean',
-                      station_condition: 'good',
-                      action_taken: '',
-                      warning_sign_condition: 'good',
-                      chemicals: []
-                    };
-                    setBaitStations([...baitStations, newStation]);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Station
-                </button>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Search station number..."
+                    value={searchStationNumber}
+                    onChange={(e) => setSearchStationNumber(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm w-48"
+                  />
+                  <button
+                    onClick={() => {
+                      const newStation: BaitStation = {
+                        location: activeTab,
+                        station_number: '',
+                        accessible: 'yes',
+                        activity_detected: 'no',
+                        bait_status: 'clean',
+                        station_condition: 'good',
+                        action_taken: '',
+                        warning_sign_condition: 'good',
+                        chemicals: []
+                      };
+                      setBaitStations([...baitStations, newStation]);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Station
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="border-b border-gray-200 mb-4">
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setActiveTab('inside')}
+                    className={`px-4 py-2 border-b-2 font-medium transition-colors ${
+                      activeTab === 'inside'
+                        ? 'border-purple-600 text-purple-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Inside ({baitStations.filter(s => s.location === 'inside').length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('outside')}
+                    className={`px-4 py-2 border-b-2 font-medium transition-colors ${
+                      activeTab === 'outside'
+                        ? 'border-purple-600 text-purple-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Outside ({baitStations.filter(s => s.location === 'outside').length})
+                  </button>
+                </div>
               </div>
 
               {baitStations.length === 0 ? (
@@ -566,38 +621,55 @@ export default function EditReportPage() {
                   <p className="text-sm mt-1">Click "Add Station" to create one</p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Group by location */}
-                  {['inside', 'outside'].map((location) => {
-                    const stationsInLocation = baitStations.filter(s => s.location === location);
-                    if (stationsInLocation.length === 0) return null;
+                <div className="space-y-2">
+                  {baitStations
+                    .filter(s => s.location === activeTab)
+                    .filter(s => !searchStationNumber || s.station_number.toLowerCase().includes(searchStationNumber.toLowerCase()))
+                    .map((station, locationIndex) => {
+                      const fullIndex = baitStations.findIndex(s => s.id === station.id && s.station_number === station.station_number && s.location === station.location);
+                      const isExpanded = expandedStationIds.has(fullIndex);
+                      
+                      return (
+                        <div key={fullIndex} className="border border-gray-200 rounded-lg bg-gray-50">
+                          {/* Accordion Header */}
+                          <div 
+                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                            onClick={() => {
+                              const newExpanded = new Set(expandedStationIds);
+                              if (isExpanded) {
+                                newExpanded.delete(fullIndex);
+                              } else {
+                                newExpanded.add(fullIndex);
+                              }
+                              setExpandedStationIds(newExpanded);
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-gray-400">
+                                {isExpanded ? '▼' : '▶'}
+                              </span>
+                              <h4 className="font-medium text-gray-800">
+                                Station #{locationIndex + 1} - {station.station_number || '(No number)'}
+                              </h4>
+                              <span className="text-sm text-gray-500">
+                                {station.activity_detected === 'yes' && '⚠️ Activity • '}
+                                {station.bait_status} • {station.station_condition}
+                              </span>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBaitStations(baitStations.filter((_, i) => i !== fullIndex));
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
 
-                    return (
-                      <div key={location} className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-900 mb-4 capitalize">
-                          {location} Stations ({stationsInLocation.length})
-                        </h3>
-                        <div className="space-y-4">
-                          {baitStations.map((station, index) => {
-                            if (station.location !== location) return null;
-                            
-                            return (
-                              <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                {/* Station header with delete button */}
-                                <div className="flex items-center justify-between mb-4">
-                                  <h4 className="font-medium text-gray-800">
-                                    Station #{index + 1}
-                                  </h4>
-                                  <button
-                                    onClick={() => {
-                                      setBaitStations(baitStations.filter((_, i) => i !== index));
-                                    }}
-                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-
+                          {/* Accordion Content */}
+                          {isExpanded && (
+                            <div className="p-4 pt-0 border-t border-gray-200">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                   {/* Location */}
                                   <div>
@@ -608,7 +680,7 @@ export default function EditReportPage() {
                                       value={station.location}
                                       onChange={(e) => {
                                         const updated = [...baitStations];
-                                        updated[index].location = e.target.value as 'inside' | 'outside';
+                                        updated[fullIndex].location = e.target.value as 'inside' | 'outside';
                                         setBaitStations(updated);
                                       }}
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -628,7 +700,7 @@ export default function EditReportPage() {
                                       value={station.station_number}
                                       onChange={(e) => {
                                         const updated = [...baitStations];
-                                        updated[index].station_number = e.target.value as any;
+                                        updated[fullIndex].station_number = e.target.value as any;
                                         setBaitStations(updated);
                                       }}
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -645,7 +717,7 @@ export default function EditReportPage() {
                                       value={station.accessible}
                                       onChange={(e) => {
                                         const updated = [...baitStations];
-                                        updated[index].accessible = e.target.value as 'yes' | 'no';
+                                        updated[fullIndex].accessible = e.target.value as 'yes' | 'no';
                                         setBaitStations(updated);
                                       }}
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -667,7 +739,7 @@ export default function EditReportPage() {
                                       value={station.not_accessible_reason || ''}
                                       onChange={(e) => {
                                         const updated = [...baitStations];
-                                        updated[index].not_accessible_reason = e.target.value;
+                                        updated[fullIndex].not_accessible_reason = e.target.value;
                                         setBaitStations(updated);
                                       }}
                                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -688,7 +760,7 @@ export default function EditReportPage() {
                                         value={station.activity_detected}
                                         onChange={(e) => {
                                           const updated = [...baitStations];
-                                          updated[index].activity_detected = e.target.value as 'yes' | 'no';
+                                          updated[fullIndex].activity_detected = e.target.value as 'yes' | 'no';
                                           setBaitStations(updated);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -710,7 +782,7 @@ export default function EditReportPage() {
                                             checked={station.activity_droppings || false}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].activity_droppings = e.target.checked;
+                                              updated[fullIndex].activity_droppings = e.target.checked;
                                               setBaitStations(updated);
                                             }}
                                             className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
@@ -723,7 +795,7 @@ export default function EditReportPage() {
                                             checked={station.activity_gnawing || false}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].activity_gnawing = e.target.checked;
+                                              updated[fullIndex].activity_gnawing = e.target.checked;
                                               setBaitStations(updated);
                                             }}
                                             className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
@@ -736,7 +808,7 @@ export default function EditReportPage() {
                                             checked={station.activity_tracks || false}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].activity_tracks = e.target.checked;
+                                              updated[fullIndex].activity_tracks = e.target.checked;
                                               setBaitStations(updated);
                                             }}
                                             className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
@@ -749,9 +821,9 @@ export default function EditReportPage() {
                                             checked={station.activity_other || false}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].activity_other = e.target.checked;
+                                              updated[fullIndex].activity_other = e.target.checked;
                                               if (!e.target.checked) {
-                                                updated[index].activity_other_description = undefined;
+                                                updated[fullIndex].activity_other_description = undefined;
                                               }
                                               setBaitStations(updated);
                                             }}
@@ -766,7 +838,7 @@ export default function EditReportPage() {
                                           value={station.activity_other_description || ''}
                                           onChange={(e) => {
                                             const updated = [...baitStations];
-                                            updated[index].activity_other_description = e.target.value;
+                                            updated[fullIndex].activity_other_description = e.target.value;
                                             setBaitStations(updated);
                                           }}
                                           placeholder="Describe other activity..."
@@ -789,7 +861,7 @@ export default function EditReportPage() {
                                         value={station.bait_status}
                                         onChange={(e) => {
                                           const updated = [...baitStations];
-                                          updated[index].bait_status = e.target.value as any;
+                                          updated[fullIndex].bait_status = e.target.value as any;
                                           setBaitStations(updated);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -808,7 +880,7 @@ export default function EditReportPage() {
                                         value={station.station_condition}
                                         onChange={(e) => {
                                           const updated = [...baitStations];
-                                          updated[index].station_condition = e.target.value as any;
+                                          updated[fullIndex].station_condition = e.target.value as any;
                                           setBaitStations(updated);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -827,7 +899,7 @@ export default function EditReportPage() {
                                         value={station.action_taken || ''}
                                         onChange={(e) => {
                                           const updated = [...baitStations];
-                                          updated[index].action_taken = e.target.value as any;
+                                          updated[fullIndex].action_taken = e.target.value as any;
                                           setBaitStations(updated);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -845,7 +917,7 @@ export default function EditReportPage() {
                                         value={station.warning_sign_condition}
                                         onChange={(e) => {
                                           const updated = [...baitStations];
-                                          updated[index].warning_sign_condition = e.target.value as any;
+                                          updated[fullIndex].warning_sign_condition = e.target.value as any;
                                           setBaitStations(updated);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -868,7 +940,7 @@ export default function EditReportPage() {
                                     value={station.station_remarks || ''}
                                     onChange={(e) => {
                                       const updated = [...baitStations];
-                                      updated[index].station_remarks = e.target.value;
+                                      updated[fullIndex].station_remarks = e.target.value;
                                       setBaitStations(updated);
                                     }}
                                     rows={2}
@@ -884,7 +956,7 @@ export default function EditReportPage() {
                                     <button
                                       onClick={() => {
                                         const updated = [...baitStations];
-                                        updated[index].chemicals.push({
+                                        updated[fullIndex].chemicals.push({
                                           chemical_id: 0,
                                           quantity: 0,
                                           batch_number: ''
@@ -915,7 +987,7 @@ export default function EditReportPage() {
                                             value={chem.chemical_id}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].chemicals[chemIndex].chemical_id = parseInt(e.target.value);
+                                              updated[fullIndex].chemicals[chemIndex].chemical_id = parseInt(e.target.value);
                                               setBaitStations(updated);
                                             }}
                                             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
@@ -933,7 +1005,7 @@ export default function EditReportPage() {
                                             value={chem.quantity}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].chemicals[chemIndex].quantity = parseFloat(e.target.value) || 0;
+                                              updated[fullIndex].chemicals[chemIndex].quantity = parseFloat(e.target.value) || 0;
                                               setBaitStations(updated);
                                             }}
                                             placeholder="Qty"
@@ -944,7 +1016,7 @@ export default function EditReportPage() {
                                             value={chem.batch_number}
                                             onChange={(e) => {
                                               const updated = [...baitStations];
-                                              updated[index].chemicals[chemIndex].batch_number = e.target.value;
+                                              updated[fullIndex].chemicals[chemIndex].batch_number = e.target.value;
                                               setBaitStations(updated);
                                             }}
                                             placeholder="Batch #"
@@ -953,7 +1025,7 @@ export default function EditReportPage() {
                                           <button
                                             onClick={() => {
                                               const updated = [...baitStations];
-                                              updated[index].chemicals = updated[index].chemicals.filter((_, i) => i !== chemIndex);
+                                              updated[fullIndex].chemicals = updated[fullIndex].chemicals.filter((_, i) => i !== chemIndex);
                                               setBaitStations(updated);
                                             }}
                                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -966,12 +1038,10 @@ export default function EditReportPage() {
                                   )}
                                 </div>
                               </div>
-                            );
-                          })}
+                            )}
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               )}
             </div>

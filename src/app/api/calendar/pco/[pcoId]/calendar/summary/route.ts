@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Runtime detection based on request headers (no .env needed for cPanel)
+function getApiUrl(request: Request): string {
+  const host = request.headers.get('host') || '';
+  if (host.includes('kpspestcontrol.co.za') || host.includes('app.kpspestcontrol')) {
+    return 'https://app.kpspestcontrol.co.za';
+  }
+  return 'http://localhost:3001';
+}
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +18,8 @@ export async function GET(
     const { pcoId } = params;
     const { searchParams } = new URL(request.url);
     
-    // Build the backend API URL
+    // Build the backend API URL using runtime detection
+    const API_URL = getApiUrl(request);
     let backendUrl = `${API_URL}/api/calendar/pco/${pcoId}/calendar/summary`;
     
     // Add search params if any

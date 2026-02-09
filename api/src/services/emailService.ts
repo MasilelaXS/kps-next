@@ -43,7 +43,8 @@ export const sendPasswordResetEmail = async (
   resetToken: string
 ): Promise<boolean> => {
   try {
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    // Use config.frontend.url which is already set correctly in production.config.ts
+    const resetUrl = `${config.frontend.url}/reset-password?token=${resetToken}`;
     
     const mailOptions = {
       from: config.email.from,
@@ -175,7 +176,7 @@ export const sendWelcomeEmail = async (
   tempPassword: string
 ): Promise<boolean> => {
   try {
-    const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login`;
+    const loginUrl = `${config.frontend.url}/login`;
     
     const mailOptions = {
       from: config.email.from,

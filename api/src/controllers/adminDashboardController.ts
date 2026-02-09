@@ -240,6 +240,94 @@ export const getMetrics = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /api/admin/dashboard/overview
+ * Single payload for the admin dashboard (counts + flow + recent approvals)
+ * 
+ * Returns:
+ * - summary: core counts for tiles
+ * - flow: last 14 days (approved/pending/declined)
+ * - recent_approvals: latest approved reports
+ */
+export const getOverview = async (req: Request, res: Response) => {
+  try {
+    if (!hasRole(req.user, 'admin')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const [summary, flow, recentApprovals] = await Promise.all([
+      executeQuerySingle<RowDataPacket>(
+        `SELECT
+          (SELECT COUNT(*) FROM clients WHERE deleted_at IS NULL) as total_clients,
+          (SELECT COUNT(*) FROM users WHERE status = 'active' AND role IN ('pco', 'both') AND deleted_at IS NULL) as active_pcos,
+          (SELECT COUNT(*) FROM reports WHERE status = 'pending') as pending_reports,
+          (SELECT COUNT(*) FROM reports WHERE status = 'approved') as approved_total,
+          (SELECT COUNT(*) FROM reports WHERE status = 'approved' AND reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')) as approved_this_month
+        `
+      ),
+      executeQuery<RowDataPacket[]>(
+        `WITH RECURSIVE dates AS (
+           SELECT CURDATE() as date_key
+           UNION ALL
+           SELECT DATE_SUB(date_key, INTERVAL 1 DAY)
+           FROM dates
+           WHERE date_key > DATE_SUB(CURDATE(), INTERVAL 13 DAY)
+         )
+         SELECT
+           DATE_FORMAT(d.date_key, '%Y-%m-%d') as date,
+           COALESCE(SUM(r.status = 'approved'), 0) as approved,
+           COALESCE(SUM(r.status = 'pending'), 0) as pending,
+           COALESCE(SUM(r.status = 'declined'), 0) as declined
+         FROM dates d
+         LEFT JOIN reports r
+           ON DATE(COALESCE(r.reviewed_at, r.submitted_at, r.created_at)) = d.date_key
+           AND r.status IN ('approved', 'pending', 'declined')
+         GROUP BY d.date_key
+         ORDER BY d.date_key ASC`
+      ),
+      executeQuery<RowDataPacket[]>(
+        `SELECT
+           r.id as report_id,
+           r.reviewed_at,
+           r.report_type,
+           c.company_name as client_name,
+           u.name as pco_name
+         FROM reports r
+         JOIN clients c ON r.client_id = c.id
+         JOIN users u ON r.pco_id = u.id
+         WHERE r.status = 'approved'
+        ORDER BY r.reviewed_at DESC
+        LIMIT 3`
+      )
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        summary: {
+          total_clients: parseInt((summary as any)?.total_clients || 0),
+          active_pcos: parseInt((summary as any)?.active_pcos || 0),
+          pending_reports: parseInt((summary as any)?.pending_reports || 0),
+          approved_total: parseInt((summary as any)?.approved_total || 0),
+          approved_this_month: parseInt((summary as any)?.approved_this_month || 0)
+        },
+        flow,
+        recent_approvals: recentApprovals
+      }
+    });
+  } catch (error) {
+    logger.error('Error in getOverview:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve dashboard overview',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
  * GET /api/admin/dashboard/activity
  * Recent activity log and timeline
  * 
@@ -465,18 +553,48 @@ export const getStats = async (req: Request, res: Response) => {
         else if (period === '90d') daysBack = 90;
         else if (period === '1y') daysBack = 365;
 
-        // Report trends by day
+        // Report trends by day (use best available activity timestamp)
         const reportTrends = await executeQuery<RowDataPacket[]>(
           `SELECT 
-            DATE(submitted_at) as date,
+            DATE(COALESCE(reviewed_at, submitted_at, created_at)) as date,
             COUNT(*) as count,
             status
           FROM reports
-          WHERE submitted_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+          WHERE COALESCE(reviewed_at, submitted_at, created_at) >= DATE_SUB(NOW(), INTERVAL ? DAY)
             AND status IN ('pending', 'approved', 'declined')
-          GROUP BY DATE(submitted_at), status
+          GROUP BY DATE(COALESCE(reviewed_at, submitted_at, created_at)), status
           ORDER BY date DESC`,
           [daysBack]
+        );
+
+        // Report flow (last 14 days) - pre-bucketed for charts
+        const reportTrendsDaily = await executeQuery<RowDataPacket[]>(
+          `WITH RECURSIVE date_series AS (
+             SELECT DATE(NOW()) as date_key, 0 as day_offset
+             UNION ALL
+             SELECT DATE_SUB(date_key, INTERVAL 1 DAY), day_offset + 1
+             FROM date_series
+             WHERE day_offset < 13
+           ),
+           report_counts AS (
+             SELECT 
+               DATE(COALESCE(reviewed_at, submitted_at, created_at)) as date_key,
+               SUM(status = 'approved') as approved,
+               SUM(status = 'pending') as pending,
+               SUM(status = 'declined') as declined
+             FROM reports
+             WHERE COALESCE(reviewed_at, submitted_at, created_at) >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+               AND status IN ('pending', 'approved', 'declined')
+             GROUP BY DATE(COALESCE(reviewed_at, submitted_at, created_at))
+           )
+           SELECT 
+             DATE_FORMAT(ds.date_key, '%Y-%m-%d') as date,
+             COALESCE(rc.approved, 0) as approved,
+             COALESCE(rc.pending, 0) as pending,
+             COALESCE(rc.declined, 0) as declined
+           FROM date_series ds
+           LEFT JOIN report_counts rc ON rc.date_key = ds.date_key
+           ORDER BY ds.date_key ASC`
         );
 
         // Approval rates
@@ -562,6 +680,7 @@ export const getStats = async (req: Request, res: Response) => {
             end_date: new Date().toISOString().split('T')[0]
           },
           report_trends: reportTrends,
+          report_trends_daily: reportTrendsDaily,
           approval_stats: {
             total_reviewed: parseInt((approvalStats as any)?.total_reviewed || 0),
             approved: parseInt((approvalStats as any)?.approved_count || 0),

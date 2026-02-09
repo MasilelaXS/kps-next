@@ -12,6 +12,7 @@ import { config } from './config/env';
 import { logger } from './config/logger';
 import { testConnection, closeConnection } from './config/database';
 import { initializeCronJobs } from './config/cron';
+import VersionController from './controllers/versionController';
 
 /**
  * Start the server with proper error handling
@@ -21,6 +22,10 @@ const startServer = async (): Promise<void> => {
     // Test database connection first
     logger.info('🔄 Testing database connection...');
     await testConnection();
+    
+    // Sync version from package.json to database
+    logger.info('🔄 Syncing version to database...');
+    await VersionController.syncVersionToDatabase();
     
     // Initialize cron jobs for automated tasks
     logger.info('⏰ Initializing scheduled tasks...');

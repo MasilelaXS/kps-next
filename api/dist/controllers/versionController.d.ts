@@ -4,6 +4,8 @@ export declare class VersionController {
     static releaseVersion(req: Request, res: Response): Promise<void>;
     static getVersionHistory(req: Request, res: Response): Promise<void>;
     static updateVersionStatus(req: Request, res: Response): Promise<void>;
+    static syncVersionToDatabase(): Promise<void>;
+    static getDiagnosticInfo(req: Request, res: Response): Promise<void>;
 }
 export default VersionController;
 //# sourceMappingURL=versionController.d.ts.map

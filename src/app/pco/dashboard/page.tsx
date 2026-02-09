@@ -68,7 +68,7 @@ export default function PCODashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [downloadingCache, setDownloadingCache] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const { needsUpdate, forceUpdate, currentVersion, latestVersion, updateMessage, dismissUpdate } = useVersionCheck();
+  const { needsUpdate, forceUpdate, currentVersion, latestVersion, updateMessage, dismissUpdate, handleUpdate } = useVersionCheck();
 
   useEffect(() => {
     fetchDashboardData();
@@ -200,11 +200,6 @@ export default function PCODashboard() {
     } finally {
       setDownloadingCache(false);
     }
-  };
-
-  const handleUpdate = () => {
-    // Redirect to app store or trigger PWA update
-    window.location.reload();
   };
 
   if (loading) {

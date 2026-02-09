@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { buildApiUrl } from '@/lib/api';
 import { preloadCache } from '@/lib/preloadCache';
 
 interface UseVersionCheckReturn {
@@ -11,10 +10,26 @@ interface UseVersionCheckReturn {
   latestVersion: string;
   updateMessage: string;
   dismissUpdate: () => void;
+  handleUpdate: () => Promise<void>;
 }
 
 const DEFAULT_APP_VERSION = 'dev';
 const VERSION_CHECK_INTERVAL = 300000; // 5 minutes
+
+// Compare semantic versions (returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2)
+const compareVersions = (version1: string, version2: string): number => {
+  const v1parts = version1.split('.').map(Number);
+  const v2parts = version2.split('.').map(Number);
+  
+  for (let i = 0; i < 3; i++) {
+    const v1part = v1parts[i] || 0;
+    const v2part = v2parts[i] || 0;
+    
+    if (v1part > v2part) return 1;
+    if (v1part < v2part) return -1;
+  }
+  return 0;
+};
 
 export function useVersionCheck(): UseVersionCheckReturn {
   const [needsUpdate, setNeedsUpdate] = useState(false);
@@ -76,10 +91,15 @@ export function useVersionCheck(): UseVersionCheckReturn {
 
   const checkVersion = async () => {
     try {
-      // Add cache-busting parameter to ensure fresh data
-      const timestamp = new Date().getTime();
-      const response = await fetch(buildApiUrl(`/api/version/current?current_version=${currentVersion}&platform=web&_t=${timestamp}`), {
-        cache: 'no-store'
+      // Get local version (what user is currently running)
+      if (currentVersion === DEFAULT_APP_VERSION) {
+        return; // Wait for local version to be loaded first
+      }
+
+      // Fetch latest version from server (cache-busted to get fresh data)
+      const timestamp = Date.now();
+      const response = await fetch(`/version.json?_t=${timestamp}`, { 
+        cache: 'no-store' 
       });
       
       if (!response.ok) {
@@ -87,45 +107,39 @@ export function useVersionCheck(): UseVersionCheckReturn {
         return;
       }
 
-      const data = await response.json();
+      const serverVersion = await response.json();
       
-      if (data.success && data.data) {
-        const versionData = data.data;
-        
-        // Safety check for undefined versions
-        if (!versionData.latest_version) {
-          console.warn('Version info incomplete:', versionData);
-          return;
-        }
-        
-        const latestVer = versionData.latest_version;
-        const updateAvailable = versionData.update_available || false;
-        const forceUpdateRequired = versionData.force_update || false;
-        
-        setLatestVersion(latestVer);
-        setUpdateMessage(versionData.release_notes || 'A new version is available. Please refresh your browser to get the latest features and fixes.');
-
-        setNeedsUpdate(updateAvailable && !dismissed);
-        setForceUpdate(forceUpdateRequired);
-
-        if (updateAvailable && !updateHandled) {
-          await refreshCaches();
-          setUpdateHandled(true);
-
-          if (forceUpdateRequired) {
-            window.location.reload();
-          }
-        }
-
-        // Log version check
-        console.log('Version Check:', {
-          current: currentVersion,
-          latest: latestVer,
-          updateAvailable,
-          forceUpdate: forceUpdateRequired,
-          message: data.message
-        });
+      if (!serverVersion?.version) {
+        console.warn('Invalid version data from server');
+        return;
       }
+
+      const latestVer = serverVersion.version;
+      
+      // Compare versions
+      const comparison = compareVersions(latestVer, currentVersion);
+      const updateAvailable = comparison > 0;
+      
+      setLatestVersion(latestVer);
+      setUpdateMessage(`Version ${latestVer} is available. Please refresh to get the latest features and fixes.`);
+
+      // Only show update modal if there's actually an update
+      if (updateAvailable) {
+        setNeedsUpdate(!dismissed);
+        setForceUpdate(false); // No forced updates for now
+      } else {
+        // No update available - ensure modal is hidden
+        setNeedsUpdate(false);
+        setForceUpdate(false);
+      }
+
+      // Log version check
+      console.log('Version Check:', {
+        current: currentVersion,
+        latest: latestVer,
+        updateAvailable,
+        dismissed
+      });
     } catch (error) {
       console.error('Version check error:', error);
     }
@@ -153,12 +167,48 @@ export function useVersionCheck(): UseVersionCheckReturn {
     }
   };
 
+  const handleUpdate = async () => {
+    try {
+      console.log('Updating app...');
+      
+      // Clear all caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        console.log('Cleared caches');
+      }
+
+      // Tell service worker to skip waiting and activate
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          if (registration.waiting) {
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+          // Force service worker update
+          await registration.update();
+        }
+      }
+
+      // Small delay to ensure cache clearing completes
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Hard reload - this will bypass cache
+      window.location.href = window.location.href.split('?')[0] + '?_v=' + Date.now();
+    } catch (error) {
+      console.error('Update error:', error);
+      // Fallback: just reload
+      window.location.reload();
+    }
+  };
+
   return {
     needsUpdate: needsUpdate && !dismissed,
     forceUpdate,
     currentVersion,
     latestVersion,
     updateMessage,
-    dismissUpdate
+    dismissUpdate,
+    handleUpdate
   };
 }

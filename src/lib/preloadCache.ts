@@ -4,6 +4,7 @@
  */
 
 import { apiCall } from './api';
+import { clientCache } from './clientCache';
 
 interface PreloadConfig {
   endpoint: string;
@@ -33,7 +34,7 @@ class PreloadCacheManager {
   private isPreloading = false;
   private preloadedEndpoints = new Set<string>();
   private readonly PRELOAD_KEY = 'kps_last_preload';
-  private readonly PRELOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
+  private readonly PRELOAD_INTERVAL = 4 * 60 * 60 * 1000; // 4 hours
 
   /**
    * Check if we should preload (avoid too frequent preloads)
@@ -95,8 +96,12 @@ class PreloadCacheManager {
         normalPriority.map(config => this.preloadEndpoint(config.endpoint))
       );
 
-      // For PCO role, also preload last reports for all assigned clients (for autopopulate)
+      // For PCO role, download all clients and chemicals for full offline support
       if (role === 'pco' || role === 'both') {
+        console.log('[Preload] Downloading clients and chemicals for offline use...');
+        await clientCache.downloadAllClients();
+        
+        // Also preload last reports for all assigned clients (for autopopulate)
         await this.preloadLastReportsForClients();
       }
 

@@ -59,10 +59,10 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/icons/16.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/icons/32.png" />
-        <link rel="icon" type="image/png" sizes="48x48" href="/icons/48.png" />
-        <link rel="shortcut icon" href="/icons/32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/icons/16.png?v=2" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/32.png?v=2" />
+        <link rel="icon" type="image/png" sizes="48x48" href="/icons/48.png?v=2" />
+        <link rel="shortcut icon" href="/icons/32.png?v=2" />
         <meta name="theme-color" content="#8b5cf6" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />

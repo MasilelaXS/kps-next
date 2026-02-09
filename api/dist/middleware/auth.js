@@ -11,7 +11,10 @@ const env_1 = require("../config/env");
 const hasRole = (user, requiredRole) => {
     if (!user)
         return false;
-    return user.role === 'both' || user.role === requiredRole;
+    if (user.role === 'both') {
+        return user.role_context ? user.role_context === requiredRole : false;
+    }
+    return user.role === requiredRole;
 };
 exports.hasRole = hasRole;
 const authenticateToken = async (req, res, next) => {
@@ -83,6 +86,7 @@ const authenticateToken = async (req, res, next) => {
             id: session.user_id,
             login_id: session.pco_number,
             role: session.role,
+            role_context: session.role_context,
             first_name: session.name,
             last_name: '',
             email: session.email,
