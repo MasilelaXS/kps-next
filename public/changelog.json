@@ -1,0 +1,52 @@
+{
+  "changelog": [
+    {
+      "version": "1.0.23",
+      "date": "2026-02-10",
+      "releaseDate": "February 10, 2026",
+      "changes": {
+        "added": [],
+        "changed": [],
+        "fixed": [
+          "Bait stations now display in correct numeric order (1, 2, 3... 20, 21) instead of alphabetical order (1, 11, 12... 2, 20, 21) on reports"
+        ],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Bug fix release - Corrected bait station sorting in PDF reports and report displays"
+    },
+    {
+      "version": "1.0.22",
+      "date": "2026-02-10",
+      "releaseDate": "February 10, 2026",
+      "changes": {
+        "added": [
+          "Complete admin portal with client, user, and assignment management",
+          "PCO mobile-friendly portal with offline sync capabilities",
+          "Automated report generation with PDF export functionality",
+          "Email notification system for report delivery and status updates",
+          "Push notifications for real-time assignment updates",
+          "Bait station and equipment tracking system",
+          "Chemical inventory management with L-number tracking",
+          "Batch number management for fumigation reports",
+          "Draft reports feature for incomplete inspections",
+          "Client self-assignment portal for direct booking",
+          "Comprehensive audit trails for all system activities",
+          "Service worker for offline functionality"
+        ],
+        "changed": [],
+        "fixed": [],
+        "removed": [],
+        "security": [
+          "JWT-based authentication with secure token management",
+          "Role-based access control (Admin, PCO, Client)",
+          "Password encryption using bcrypt (10 rounds)",
+          "SQL injection prevention with parameterized queries",
+          "XSS protection with input sanitization"
+        ]
+      },
+      "notes": "Initial production release - Full system deployment with all core features"
+    }
+  ],
+  "latest": "1.0.23"
+}

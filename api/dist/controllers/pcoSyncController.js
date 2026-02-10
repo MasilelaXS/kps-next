@@ -629,7 +629,7 @@ const getLastReportForClient = async (req, res) => {
         station_remarks
       FROM bait_stations 
       WHERE report_id = ?
-      ORDER BY location, station_number`, [reportId]);
+      ORDER BY location, CAST(station_number AS UNSIGNED)`, [reportId]);
         const stationChemicals = await (0, database_1.executeQuery)(`SELECT 
         sc.station_id as bait_station_id,
         sc.chemical_id,

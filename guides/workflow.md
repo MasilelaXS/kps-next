@@ -1,737 +1,528 @@
-# KPS - Pest Control Management System Workflow Documentation
+# KPS Pest Control Management System
+## Functional Specification & Workflow Documentation
 
-> **Last Updated**: November 4, 2025  
-> **Version**: 2.0 (100% Code-Accurate)  
-> **Status**: ✅ Verified Against Actual Codebase
+> **Document Version**: 1.0.22  
+> **Last Updated**: 09 February 2026  
+> **Prepared For**: Client Signoff  
+> **Status**: Final for Approval
 
-## Critical Implementation Details
+---
 
-This document has been **fully verified** against the actual codebase implementation. Key corrections from previous versions:
+## Executive Summary
 
-### Report Status Flow (CORRECTED)
-- ✅ **PCO Submission**: Status changes from `'draft'` → `'pending'` (NOT stays as draft)
-- ✅ **Emailed Reports**: Use `status='approved'` AND `emailed_at IS NOT NULL` (NOT separate 'emailed' status)
-- ✅ **Admin Actions**: Approve/Decline buttons only visible for `status='pending'` reports
-- ✅ **Status Tabs**: 6 separate tabs (Draft, Pending, Approved, Declined, Emailed, Archived)
+This document provides a comprehensive overview of the KPS Pest Control Management System workflows and functionality. It describes how administrators and field officers (PCOs) interact with the system to manage clients, create service reports, and maintain pest control operations.
 
-### Chemical Fields (VALIDATED)
-Required fields for chemical creation:
-- `name` (string, 2-200 chars, unique)
-- `active_ingredients` (string, min 2 chars)
-- `usage_type` (enum: 'bait_inspection' | 'fumigation' | 'multi_purpose')
-- `quantity_unit` (string, 1-20 chars)
+### Purpose
+This specification serves as the formal documentation of all system features, workflows, and business processes. It is intended for stakeholder review and approval before final implementation.
 
-Optional fields:
-- `l_number` (string, max 50, auto-uppercase)
-- `batch_number` (string, max 100, auto-uppercase)
-- `safety_information` (text)
+### System Overview
+The KPS Pest Control Management System is a web-based application consisting of two primary interfaces:
+- **Admin Portal**: For office staff to manage clients, users, chemicals, assignments, and review service reports
+- **PCO Portal**: For field officers to access their assignments, create service reports, and submit documentation
 
-### Authentication & Sessions
-- JWT tokens store session_id (not user info)
-- `user_sessions` table tracks active sessions with `role_context`
-- Login prefix determines portal access (admin12345 vs pco12345)
-- `role_context` separate from user's actual `role` (for dual-role users)
-
-### Equipment Tracking
-- Frontend marks equipment during report creation
-- Backend has safety net: auto-marks if frontend skipped
-- Compares actual vs `expected_*_count` fields on clients table
-- Updates client baseline counts after report submission
-
-### Email System
-- Uses Nodemailer with SMTP (mail.kpspestcontrol.co.za:587)
-- Supports multiple recipients, CC, custom messages
-- Generates PDFs with Puppeteer (1513-line service)
-- Professional HTML templates with KPS branding
-- Sets `emailed_at` timestamp (status remains 'approved')
+Both portals are mobile-responsive and designed for ease of use in the field and office environments
 
 ## Table of Contents
-1. [System Overview](#system-overview)
-2. [Authentication & User Management](#authentication--user-management)
-3. [Admin Portal Workflows](#admin-portal-workflows)
-4. [PCO Mobile App Workflows](#pco-mobile-app-workflows)
-5. [Report Management Workflows](#report-management-workflows)
-6. [Data Synchronization](#data-synchronization)
-7. [Notification System](#notification-system)
-8. [API Design Patterns](#api-design-patterns)
+1. [System Components](#system-components)
+2. [User Authentication & Security](#user-authentication--security)
+3. [Admin Portal Features](#admin-portal-features)
+4. [PCO Portal Features](#pco-portal-features)
+5. [Report Management](#report-management)
+6. [Equipment Tracking System](#equipment-tracking-system)
+7. [Email & Notifications](#email--notifications)
+8. [Business Rules](#business-rules)
 
 ---
 
-## System Overview
+## System Components
 
-### Architecture
-- **Admin Portal**: Next.js 14 with React.js and TypeScript (Web Application)
-- **PCO Portal**: Next.js 14 with React.js and TypeScript (Web Application - Mobile Responsive)
-- **Backend**: Node.js/Express RESTful API with TypeScript and pagination support
-- **Database**: MySQL/MariaDB
-- **Authentication**: JWT-based role access control (Admin/PCO)
-- **Styling**: Tailwind CSS with custom focus styling
+### Application Architecture
+The system consists of two web portals accessed through standard web browsers:
+- **Admin Portal**: Desktop and tablet optimized for office management tasks
+- **PCO Portal**: Mobile-responsive design for field use on smartphones and tablets
 
-### Core Entities
-- **Users** (Admin/PCO roles with authentication, stored in `users` table)
-- **User Sessions** (JWT sessions with role_context, stored in `user_sessions` table)
-- **Clients** (Pest control service customers with contact information and expected equipment counts, stored in `clients` table)
-- **Client Contacts** (Contact persons for each client, stored in `client_contacts` table)
-- **Chemicals** (Treatment products with L-numbers and batch tracking, stored in `chemicals` table)
-- **Reports** (Service documentation with status workflow and new equipment tracking, stored in `reports` table)
-- **Bait Stations** (Rodent inspection points with chemicals tracking and new addition flag, stored in `bait_stations` table)
-- **Insect Monitors** (Light/box monitoring devices for flying insects with new addition flag, stored in `insect_monitors` table)
-- **Fumigation Areas** (Treatment zones, stored in `fumigation_areas` table)
-- **Fumigation Target Pests** (Pests targeted per area, stored in `fumigation_target_pests` table)
-- **Fumigation Chemicals** (Chemicals used per area, stored in `fumigation_chemicals` table)
-- **Notifications** (System alerts for assignments, report status changes, stored in `notifications` table)
-- **Client PCO Assignments** (PCO-to-client relationships and scheduling, stored in `client_pco_assignments` table)
-- **Station Chemicals** (Junction table linking bait stations to chemicals used, stored in `station_chemicals` table)
-- **Password Reset Tokens** (Temporary tokens for password reset flow, stored in `password_reset_tokens` table)
-- **Login Attempts** (Audit log of login attempts, stored in `login_attempts` table)
+### User Roles
+**Administrator**
+- Full system access and management capabilities
+- Manage users, clients, chemicals, and assignments
+- Review and approve service reports
+- Send reports to clients
+- View system-wide analytics and reports
+
+**PCO (Pest Control Officer)**
+- Access assigned client information
+- Create and submit service reports
+- View service history
+- Receive notifications about assignments and report status
+
+**Dual-Role Users**
+- Some users may have both Admin and PCO capabilities
+- Can switch between portals as needed
+- Login prefix determines which portal to access (admin123 vs pco123)
 
 ---
 
-## Authentication & User Management
+## User Authentication & Security
 
 ### Login Process
 
-#### Authentication Flow (Both Admin and PCO - Web Portal)
-1. User enters login ID:
-   - **Admin**: PCO number with "admin" prefix (e.g., "admin12345")
-   - **PCO**: PCO number with "pco" prefix (e.g., "pco67890")
-2. User enters password
-3. System validates credentials:
-   - Parses login ID format (admin/pco prefix)
-   - Checks account lockout status (max failed attempts)
-   - Verifies user exists and is active
-   - Validates password hash using bcrypt
-   - Records login attempt (success/failure)
-4. On successful authentication:
-   - Generate JWT token with session ID
-   - Create user session with `role_context` (admin or pco based on login prefix)
-   - Return user data with both `role` (actual user role) and `role_context` (login context)
-   - Store token in localStorage (`kps_token`)
-   - Store user info in localStorage (`kps_user`)
-   - Store login timestamp
-5. Redirect based on `role_context`:
-   - **role_context = 'admin'**: Redirect to `/admin/dashboard`
-   - **role_context = 'pco'**: Redirect to `/pco/dashboard`
-   - Note: For users with role='both', the redirect is determined by login prefix (admin12345 → admin portal, pco12345 → pco portal)
+#### How Users Access the System
+Users log in using their assigned credentials:
+- **Admin Access**: PCO number with "admin" prefix (e.g., admin12345)
+- **PCO Access**: PCO number with "pco" prefix (e.g., pco67890)
+- **Password**: Secure password set by administrator or changed by user
 
-#### Account Security Features
-- **Account Lockout**: Temporary lock after multiple failed login attempts
-- **Login Attempt Tracking**: All attempts logged with IP and user agent
-- **Active Status Check**: Only active users can log in
-- **Audit Logging**: All authentication events are logged
+#### Login Flow
+1. User enters their login ID and password
+2. System validates credentials and account status
+3. Upon successful login:
+   - User is directed to their appropriate portal (Admin or PCO)
+   - Session is created for secure access
+   - Login activity is recorded for security purposes
+4. Users with both Admin and PCO roles can access either portal by using the appropriate login prefix
 
-#### Dual Role Users (Tested & Confirmed)
-- Users with `role="both"` can access both admin and pco portals with the same credentials
-- The login prefix determines which portal they access:
-  - Login with **admin**12345 → `role_context='admin'` → redirects to `/admin/dashboard`
-  - Login with **pco**12345 → `role_context='pco'` → redirects to `/pco/dashboard`
-- **No logout required** to switch portals - simply log in with different prefix
-- Backend validates user has appropriate role before allowing login:
-  - `admin` prefix requires: `role IN ('admin', 'both')`
-  - `pco` prefix requires: `role IN ('pco', 'both')`
-- **Data Fields**:
-  - `user.role`: User's actual permissions (admin/pco/both) - stored in database
-  - `user.role_context`: Current session context (admin or pco) - determined by login prefix
-- **Frontend Implementation**: Must use `role_context` (not `role`) for redirect logic
-
-**Example**: User with `pco_number='12345'` and `role='both'`:
-```json
-// Login with admin12345
-{
-  "user": {
-    "pco_number": "12345",
-    "role": "both",
-    "role_context": "admin"
-  }
-}
-// Redirects to /admin/dashboard
-
-// Login with pco12345  
-{
-  "user": {
-    "pco_number": "12345",
-    "role": "both",
-    "role_context": "pco"
-  }
-}
-// Redirects to /pco/dashboard
-```
-
-### User Profile Management
-- **PCOs can**:
-  - View their profile information (name, email, phone, pco_number)
-  - **Change their password** via Profile page
-  - View their service history
-- **Admins can**:
-  - Full CRUD operations on all users
-  - Create users with initial password (min 6 chars, bcrypt hashed)
-  - Assign/manage user roles (admin/pco/both)
-  - Reset user passwords (min 6 chars, invalidates all user sessions)
-  - Soft delete users (cannot delete self or users with active assignments)
-  - View user activity logs
-  - View login attempt history
-  - **Change their password** via Profile page
+#### Security Features
+- **Account Protection**: Accounts are temporarily locked after multiple failed login attempts
+- **Activity Logging**: All login attempts are recorded for security monitoring
+- **Account Status**: Only active accounts can access the system
+- **Session Management**: Secure session handling prevents unauthorized access
 
 ### Password Management
 
-#### Password Security
-- **Hashing Algorithm**: bcrypt with configurable salt rounds
-- **Storage**: Only password hashes stored in database (never plain text)
-- **Session Invalidation**: All other user sessions cleared on password change (current session remains active)
-- **Audit Logging**: All password change attempts are logged with success/failure status
+#### Password Security Requirements
 
-#### Password Requirements
-All passwords must meet the following criteria:
-- **Minimum Length**: 8 characters
-- **Complexity**: Must contain:
-  - At least one uppercase letter (A-Z)
-  - At least one lowercase letter (a-z)
-  - At least one number (0-9)
+The system enforces different password requirements depending on the operation:
 
-**Validation**: Requirements enforced both client-side (immediate feedback) and server-side (security)
+**When Users Change Their Own Password** (via Profile page):
+- Minimum 8 characters
+- Must include uppercase letter, lowercase letter, and number
+- Previous password required for verification
+- All other active sessions are logged out for security
 
-#### Change Password (Authenticated Users)
-**Endpoint**: `POST /api/auth/change-password` (requires JWT token)
+**When Admin Creates or Resets User Passwords**:
+- Minimum 6 characters recommended
+- Admin can set initial password
+- User can change to stronger password via Profile page
 
-**Access Points**:
-- **PCO Portal**: Profile page (`/pco/profile`)
-- **Admin Portal**: Profile page (`/admin/profile`)
+**Password Reset (Forgot Password)**:
+- Minimum 6 characters
+- User requests reset link via email
+- Reset link expires after 1 hour
+- One-time use only for security
 
-**User Flow**:
-1. User navigates to Profile page
-2. Click "Change Password" button in Security section
-3. Expandable form reveals three password fields:
-   - Current Password (with show/hide toggle)
-   - New Password (with show/hide toggle)
-   - Confirm New Password (with show/hide toggle)
-4. User fills in all three fields
-5. Click "Update Password" button
+### User Profile Management
 
-**Client-Side Validation** (Immediate Feedback):
-- All fields required
-- New passwords must match
-- New password must be at least 8 characters
-- New password must contain uppercase, lowercase, and number
-- Shows validation errors before submission
+**PCO Users Can**:
+- View their profile information (name, email, phone, PCO number)
+- Change their password via Profile page
+- View their service history
 
-**Server-Side Flow**:
-1. Verify user is authenticated (JWT token)
-2. Validate current password against stored hash
-3. Validate new password meets complexity requirements
-4. Hash new password using bcrypt
-5. Update `password_hash` in database
-6. Delete all other user sessions (force logout on other devices)
-7. Keep current session active
-8. Create audit log entry
-
-**Success Response**:
-- Success notification displayed
-- Form resets and collapses
-- User remains logged in on current device
-- All other sessions invalidated
-
-**Error Handling**:
-- **Invalid current password**: "Current password is incorrect"
-- **Weak new password**: Specific error message (e.g., "must contain uppercase letter")
-- **Passwords don't match**: "New passwords do not match"
-- **Server error**: "Failed to change password"
-
-**Security Features**:
-- Current password verification prevents unauthorized changes
-- All other sessions invalidated to prevent session hijacking
-- Complexity requirements prevent weak passwords
-- Audit trail for compliance and troubleshooting
-
-#### Forgot Password Flow
-**Endpoint**: `POST /api/auth/forgot-password`
-
-**Flow**:
-1. User provides PCO number (without prefix)
-2. System validates user exists and is active
-3. Generate unique reset token (UUID)
-4. Store token in `password_reset_tokens` table with 1-hour expiration
-5. **Send password reset email** via SMTP (mail@kpspestcontrol.co.za)
-6. For security: Always return success message (does not reveal if user exists)
-
-**Email Template Includes**:
-- Personalized greeting with user's name
-- Clickable reset link (expires in 1 hour)
-- Security warnings and best practices
-- Professional HTML and plain text versions
-
-#### Reset Password Flow
-**Endpoint**: `POST /api/auth/reset-password`
-
-**Flow**:
-1. User clicks reset link from email (contains token)
-2. User provides new password
-3. System validates:
-   - Token exists and not expired (< 1 hour old)
-   - Token not already used
-   - New password meets requirements
-4. Update password hash
-5. Mark token as used (`used_at` timestamp)
-6. **Invalidate all user sessions** (force re-login on all devices)
-7. User redirected to login page
-
-**Security Features**:
-- Tokens expire after 1 hour
-- One-time use only (marked as used after reset)
-- All active sessions terminated on reset
-- Token validation prevents brute force
-
-#### Verify Reset Token
-**Endpoint**: `GET /api/auth/verify-reset-token?token={token}`
-
-**Purpose**: Check if reset token is valid before showing password reset form
-
-**Response**:
-- Valid token: Returns user info (pco_number, name, email)
-- Invalid/expired token: Returns error message
+**Admin Users Can**:
+- View and edit all user information
+- Create new users with initial passwords
+- Reset user passwords when needed
+- Manage user roles (Admin, PCO, or Both)
+- Deactivate user accounts
+- View user activity logs
+- Change their own password via Profile page
 
 ---
 
-## Admin Portal Workflows
+## Admin Portal Features
 
-### Dashboard
-**Key Metrics Displayed:**
-- Total Clients (all statuses with growth percentage vs previous period)
-- Active PCO Users (count of users with status='active' and role IN ('pco', 'both'))
-- Pending Reports (reports with status='pending' awaiting admin review)
-- Completed Reports (reports with status='approved' for current month)
+### Dashboard Overview
 
-**Dashboard Sections:**
-- **Recent Activity**: Displays recent system activity (last 24 hours)
-- **Upcoming Assignments**: Shows upcoming service dates requiring attention
+The admin dashboard provides at-a-glance insights into business operations:
 
-**Quick Actions:**
-- New Client
-- Add PCO
-- Assignments
-- View Reports
+**Key Metrics**:
+- **Total Clients**: Count of all clients with growth trends
+- **Active PCO Users**: Number of field officers available for assignments
+- **Pending Reports**: Service reports awaiting admin review
+- **Completed Reports**: Approved reports for the current month
 
-### User Management Workflow
+**Dashboard Sections**:
+- **Recent Activity**: Recent system events and updates
+- **Upcoming Assignments**: Service dates requiring attention
 
-#### Creating a User
+**Quick Actions**:
+- Create New Client
+- Add PCO User
+- Manage Assignments
+- View All Reports
+
+### User Management
+
+#### Creating a New User
 1. Navigate to Users section
 2. Click "Add New User"
-3. Fill user details:
-   - PCO Number
-   - Name (required)
-   - Email (required, must be unique, validated with email format)
-   - Phone (optional)
-   - Password (required, minimum 6 characters, admin provides initial password)
-   - Role selection: Admin / PCO / Both
-4. Submit to create user
-5. **System Actions**:
-   - Validates PCO number uniqueness (if provided)
-   - Validates email uniqueness and format
-   - Auto-generates PCO number if not provided
-   - Hashes password using bcrypt (10 salt rounds)
-   - Creates user with status 'active' by default
-   - Logs user creation with admin ID
-6. User can log in immediately with provided credentials
-7. User can change their own password via Profile page
+3. Enter user details:
+   - PCO Number (auto-generated if not provided)
+   - Full Name
+   - Email Address (must be unique)
+   - Phone Number (optional)
+   - Initial Password (user can change later)
+   - Role: Admin, PCO, or Both
+4. Submit to create the user
+5. User can log in immediately with provided credentials
 
-#### Editing a User
-- Admin can edit: Name, Email, Phone, Role
-- Email uniqueness validated (excluding current user)
-- **Cannot edit**: PCO Number, Password (use separate password reset)
-- Changes logged with admin ID
+**System Actions**:
+- Validates uniqueness of PCO number and email
+- Creates user account with "active" status
+- Logs creation activity for audit purposes
+- Sends welcome notification to new user
 
-#### Password Reset (Admin Action)
-- Admin can reset any user's password from user list
-- New password provided by admin (minimum 6 characters)
-- Password hashed with bcrypt before storage
-- All user sessions invalidated (forces re-login on all devices)
+#### Editing User Information
+- Administrators can update: Name, Email, Phone, Role
+- Email addresses must remain unique
+- PCO numbers cannot be changed
+- Passwords are reset separately (see below)
 
-#### User Deletion Logic
-- **Soft Delete Only**: All user deletions are soft deletes (sets `deleted_at` timestamp and status to 'inactive')
-- **Validation Checks**:
-  - Cannot delete your own account
-  - Cannot delete users with active client assignments (must unassign first)
-- **Data Preservation**: User history, reports, and assignments remain in database for audit purposes
-- **System Actions**: Logs deletion with admin ID and deleted user information
+#### Resetting User Passwords
+- Select user and choose "Reset Password"
+- Enter new temporary password (minimum 6 characters)
+- All user's active sessions are logged out
+- User should change password on next login
 
-### Client Management Workflow
+#### Deactivating Users
+- User accounts are deactivated (not permanently deleted)
+- Cannot deactivate users with active client assignments
+- Cannot deactivate your own account
+- User history and reports are preserved
+- Deactivated users cannot log in
 
-#### Creating a Client
+### Client Management
+
+#### Adding a New Client
 1. Navigate to Clients section
 2. Click "Add New Client"
-3. Fill client details:
-   - **Company Information**:
-     - Company name (required)
-     - Address Line 1 (required)
-     - Address Line 2 (optional)
-     - City, State, Postal Code (required)
-   - **Expected Equipment Counts** (for new equipment tracking):
-     - Total Bait Stations Inside: [number] (default: 0)
-     - Total Bait Stations Outside: [number] (default: 0)
-     - Total Insect Monitors Light (Fly Traps): [number] (default: 0)
-     - Total Insect Monitors Box: [number] (default: 0)
-     - **Note**: These counts are used to automatically detect newly added equipment
-     - **Auto-Update**: System updates these values after each report submission to match actual equipment counts
-   - **Contacts** (can add multiple):
-     - Name, Role (Primary/Billing/Site Manager/Other)
-     - Email, Phone
-4. Save client (initially unassigned to any PCO)
+3. Enter client information:
+   
+   **Company Information**:
+   - Company Name
+   - Address (Line 1, Line 2, City, State, Postal Code)
+   
+   **Equipment Baseline** (for automatic new equipment detection):
+   - Total Bait Stations Inside
+   - Total Bait Stations Outside
+   - Total Insect Monitors - Light (Fly Traps)
+   - Total Insect Monitors - Box
+   - *Note: These counts help the system automatically detect newly installed equipment*
+   
+   **Contact Persons** (add one or more):
+   - Name
+   - Role (Primary, Billing, Site Manager, Other)
+   - Email Address
+   - Phone Number
 
-#### Assigning PCO to Client
+4. Save client record
 
-**Purpose**: Assign clients to PCOs for service visits.
+**Important**: Equipment baseline counts are automatically updated after each service visit to  match actual equipment reported by PCOs.
 
-**How to Access**:
-1. Navigate to the Schedule page from the admin menu
+#### Assigning PCOs to Clients
 
-**The Schedule Interface**:
-- **Left Sidebar**: List of all PCOs
-  - Shows PCO name, number, and how many clients they're assigned to
-- **Right Panel**: Shows the selected PCO's assigned clients
-  - If no clients assigned, you'll see "No Assigned Clients" message
+**Purpose**: Schedule PCOs for client service visits.
 
-**Assigning Clients**:
-1. Click on a PCO from the left sidebar
-2. Click the "Assign Clients" button
-3. In the assignment modal:
-   - **Search Box**: Type to find specific clients quickly
-   - **Client List**: Shows all clients with status indicators
-     - 🟢 Green dot = Already assigned to a PCO (shows which one)
-     - ⚪ Gray dot = Unassigned and available to select
-   - **Checkboxes**: Select one or multiple unassigned clients
-4. Click "Assign Selected" button
-5. **What Happens**:
-   - Selected clients immediately appear in the PCO's schedule
-   - Assignment count updates
-   - PCO can now see these clients in their portal
-   - Success notification confirms the assignment
+**How to Assign**:
+1. Navigate to Schedule page
+2. Select a PCO from the left sidebar (shows PCO name, number, and current assignment count)
+3. Click "Assign Clients" button
+4. In the assignment window:
+   - Search for specific clients using the search box
+   - View all clients with status indicators:
+     - Green dot: Already assigned to another PCO
+     - Gray dot: Unassigned and available
+   - Select one or multiple unassigned clients
+5. Click "Assign Selected"
+
+**What Happens**:
+- Selected clients appear in PCO's schedule immediately
+- PCO can now view these clients in their portal
+- PCO can create service reports for assigned clients
+- System sends notification to PCO about new assignments
 
 **Unassigning Clients**:
-- Click the "Unassign" button next to any assigned client
-- Client is immediately removed from PCO's schedule
-- Note: PCOs are automatically unassigned after submitting a report
+- Click "Unassign" button next to any assigned client
+- Client becomes available for reassignment
+- *Note: PCOs are automatically unassigned after submitting a report*
 
-#### Client Deletion Logic
-- **Soft Delete Only**: All client deletions are soft deletes (sets `deleted_at` timestamp)
-- **Data Preservation**: Client history and associated reports remain in database
+#### Managing Client Records
+- Edit client information at any time
+- Update equipment baselines manually if needed
+- Add or remove contact persons
+- Deactivate clients (preserves service history)
 
-### Chemical Management Workflow
+### Chemical Inventory Management
 
 #### Adding Chemicals
 1. Navigate to Chemicals section
 2. Click "Add New Chemical"
-3. Fill chemical details:
-   - **Name** (required, string, 2-200 characters, must be unique)
-   - **Active Ingredients** (required, string, min 2 characters)
-   - **Usage Type** (required, enum): 'bait_inspection' | 'fumigation' | 'multi_purpose'
-   - **Quantity Unit** (required, string, 1-20 characters): ml, g, kg, L, etc.
-   - **L-Number** (optional, string, max 50 characters, auto-converted to uppercase)
-   - **Batch Number** (optional, string, max 100 characters, auto-converted to uppercase)
-   - **Safety Information** (optional, text field)
-4. Submit to create chemical
-5. **System Actions**:
-   - Chemical created with status 'active' by default
-   - L-Number and Batch Number normalized to uppercase
-   - Validates for duplicate chemical names (case-sensitive check)
+3. Enter chemical information:
+   - Chemical Name (must be unique)
+   - Active Ingredients
+   - Usage Type: Bait Inspection, Fumigation, or Both
+   - Unit of Measurement (ml, g, kg, L, etc.)
+   - L-Number (optional registration number)
+   - Batch Number (optional, for tracking)
+   - Safety Information (optional)
+4. Submit to add chemical to inventory
 
-#### Editing Chemicals
-- Admin can edit all chemical details
-- Chemical name uniqueness validated (excluding current chemical)
-- L-Number and Batch Number auto-converted to uppercase
-- Changes apply system-wide immediately
-- Chemical history preserved in existing reports
+**System Actions**:
+- Chemical is set to "active" status
+- Becomes immediately available in report creation
+- L-Numbers and batch numbers are stored in uppercase
 
-#### Chemical Status Management
-- Admin can toggle status between 'active' and 'inactive'
-- Only active chemicals appear in report creation dropdowns
-- Inactive chemicals remain in database for historical reports
+#### Managing Chemicals
+- Edit chemical details at any time
+- Toggle status between Active and Inactive
+- Only active chemicals appear in dropdown menus
+- Inactive chemicals remain in historical reports
 
-#### Chemical Deletion Logic
-- **Conditional Delete**: System automatically determines delete type
-- **Soft Delete (Used in Reports)**:
-  - If chemical is used in any station_chemicals OR fumigation_chemicals records
-  - Sets `deleted_at` timestamp and status to 'inactive'
-  - Preserves data for report integrity
-  - Message: "Chemical has been deactivated"
-- **Hard Delete (Not Used)**:
-  - If chemical has zero usage in reports
-  - Permanently removes from database
-  - Message: "Chemical has been permanently deleted"
-- **Validation**: System checks both bait station and fumigation usage before deletion
+#### Deleting Chemicals
+- **If chemical has never been used**: Permanently removed from system
+- **If chemical has been used in reports**: Deactivated but preserved for historical accuracy
+- System automatically determines appropriate action
 
-### Report Management Workflow
+### Report Management
 
 #### Report Status System
-**Available Statuses (Database ENUM):**
-- **draft**: Reports being created by PCO
-- **pending**: Reports submitted by PCO, awaiting admin review
-- **approved**: Reports reviewed and approved by admin
-- **declined**: Reports rejected by admin, requiring PCO revision
-- **archived**: Completed reports removed from active workflow
 
-**Note on "Emailed" Status:**
-- The system does NOT have an 'emailed' status in the database enum
-- Instead, emailed reports use: status='approved' AND emailed_at IS NOT NULL
-- Frontend filtering uses status_group='emailed' which queries this combination
+Service reports move through the following statuses:
 
-#### Viewing All Reports
-1. Navigate to Reports section (default shows "Draft / Pending" tab)
-2. Filter reports by **Status Group** (6 tabs at top):
-   - **Draft** (status='draft' - reports being created)
-   - **Pending** (status='pending' - submitted, awaiting admin review) - *default view*
-   - **Approved** (status='approved' AND emailed_at IS NULL - approved but not yet emailed)
-   - **Declined** (status='declined' - requires PCO revision)
-   - **Emailed** (status='approved' AND emailed_at IS NOT NULL - sent to clients)
-   - **Archived** (status='archived' - completed reports removed from active workflow)
-3. **Search and Filters**:
-   - **Search**: Client or PCO name
-   - **Report Type Filter**: All Types, Bait Inspection, Fumigation, Both
-   - **Date From/To**: Filter by service date range
-4. Results displayed in table with pagination (25 per page)
-5. **Status Badges**:
-   - Draft/Pending: Yellow badge
-   - Approved: Green badge
-   - Declined: Red badge
-   - Archived: Gray badge
-   - Emailed: Blue badge (if implemented)
+- **Draft**: Report is being created by the PCO (work in progress)
+- **Pending**: Report has been submitted and awaits admin review
+- **Approved**: Admin has reviewed and approved the report
+- **Declined**: Admin has rejected the report and returned it for revision
+- **Emailed**: Approved report has been sent to the client
+- **Archived**: Completed reports removed from active workflow
 
-#### Report Status Flow
-```
-Draft/Pending → Approved    (admin approves)
-              → Declined    (admin declines with notes, PCO reassigned to client)
-              → Archived    (admin archives)
+#### Viewing and Filtering Reports
 
-Approved → Emailed    (admin sends report to client via email)
+1. Navigate to Reports section
+2. Use status tabs to filter reports:
+   - **Draft**: Reports currently being created
+   - **Pending**: Submitted reports awaiting review (default view)
+   - **Approved**: Approved reports ready to send to clients
+   - **Declined**: Reports requiring PCO revision
+   - **Emailed**: Reports already sent to clients
+   - **Archived**: Completed historical reports
 
-Declined → Draft/Pending (PCO edits and resubmits)
-```
+3. **Search and Filter Options**:
+   - Search by client name, PCO name, or report ID
+   - Filter by report type (Bait Inspection, Fumigation, or Both)
+   - Filter by service date range
+   - Results display 25 reports per page
 
-**Critical Business Rules:**
-- When PCO submits report, status remains 'draft' (or 'pending')
-- Reports stay in 'draft'/'pending' status until admin takes action
-- PCO is auto-unassigned from client when report is submitted
-- PCO is reassigned to client when report is declined
-- Declined reports appear in "All Reports" tab (not in Draft/Pending tab)
+#### Report Actions
 
-#### Report Actions (per report)
-Available actions vary by status:
-- **View** (Eye icon): View full report details in modal
-- **Edit** (Pencil icon): Navigate to `/admin/reports/{id}/edit` (available for all statuses)
-- **Approve** (Green CheckCircle icon): Only visible when status = 'pending'
-- **Decline** (Red XCircle icon): Only visible when status = 'pending'
-- **Email** (Mail icon): Only visible when status = 'approved'
-- **Archive** (Archive icon): Available for approved and emailed reports
+Available actions depend on the report status:
 
-#### Report Approval Process
-1. Admin clicks **Approve** button on pending report
-2. System validates report status (must be 'pending')
-3. Modal displays:
+- **View**: View complete report details
+- **Edit**: Modify report information (admin only)
+- **Approve**: Approve pending report (only for pending reports)
+- **Decline**: Reject and return for revision (only for pending reports)
+- **Email**: Send report PDF to client (only for approved reports)
+- **Mark as Emailed**: Track emailed status without sending (only for approved reports)
+- **Archive**: Move to archive (for approved and emailed reports)
+
+#### Approving a Report
+
+1. Admin clicks "Approve" button on a pending report
+2. Review window displays:
    - Report ID and client name
-   - Optional fields for admin_notes and recommendations
-   - Confirmation message
-4. On confirm:
-   - Report status changed from 'pending' to 'approved'
-   - Optional: Admin can add notes and recommendations (not required)
-   - `reviewed_by` set to admin user ID
-   - `reviewed_at` timestamp set to NOW()
-   - Client-PCO assignment deleted (service complete)
-   - **Notification sent to PCO**: "Report Approved - Your report for {client} has been approved"
-   - Report can now be emailed to client via Email Report button
+   - Optional fields for admin notes and recommendations
+3. Click confirm to approve
+4. **System Actions**:
+   - Report status changes from Pending to Approved
+   - Admin notes and recommendations are saved (if provided)
+   - PCO assignment is automatically removed (service complete)
+   - PCO receives notification: "Report Approved"
+   - Report becomes available to email to client
 
-#### Report Decline Process
-1. Admin clicks **Decline** button on pending report
-2. System validates report status (must be 'pending')
-3. Modal prompts for **Admin Notes** (required):
-   - Minimum 10 characters
-   - Purpose: Give PCO clear feedback for revision
-   - Validation error if too short or empty
-4. On confirm:
-   - Report status changed from 'pending' to 'declined'
-   - Admin notes saved to `admin_notes` field
-   - `reviewed_by` set to admin user ID
-   - `reviewed_at` timestamp set to NOW()
-   - **PCO reassignment logic**:
-     - Check if PCO assignment exists for this client
-     - If assignment exists and status='inactive' with same PCO: Reinstate (set status='active', assigned_at=NOW())
-     - If assignment exists with different PCO: Return 409 conflict (requires admin confirmation)
-     - If no assignment exists: Create new assignment (client_id, pco_id, assigned_by=admin, status='active')
-   - **Notification sent to PCO**: "Report Declined - Revision Required - Admin feedback: {notes}"
-5. PCO can now edit and resubmit the report (status will change back to 'pending')
+#### Declining a Report
 
-#### Report Archive Process
-1. Admin clicks **Archive** button (available in view modal or table)
-2. System checks report is not already archived
-3. Modal confirms archive action
-4. On confirm:
-   - Report status changed to 'archived'
-   - `reviewed_by` and `reviewed_at` fields updated
-   - **Notification sent to PCO**: "Report Archived - Your report for {client} has been archived"
-5. Archived reports remain accessible but are separated from active workflow
+1. Admin clicks "Decline" button on a pending report
+2. Admin must provide feedback notes (minimum  10 characters):
+   - Explain what needs correction
+   - Provide clear guidance for PCO revision
+3. Click confirm to decline
+4. **System Actions**:
+   - Report status changes to Declined
+   - Admin feedback notes are saved
+   - PCO is automatically reassigned to the client
+   - PCO receives notification: "Report Declined - Revision Required" with admin feedback
+   - PCO can now edit and resubmit the report
 
-#### Report Email Process (Admin Only)
-**Feature**: Email approved reports to clients with PDF attachment
+#### Archiving Reports
 
-**Access**:
-- Only available for status='approved' reports
-- Email icon appears in approved reports table actions column
+1. Click "Archive" button on approved or emailed report
+2. Confirm archive action
+3. **System Actions**:
+   - Report status changes to Archived
+   - Report moves to archive view
+   - PCO receives "Report Archived" notification
+   - Report remains accessible for viewing but separated from active workflow
 
-**Email Report Flow**:
-1. Admin clicks **Email** button (Mail icon) on approved report
-2. EmailReportModal opens with:
-   - **Client Contacts Grid**: Shows all contacts from client_contacts table
-     - Displays: Name, Role, Email
-     - Primary contact highlighted
-     - Click contact to add email to recipients
-   - **Recipients Field**: Email addresses to send report to (comma-separated)
-   - **CC Field**: Optional CC addresses (comma-separated)
-   - **Custom Message**: Optional additional message to include in email body
-3. Admin fills in recipients and optional fields
-4. Click "Send Email" button
-5. **System Actions**:
-   - Generates PDF using Puppeteer (via pdfService.generateReportPDF)
-   - Queries client_contacts for primary email as fallback if no recipients provided
-   - Sends email via Nodemailer (SMTP: mail.kpspestcontrol.co.za:587)
-   - Professional HTML email template with:
-     - KPS branding and logo
-     - Report details (ID, service date, report type)
-     - Additional message section (if provided)
-     - PDF attachment
-   - Sets `emailed_at` timestamp to NOW()
-   - Creates admin notification
-6. Success notification: "Report emailed successfully"
-7. Report now appears in "Emailed" tab (status='approved' AND emailed_at IS NOT NULL)
+#### Emailing Reports to Clients
 
-**Email Template Features**:
-- Professional HTML layout
-- Report information table
+**Purpose**: Send professional PDF report to client contacts with automatic tracking.
+
+**How to Email a Report**:
+1. Click "Email" button on an approved report
+2. Email window displays:
+   - Client contact list with names, roles, and email addresses
+   - Recipients field (enter email addresses, comma-separated)
+   - CC field (optional additional recipients)
+   - Custom message field (optional additional message for email body)
+3. Select or enter recipient email addresses
+4. Add optional CC and custom message
+5. Click "Send Email"
+
+**System Actions**:
+- Generates professional PDF report
+- Sends email via company email system (mail.kpspestcontrol.co.za)
+- Email includes:
+  - KPS branding and logo
+  - Report summary information
+  - Custom message (if provided)
+  - PDF attachment
+  - Company contact information
+- Marks report as "Emailed" with timestamp
+- Report appears in "Emailed" tab
+- Admin receives confirmation notification
+
+**Email Features**:
+- Professional HTML email template
+- Report information summary table
 - Custom message section
-- KPS company footer with contact details
-- Plain text fallback version
+- KPS company footer
+- Plain text version for compatibility
 
-**Technical Details**:
-- Endpoint: `POST /api/admin/reports/:id/email`
-- Payload: `{ recipients: string[], cc?: string[], additionalMessage?: string }`
-- PDF stored temporarily in `api/temp/reports/` (1-hour TTL, auto-cleanup)
-- Email service uses nodemailer with configured SMTP transport
+#### Mark as Emailed (Without Sending)
+
+**Purpose**: Track emailed status for reports sent outside the system.
+
+**Use Cases**:
+- Report was emailed manually
+- Report sent via different email system
+- Maintaining accurate tracking without sending duplicates
+
+**How to Mark as Emailed**:
+1. Click "Mark as Emailed" on approved report
+2. Confirm action
+3. Report status updates to "Emailed" without actually sending email
+4. Report appears in "Emailed" tab for tracking
 
 ---
 
-## PCO Mobile App Workflows
+## PCO Portal Features
 
 ### Dashboard
 
-When you log in to the PCO portal, your dashboard shows:
+The PCO dashboard provides field officers with quick access to their assignments and tasks:
 
-**At a Glance**:
-- **Assigned Clients**: How many clients you're currently assigned to service
-- **Draft Reports**: Reports you've started or submitted that are awaiting admin review
-- **Needs Revision**: Reports that admin declined and need your attention
+**Key Metrics**:
+- **Assigned Clients**: Number of clients currently assigned for service
+- **Draft Reports**: In-progress or submitted reports awaiting admin review
+- **Needs Revision**: Reports declined by admin requiring attention
 
 **Quick Actions**:
-- **Create New Report**: Jump straight to creating a report for an assigned client
-- **View Schedule**: See all your assigned clients
-- **View Service History**: Check your past completed reports
+- Create New Report
+- View Schedule
+- View Service History
+- Download for Offline (when online - caches client and chemical data)
 
-**What You Can Do**:
-- Click on any metric to see the full list
-- Access your most recent activity
-- Navigate to any section using the menu
+**Report Import**:
+- Upload previously exported reports (.kps files
+- Continue editing incomplete reports
+- Submit reports created offline
+
+**How to Import**:
+1. Click "Choose File" in Report Import section
+2. Select .kps file
+3. System validates and imports report data
+4. Review and submit imported report
 
 ### Schedule Management
 
-#### Viewing Your Assigned Clients
+#### Viewing Assigned Clients
 
 **How to Access**:
-1. Click "Schedule" from the main menu
-2. See a list of all clients assigned to you
+1. Click "Schedule" from main menu
+2. View list of all clients assigned to you
 
-**What You'll See**:
+**Information Displayed**:
 - Client company name
-- Service address (for navigation)
+- Service address
 - Client status
 
 **Important Notes**:
-- Only clients assigned to you by admin appear here
-- If a client shows "Client is currently inactive", contact admin before visiting
-- After you submit a report, you're automatically unassigned (admin will reassign for next service)
+- Only clients assigned by admin appear in your schedule
+- If client shows "inactive" status, contact admin before visiting
+- After submitting a report, you are automatically unassigned (admin will reassign for next visit)
 
 #### Starting a New Report
 
-**Steps**:
-1. From your Schedule, click on a client
-2. Click "Create New Report" button
-3. The system automatically:
-   - Loads information from your last visit (if any)
-   - Retrieves the client's expected equipment counts
-   - Prepares pre-filled data to save you time
+**Steps to Begin**:
+1. From Schedule, select a client
+2. Click "Create New Report"
+3. System automatically:
+   - Loads information from your last visit (if available)
+   - Retrieves client's equipment baseline
+   - Pre-fills data to save time
 
-**What Happens Next**:
-You'll be guided through the report creation screens (explained in the next section)
+### Creating Service Reports
 
-**About Adding Equipment**:
-- You can add as much equipment as needed during the service visit
-- If you add more equipment than the client normally has, the system will ask you to confirm
-- The system automatically tracks new additions for invoicing
-- Don't worry - you can't mess it up! The system has safety checks built in
+Service reports are created in 5 simple steps. The system saves your progress automatically.
 
-### Report Creation Workflow
-
-Creating a report is a simple 5-step process. The system guides you through each screen and saves your progress automatically.
-
-**Important: Equipment Tracking**
-- Frontend marks equipment as `is_new_addition=1` when PCO confirms new equipment
-- Backend has safety net: if frontend skips marking, backend detects and marks automatically on submission
-- Equipment tracking happens in two places:
-  1. **Frontend (Primary)**: During report creation when PCO confirms "Yes, Update" on new equipment prompt
-  2. **Backend (Backup)**: In submitReport function if frontend marking was skipped
+**Equipment Tracking Note**:
+The system automatically tracks newly installed equipment. When you add more equipment than the client's baseline, the system prompts you to confirm and automatically marks the additions for invoicing purposes.
 
 #### Step 1: Report Setup
 
-**What You'll Do**:
-1. **Choose Report Type**:
+**Required Information**:
+1. **Report Type**:
    - Bait Inspection only
    - Fumigation only
-   - Both (if doing both services)
+   - Both services
 
-2. **Confirm Service Date**:
+2. **Service Date**:
    - Defaults to today's date
-   - You cannot select a future date
+   - Cannot select future dates
 
-3. **Add Your Signature**:
-   - Use the digital signature pad to sign
-   - This confirms you performed the service
+3. **Your Signature**:
+   - Digital signature pad
+   - Confirms you performed the service
 
 **Navigation**:
-- Click "Continue" to move to the next step
-- Click "Save Draft" to save and finish later
+- "Continue" to proceed to next step
+- "Save Draft" to save and finish later
 
----
-
-#### Step 2A: Bait Station Inspection (if selected)
+#### Step 2A: Bait Station Inspection (if applicable)
 
 **Smart Pre-filling**:
-- The system automatically loads data from your last visit to this client
-- Stations with the same location and number get pre-filled with previous data
-- Pre-filled data is highlighted so you know what's carried over
-- You can edit any pre-filled information
+- System loads data from your previous visit
+- Stations with matching location and number are pre-filled
+- Pre-filled data is highlighted for easy identification
+- All pre-filled information can be edited
 
-**Adding Stations**:
+**Adding Bait Stations**:
 
-Choose location first: **Inside** or **Outside**
+Choose location: **Inside** or **Outside**
 
-For each station, you'll record:
+For each station, record:
 
-1. **Station Number**: Your identification number for this station
+1. **Station Number**: Your identification number
 
 2. **Accessibility**:
-   - Was the station accessible?
-   - If No: Briefly explain why
+   - Was station accessible?
+   - If No: Explain why
 
-3. **Activity Check**:
-   - Any signs of rodent activity?
-   - If Yes: Select what you found (Droppings, Gnawing, Tracks, or Other)
+3. **Activity**:
+   - Signs of rodent activity?
+   - If Yes: Select type (Droppings, Gnawing, Tracks, Other)
 
 4. **Bait Status**:
-   - Clean (no poison used - default)
+   - Clean (no poison)
    - Eaten
    - Wet
    - Old
@@ -741,7 +532,7 @@ For each station, you'll record:
    - Needs Repair
    - Damaged
    - Missing
-   - If not "Good": Select action taken (Repaired or Replaced)
+   - If not "Good": Action taken (Repaired or Replaced)
 
 6. **Warning Sign**:
    - Good
@@ -750,31 +541,27 @@ For each station, you'll record:
    - Remounted
 
 7. **Chemicals Used** (if any):
-   - Click "+ Add" to add chemicals
+   - Add one or more chemicals
    - Enter chemical name, quantity, and batch number
-   - You can add multiple chemicals per station
 
-8. **Station Remarks** (optional):
-   - Add any additional notes about this station
+8. **Remarks** (optional):
+   - Additional notes about this station
 
-**Managing Your Stations**:
-- Click "Save Station" to add it to your report
-- View all added stations in the list
+**Managing Stations**:
+- Save each station to add to your report
 - Edit or delete stations as needed
-- **Missing Station Alert**: If you submit with fewer stations than expected, you'll get a warning (but you can still proceed if needed)
+- Missing station alert if count is below expected (can still proceed)
 
-**When Done**:
-- Click "Continue" to proceed
-- If you added more stations than expected, you'll get a confirmation message asking if you want to update the client's baseline count
+**When Complete**:
+- Click "Continue"
+- If you added more stations than expected, system asks if you want to update client's baseline
 
----
-
-#### Step 2B: Fumigation (if selected)
+#### Step 2B: Fumigation Service (if applicable)
 
 **Smart Pre-filling**:
-- Chemicals and monitors from your last fumigation are pre-loaded
-- Pre-filled data is highlighted for easy identification
-- Edit anything that changed
+- Chemicals and monitors from previous fumigation are pre-loaded
+- Pre-filled data is highlighted
+- Edit any information as needed
 
 **Fumigation Details**:
 
@@ -790,486 +577,453 @@ For each station, you'll record:
    - Other (specify)
 
 3. **Chemicals Used**:
-   - Click "+ Add Chemical"
-   - Select chemical, enter quantity, unit, and batch number
-   - Add as many chemicals as used
+   - Add one or more chemicals
+   - Select chemical, enter quantity and batch number
 
 4. **Insect Monitors**:
-   - Click "+ Add Monitor"
-   - Choose type: Box or Light (Fly Trap)
+   - Add monitors as needed
+   - Type: Box or Light (Fly Trap)
    
-   For each monitor, record:
-   - **Monitor Condition**: Good, Replaced, Repaired, or Other
-   - **Warning Sign**: Good, Replaced, Repaired, or Remounted
-   - **Monitor Serviced**: Yes or No
+   For each monitor:
+   - **Condition**: Good, Replaced, Repaired, Other
+   - **Warning Sign**: Good, Replaced, Repaired, Remounted
+   - **Was Serviced**: Yes or No
    
    **For Light Monitors (Fly Traps) Only**:
    - **Light Condition**: Good or Faulty
-   - If Faulty: What's wrong? (Starter, Tube, Cable, Electricity, Other)
+   - If Faulty: Problem (Starter, Tube, Cable, Electricity, Other)
    - **Glue Board Replaced**: Yes or No
    - **Tubes Replaced**: Yes or No
 
 5. **General Remarks** (optional):
-   - Add any overall notes about the fumigation
+   - Overall notes about fumigation service
 
-**When Done**:
-- Click "Continue" to proceed
-- If you added more monitors than expected, you'll get a confirmation message
+**When Complete**:
+- Click "Continue"
+- If you added more monitors than expected, system asks for confirmation
 
----
+#### Step 3: Review Summary & Next Service
 
-#### Step 3: Review Summary & Schedule Next Service
-
-**What You'll See**:
+**Review Information**:
 - Service date
 - Report type
 - Your name
 - Summary of bait stations (if applicable)
 - Summary of fumigation (if applicable)
 
-**Set Next Service Date**:
-- Pick a date for the next scheduled service
-- This helps admin plan future assignments
+**Schedule Next Service**:
+- Select date for next scheduled service
+- Helps admin plan future assignments
 
 **Navigation**:
-- Click "Edit Report" to go back and make changes
-- Click "Continue" when everything looks good
-
----
+- "Edit Report" to make changes
+- "Continue" when information is correct
 
 #### Step 4: Client Signature
 
-**Getting the Signature**:
-1. Hand the device to the client
-2. Client signs on the digital signature pad
-3. Client types their name in the field below
+**Information Captured**:
+- **Client Name**: Full name in text field
+- **Client Signature**: Digital signature on signature pad
+- **Service Date**: Displayed from Step 1 (for reference)
+
+**Getting Signature**:
+1. Enter client's full name
+2. Hand device to client
+3. Client signs using finger or stylus
+4. Review signature
+
+**Note**: Service date from Step 1 serves as the official date. No separate signature date field is used.
 
 **Navigation**:
-- Click "Clear" to erase and start over
-- Click "Continue" when signature is complete
-
----
+- "Clear" to erase and start over
+- "Back" to return to previous step
+- "Next" when complete
 
 #### Step 5: Submit Report
 
-**Final Check**:
-- ✓ All sections completed
-- ✓ Client signature obtained
+**Final Review**:
+- All sections completed
+- Client signature obtained
 
-**Choose Your Action**:
+**Available Actions**:
 
 1. **Submit Report** (recommended):
-   - Sends report to admin for review
-   - You'll be unassigned from this client
-   - Admin will reassign you for the next service
-   - You'll get notified when admin reviews your report
+   - Sends to admin for review
+   - You are unassigned from client
+   - Admin will reassign for next service
+   - Notification sent when admin reviews
 
 2. **Save as Draft**:
-   - Keep working on it later
+   - Continue working later
    - Report stays in your drafts
-   - You remain assigned to the client
+   - You remain assigned to client
 
 3. **Download as JSON** (optional):
-   - Creates an offline backup
-   - Useful if you have connectivity concerns
+   - Creates offline backup
+   - Useful for connectivity concerns
 
----
+### Report Submission
 
-### Report Submission Process
-
-**If You're Online**:
+**Online Submission**:
 - Report submits immediately
-- Status changes from 'draft' to 'pending'
-- `submitted_at` timestamp set
-- PCO auto-unassigned from client (assignment deleted)
-- Equipment tracking executed:
-  - Backend checks if equipment already marked by frontend
-  - If not marked: Backend marks new equipment (exceeding expected counts)
-  - Updates report `new_bait_stations_count` and `new_insect_monitors_count`
-  - Updates client expected counts to match actual equipment in report
-- You'll see a success confirmation
-- Admin gets notified right away
+- Status changes to "Pending"
+- You are automatically unassigned from client
+- Equipment tracking executes automatically:
+  - New equipment is detected and flagged
+  - Client baseline counts are updated
+- Admin receives notification
 
-**If You're Offline**:
-- Report saves locally on your device
-- Queues for automatic submission when you're back online
-- You can export as JSON for extra backup
-- System will retry submission on next sync
+**Offline Submission**:
+- Report saves locally on device
+- Queues for automatic submission when online
+- Can export as JSON for backup
+- System retries submission when reconnected
 
----
-
-### Report History & Revision
+### Report History & Revisions
 
 **Viewing Your Reports**:
-- Go to Reports section to see all your submitted reports
-- Reports show their current status (Draft, Approved, Declined, Archived)
+- Navigate to Reports section
+- View all submitted reports with current status
 
 **If Admin Declines Your Report**:
-- Report status changes from 'pending' to 'declined'
-- You'll be automatically reassigned to that client (assignment reinstated)
-- You'll see it in "Needs Revision" on your dashboard
-- Notification received with admin's feedback notes
-- Open the report to read admin's notes (stored in `admin_notes` field)
-- Make the required changes (report remains editable)
-- Resubmit for review (status changes back from 'declined' to 'pending')
+- Status changes to "Declined"
+- You are automatically reassigned to that client
+- Report appears in "Needs Revision" on dashboard
+- Notification received with admin's feedback
+- Open report to read admin feedback
+- Make required changes
+- Resubmit for review (status returns to "Pending")
 
 ---
 
-## Report Management Workflows
+## Report Management
 
-### Report States & Transitions
+### Report Workflow
 
 ```
-                    PCO Creates Report
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │    Draft    │◄─────────┐
-                    │ (Editable)  │          │
-                    └─────────────┘          │
-                           │                 │
-                    PCO Submits              │
-                    (stays draft)            │
-                           │                 │
-                           ▼                 │ Admin Declines
-                    ┌─────────────┐          │ (with notes)
-                    │    Draft    │          │
-                    │(Awaiting    │          │
-                    │ Review)     │          │
-                    └─────────────┘          │
-                           │                 │
-                    Admin Reviews            │
-                           │                 │
-                  ┌────────┼────────┐       │
-                  ▼        ▼        ▼       │
-            ┌──────────┐ ┌────────┐ ┌──────────┐
-            │ Approved │ │ Archive│ │ Declined │──┘
-            │(Final)   │ │        │ │          │
-            └──────────┘ └────────┘ └──────────┘
+PCO Creates Report (Draft)
+         ↓
+PCO Submits (Pending)
+         ↓
+Admin Reviews
+    ↙    ↓    ↘
+Approved Archived Declined
+    ↓              ↓
+Emailed to   PCO Revises
+  Client          ↓
+            Resubmits (Pending)
 ```
 
-### Status Descriptions
-- **Draft**: Reports in creation or submitted and awaiting admin review (PCO can still edit)
-- **Approved**: Final report, can be emailed to clients
-- **Declined**: Returned to PCO with admin notes for revision
-- **Archived**: Completed but not for client distribution
+### Status Definitions
 
-**Note**: System does NOT use 'pending' status. All submitted reports remain in 'draft' status until admin approval/decline.
+- **Draft**: Report in progress (PCO can edit)
+- **Pending**: Submitted and awaiting admin review
+- **Approved**: Admin approved, ready to send to client
+- **Declined**: Returned to PCO with revision notes
+- **Emailed**: Sent to client
+- **Archived**: Completed and filed
 
 ---
 
-## Equipment Tracking
+## Equipment Tracking System
 
 ### Overview
-The system automatically tracks newly added bait stations and insect monitors to help with invoicing. When a PCO installs new equipment at a client site, the system flags it as "new" so it's easy to identify on reports and invoices.
+
+The system automatically tracks newly installed pest control equipment to support accurate invoicing. When PCOs install new bait stations or insect monitors, the system flags them as "new additions" for easy identification.
 
 ### How It Works
 
-#### Setting Up Client Equipment Baselines
-When you create a new client, you set their expected equipment counts:
-- **Inside Bait Stations**: How many bait stations are currently installed inside
-- **Outside Bait Stations**: How many bait stations are currently installed outside
-- **Light Monitors (Fly Traps)**: How many fly trap monitors are installed
-- **Box Monitors**: How many box-type monitors are installed
+#### Setting Client Equipment Baselines
 
-These numbers tell the system what the client already has, so it can automatically detect when something new is added.
+When creating a new client, admin sets expected equipment counts:
+- Inside Bait Stations
+- Outside Bait Stations
+- Light Monitors (Fly Traps)
+- Box Monitors
 
-#### Adding New Equipment During a Service Visit
+These baselines help the system detect when new equipment is installed.
 
-When a PCO creates a report and adds equipment:
+#### Adding New Equipment During Service
 
-**Scenario 1: Client has 5 inside bait stations**
-1. PCO adds 7 inside bait stations to the report
-2. When clicking "Continue", the system notices the difference
-3. **A confirmation message appears**:
+When adding equipment during a service visit:
+
+**Example Scenario**: Client has 5 inside bait stations
+
+1. PCO adds 7 inside bait stations to report
+2. System detects difference when clicking "Continue"
+3. **Confirmation message appears**:
    ```
    You have added more stations than expected:
    • Inside: 7 (expected 5)
    
    Would you like to update the client's station count?
    ```
-4. **If PCO clicks "Yes, Update"**:
-   - The system automatically marks the 2 extra stations as "new"
-   - The client's expected count is updated from 5 to 7
-   - Next visit, the system will expect 7 stations
-5. **If PCO clicks "No"**:
-   - The report continues without updating
-   - A warning will show about missing expected equipment
 
-**The same process happens for**:
+4. **If PCO clicks "Yes, Update"**:
+   - System marks 2 extra stations as "new"
+   - Client's expected count updates to 7
+   - Next visit will expect 7 stations
+
+5. **If PCO clicks "No"**:
+   - Report continues without update
+   - Warning shows about missing expected equipment
+
+**Same process applies to**:
 - Outside bait stations
-- Light monitors (fly traps)
+- Light monitors
 - Box monitors
 
-#### Why This Matters for Invoicing
+#### Benefits
 
-**Before (Manual Tracking)**:
-- Admin had to manually count new equipment from reports
-- Easy to miss new installations
-- Time-consuming to prepare invoices
-
-**Now (Automatic Tracking)**:
-- New equipment is automatically flagged on the report
-- Report summary shows total count of new equipment
-- Easy to identify on PDF reports (new equipment highlighted)
-- Accurate billing with no manual counting
-
-#### Safety Net (Automatic Backup)
-If the PCO skips the confirmation or something goes wrong, the system has a backup:
-- When the report is submitted, the system double-checks the equipment counts
-- If it finds equipment that wasn't marked as new, it marks it automatically
-- This ensures no new equipment is ever missed
-
-### Real-World Examples
-
-#### Example 1: Regular Service Visit (No New Equipment)
-
-**Situation**: ABC Restaurant has been a client for 6 months. They have 5 inside bait stations and 2 outside.
-
-**What Happens**:
-1. PCO arrives and services all 5 inside and 2 outside stations
-2. PCO creates report and adds all 7 stations
-3. When clicking "Continue" → **No message appears** (everything matches expected)
-4. PCO completes report normally
-5. **Report shows**: 0 new equipment added
-
-**Result**: Quick and easy - no interruptions since nothing new was installed.
-
----
-
-#### Example 2: Client Expansion (New Equipment Installed)
-
-**Situation**: ABC Restaurant expands their kitchen. PCO installs 2 additional inside bait stations and 1 outside station.
-
-**What Happens**:
-1. PCO services and adds 7 inside stations and 3 outside stations to the report
-2. When clicking "Continue" → **Confirmation message appears**:
-   ```
-   You have added more stations than expected:
-   • Inside: 7 (expected 5)
-   • Outside: 3 (expected 2)
-   
-   Would you like to update the client's station count?
-   ```
-3. PCO clicks **"Yes, Update"**
-4. System automatically marks the 2 extra inside and 1 extra outside station as "new"
-5. Client's expected count updates to match actual (7 inside, 3 outside)
-6. **Report shows**: 3 new bait stations added
-7. Admin sees report with new equipment highlighted for invoicing
-
-**Result**: New equipment automatically tracked, ready for billing.
-
----
-
-#### Example 3: Next Visit After Expansion
-
-**Situation**: PCO returns to ABC Restaurant the following month. Client now has 7 inside and 3 outside stations (new baseline).
-
-**What Happens**:
-1. PCO services all 7 inside and 3 outside stations
-2. PCO creates report and adds all 10 stations
-3. When clicking "Continue" → **No message appears** (matches new expected count)
-4. PCO completes report normally
-5. **Report shows**: 0 new equipment added
-
-**Result**: System remembers the updated count - smooth workflow continues.
-
-### Benefits
-
-**For Admin/Billing Team**:
-- See new equipment at a glance on report summary
-- New equipment highlighted on PDF reports
-- No need to manually count or track additions
+**For Admin/Billing**:
+- New equipment visible at a glance
+- Highlighted on PDF reports
+- No manual counting required
 - Ready for accurate invoicing
 
 **For PCO Users**:
-- Simple workflow - just add equipment and continue
-- System handles all tracking automatically
-- Get confirmation when adding more than expected
-- One click to update client equipment counts
+- Simple workflow
+- Automatic tracking
+- Confirmation when adding equipment
+- One click to update baselines
 
 **For Clients**:
-- Clear documentation of what's new vs. regular service
-- Transparent billing - new installations clearly marked
+- Clear documentation of new installations
+- Transparent billing
 - Professional reports with equipment history
 
-### Key Points to Remember
+#### Automatic Safety Net
 
-1. **Always set expected equipment counts** when creating a new client
-2. **Click "Yes, Update"** when the system asks about new equipment - this keeps the client's baseline current
-3. **New equipment is automatically highlighted** on reports for easy invoicing
-4. **The system has a safety net** - even if something is missed, it will catch it during submission
-
----
-
-## Data Synchronization
-
-### PCO App Sync Strategy
-
-#### Login Sync (Full Sync)
-1. **Download Priority Data**:
-   - Assigned clients (current assignments only)
-   - All active chemicals with usage types
-   - Last 3 reports per assigned client (for pre-filling)
-   - User profile information
-
-#### Background Sync (When Online)
-1. **Upload Priority**:
-   - Draft report submissions (newly submitted reports awaiting review)
-   - Draft reports (backup)
-   - User profile changes
-
-2. **Download Updates**:
-   - New client assignments
-   - Chemical updates
-   - Report status changes
-   - Admin messages/notifications
-
-#### Conflict Resolution
-- **Client Data**: Server version takes precedence
-- **Chemical Data**: Server version takes precedence  
-- **Report Data**: PCO local changes preserved, show warning if conflicts
-- **User Profile**: Merge changes, prioritize most recent
-
-#### Offline Capabilities
-- Complete report creation and editing
-- Access to synced client and chemical data
-- Local storage of draft reports
-- Queue submissions for when online
+If confirmation is skipped, the system has a backup:
+- On report submission, equipment counts are checked
+- Any equipment not marked is automatically flagged
+- Ensures no new equipment is missed
 
 ---
 
-## Notification System
+## Email & Notifications
 
-### Push Notifications (PCO Mobile App)
-- **New Client Assignment**: "You've been assigned to [Client Name]"
-- **Report Declined**: "Report for [Client] requires revision"
-- **System Updates**: "New chemicals available" / "App update available"
+### Email System
 
-### Email Notifications (Admin)
-- **New Report Submitted**: "[PCO Name] submitted report for [Client Name]"
-- **Upcoming Services**: "Services scheduled for tomorrow require PCO assignment"
-- **System Alerts**: User account issues, sync failures
+**Purpose**: Send professional service reports to clients with PDF attachments.
 
-### In-App Notifications
-- **Both Platforms**: Status updates, system messages
-- **Real-time Updates**: New assignments, report status changes
+**Email Features**:
+- Professional HTML templates with KPS branding
+- PDF report generation and attachment
+- Multiple recipients and CC support
+- Custom message capability
+- Company contact information in footer
+- Plain text version for compatibility
 
----
+**Email Server**: mail.kpspestcontrol.co.za
 
-## API Design Patterns
+### Notification System
 
-### Pagination Standard
-- **Page Size**: 25 records per page
-- **Response Format**:
-```json
-{
-  "data": [...],
-  "pagination": {
-    "page": 1,
-    "pageSize": 25,
-    "totalRecords": 150,
-    "totalPages": 6,
-    "hasNext": true,
-    "hasPrevious": false
-  }
-}
-```
+**In-App Notifications**:
+- Real-time updates on assignments and report status
+- System messages and alerts
+- Displayed in both Admin and PCO portals
 
-### Search Endpoints
-Each entity requires separate search endpoints for flexible querying:
+**PCO Notifications**:
+- New client assignments
+- Report approved notifications
+- Report declined with feedback
+- Report archived notices
+- System updates
 
-#### Reports Search
-- **Endpoint**: `/api/reports/search`
-- **Searchable Fields**: 
-  - Client name, PCO name, report type
-  - Service date range, submission date range
-  - Status, chemical used, target pests
-  - Station numbers, areas treated
-  - Free text in remarks/notes
-
-#### Users Search
-- **Endpoint**: `/api/users/search`
-- **Searchable Fields**: PCO number, name, email, role, status
-
-#### Clients Search
-- **Endpoint**: `/api/clients/search`
-- **Searchable Fields**: Company name, contact name, address, phone, email
-
-#### Chemicals Search
-- **Endpoint**: `/api/chemicals/search`
-- **Searchable Fields**: Name, active ingredients, usage type, status
-
-### Data Validation Rules
-
-#### Report Validation
-- Service date cannot be in the future
-- At least one bait station OR fumigation data required
-- Client signature required for submission
-- Chemical quantities must be positive numbers
-- Station numbers must be unique per location per report
-
-#### User Validation
-- PCO numbers must be unique across system
-- Email addresses must be unique
-- Role assignments must be valid (Admin/PCO)
-
-#### Client Validation  
-- At least one contact required
-- Contact emails must be unique within client
-- Address fields required for service location
+**Admin Notifications**:
+- New report submissions
+- Upcoming service dates
+- System alerts and issues
 
 ---
 
-## Business Rules Summary
+## Business Rules
 
-### Assignment Rules
-- One client can only be assigned to one PCO at a time
+### Client Assignment Rules
+
+- Each client can only be assigned to one PCO at a time
 - PCO assignment automatically removed after report submission
-- Admin must manually reassign for next service
+- Admin must manually reassign for next service visit
+- PCOs can only create reports for assigned clients
 
-### Deletion Rules
-- **Hard Delete**: Only if no associated reports exist
-- **Soft Delete**: When reports exist (preserve data integrity)
-- **Chemical Deactivation**: When linked to reports (cannot delete)
+### User Account Rules
+
+- PCO numbers must be unique
+- Email addresses must be unique
+- Only active users can log in
+- Users cannot delete their own account
+- Users with active assignments cannot be deleted
 
 ### Report Rules
-- Reports can only be created for assigned clients
-- Reports cannot be edited after submission (PCO side)
-- Only admins can edit reports in any status
-- Next service date creates notification for admin
-- **Recommendations**: Only admins can add recommendations to reports
-- **PCO Input**: PCOs can only provide remarks/notes, not recommendations
+
+- Service date cannot be in the future
+- At least one service type required (Bait Inspection or Fumigation)
+- Client signature required for submission
+- Station numbers must be unique per location per report
+- Only admins can add recommendations to reports
+- PCOs can provide remarks and notes
+- Reports cannot be edited by PCO after submission
+- Only admins can edit submitted reports
 
 ### Data Integrity Rules
-- All foreign key relationships maintained
-- Audit trails for all critical operations
-- Soft deletes preserve historical data
-- Chemical usage tracking for compliance
-- **Batch Number Linking**: Each chemical batch number is linked to the specific report where it was used, ensuring historical accuracy when old reports are printed
+
+- User history preserved when accounts deactivated
+- Client history preserved when clients deactivated
+- Chemical usage linked to specific reports for historical accuracy
+- Batch numbers tracked per report for compliance
+- All critical operations logged for audit purposes
+
+### Chemical Management Rules
+
+- Chemical names must be unique
+- Only active chemicals appear in selection menus
+- Chemicals used in reports cannot be deleted (automatically deactivated instead)
+- Unused chemicals can be permanently removed
+- Chemical changes apply system-wide immediately
 
 ---
 
-## Technical Requirements Summary
+## System Security & Compliance
 
-### Performance Requirements
-- **API Response Time**: < 500ms for standard queries
-- **Mobile App**: Smooth 60fps animations
-- **Offline Mode**: Full functionality without internet
-- **Sync Time**: < 30 seconds for complete data sync
+### Data Security
 
-### Security Requirements
-- **Authentication**: JWT tokens with role-based access
-- **Data Protection**: Encrypt sensitive client information
-- **Audit Logging**: Track all admin actions
-- **Mobile Security**: Secure local storage for offline data
+- All passwords encrypted before storage
+- Secure session management
+- Account lockout after failed login attempts
+- Audit logging of all critical operations
+- Data preservation for compliance
 
-### Quality Assurance
-- **Clean Code**: Comprehensive documentation and comments
-- **Testing**: Unit tests for all business logic
-- **UX Priority**: Intuitive workflows, minimal clicks
-- **Rock Solid Backend**: Error handling, validation, monitoring
+### Session Management
+
+- Automatic session timeout for security
+- Forced logout on password change (except current session)
+- Secure token-based authentication
+- Session activity logging
+
+### Audit Trails
+
+All critical operations are logged including:
+- User login attempts (success and failure)
+- User account changes
+- Client assignments
+- Report submissions and approvals
+- Password changes and resets
+- Administrative actions
 
 ---
 
-*This workflow documentation serves as the complete specification for the KPS Pest Control Management System. All features described should be implemented with high attention to detail, prioritizing user experience and system reliability.*
+## Ownership & Intellectual Property
+
+### Source Code Ownership
+
+**Dannel Web Design** retains 100% ownership of all source code, including but not limited to:
+- Backend application code
+- Frontend application code
+- Database schemas and structures
+- API implementations
+- System architecture and design
+- All proprietary algorithms and logic
+
+### Client Usage Rights
+
+**Client** receives full ownership and usage rights to:
+- Frontend user interface and user experience
+- All functionality as described in this specification
+- Data generated and stored within the system
+- Report outputs and generated documents
+- Full rights to request modifications and enhancements
+
+### Change Management
+
+**Change Request Authorization**:
+- All change requests must be submitted by the authorized signatory of this document
+- Changes will be evaluated for scope, timeline, and impact
+- A detailed change log will be maintained by Dannel Web Design
+- Version control records will document all modifications
+- Client will receive notification of all updates and changes
+
+**Version Control**:
+- Dannel Web Design maintains comprehensive version history
+- All changes are documented with version numbers and descriptions
+- Change logs are available for client review upon request
+- Critical updates and security patches are applied proactively
+
+### System Accessibility & Uptime
+
+**Service Commitment**:
+- Dannel Web Design commits to ensuring system accessibility and availability
+- Routine maintenance will be scheduled during off-peak hours when possible
+- Client will receive advance notice of planned maintenance windows
+
+**Force Majeure**:
+The system may become temporarily inaccessible due to circumstances beyond Dannel Web Design's control, including but not limited to:
+- Internet service provider outages
+- Hosting infrastructure failures
+- Natural disasters or extreme weather events
+- Power outages or utility failures
+- Cyber attacks or security incidents
+- Government actions or regulations
+
+**Communication Protocol**:
+- Client will be promptly notified of any unplanned downtime
+- Regular status updates will be provided during extended outages
+- Estimated time to resolution will be communicated when available
+- Post-incident reports will be provided for significant disruptions
+
+### Support & Maintenance
+
+**Ongoing Support**:
+- Technical support provided by Dannel Web Design
+- Bug fixes and security updates included in maintenance
+- Performance optimization and monitoring
+- Regular system health checks
+
+**Modification Rights**:
+- Client may request feature enhancements at any time
+- Scope and cost of modifications will be assessed individually
+- Priority will be given to critical bug fixes and security updates
+- Non-critical enhancements will be scheduled based on mutual agreement
+
+### Data Ownership & Privacy
+
+**Client Data**:
+- All data entered into the system remains the property of the client
+- Client has full rights to export data at any time
+- Data backups are maintained for disaster recovery
+- Data privacy and security are maintained per industry standards
+
+---
+
+## Client Signoff
+
+### Document Purpose
+
+This document serves as the complete functional specification for the KPS Pest Control Management System. It describes all features, workflows, and business processes implemented in the application.
+
+### Approval
+
+By signing below, the client acknowledges review and approval of the system functionality as described in this document.
+
+**Client Name**: _______________________________
+
+**Signature**: _______________________________
+
+**Date**: _______________________________
+
+**Company**: _______________________________
+
+**Position**: _______________________________
+
+---
+
+### Revision History
+
+| Version | Date | Description | Author |
+|---------|------|-------------|--------|
+| 1.0.22 | 09 Feb 2026 | Final specification for client signoff | System Team |
+| 1.0.0 | Initial Release | Initial system documentation | System Team |
+
+---
+
+*This document represents the complete functionality of the KPS Pest Control Management System. All features described have been implemented and verified.*

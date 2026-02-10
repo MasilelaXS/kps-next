@@ -416,7 +416,7 @@ const getReportById = async (req, res) => {
       LEFT JOIN chemicals ch ON sc.chemical_id = ch.id
       WHERE bs.report_id = ?
       GROUP BY bs.id
-      ORDER BY bs.location, bs.station_number
+      ORDER BY bs.location, CAST(bs.station_number AS UNSIGNED)
     `;
         const baitStations = await (0, database_1.executeQuery)(baitStationsQuery, [reportId]);
         const parsedBaitStations = baitStations.map(station => ({
@@ -1275,7 +1275,7 @@ const getPreFillData = async (req, res) => {
             });
         }
         const reportId = lastReport[0].id;
-        const baitStations = await (0, database_1.executeQuery)(`SELECT station_number, location FROM bait_stations WHERE report_id = ? ORDER BY location, station_number`, [reportId]);
+        const baitStations = await (0, database_1.executeQuery)(`SELECT station_number, location FROM bait_stations WHERE report_id = ? ORDER BY location, CAST(station_number AS UNSIGNED)`, [reportId]);
         const areas = await (0, database_1.executeQuery)(`SELECT area_name, is_other, other_description FROM fumigation_areas WHERE report_id = ?`, [reportId]);
         const pests = await (0, database_1.executeQuery)(`SELECT pest_name, is_other, other_description FROM fumigation_target_pests WHERE report_id = ?`, [reportId]);
         const chemicals = await (0, database_1.executeQuery)(`SELECT fc.chemical_id, c.name as chemical_name 
@@ -1752,7 +1752,7 @@ const exportReportAsJSON = async (req, res) => {
        LEFT JOIN chemicals ch ON sc.chemical_id = ch.id
        WHERE bs.report_id = ?
        GROUP BY bs.id
-       ORDER BY bs.station_number, bs.location`, [reportId]);
+       ORDER BY CAST(bs.station_number AS UNSIGNED), bs.location`, [reportId]);
         const fumigationAreas = await (0, database_1.executeQuery)(`SELECT * FROM fumigation_areas WHERE report_id = ? ORDER BY id`, [reportId]);
         const fumigationPests = await (0, database_1.executeQuery)(`SELECT * FROM fumigation_target_pests WHERE report_id = ? ORDER BY id`, [reportId]);
         const fumigationChemicals = await (0, database_1.executeQuery)(`SELECT fc.*, ch.name as chemical_name

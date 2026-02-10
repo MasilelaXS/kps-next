@@ -767,7 +767,7 @@ ${noTreatmentNote}
           bs.*
         FROM bait_stations bs
         WHERE bs.report_id = ?
-        ORDER BY bs.location, bs.station_number
+        ORDER BY bs.location, CAST(bs.station_number AS UNSIGNED)
       `, [reportId]);
 
       if (!stations.length) return [];

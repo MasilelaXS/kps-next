@@ -906,7 +906,7 @@ export const getLastReportForClient = async (req: Request, res: Response) => {
         station_remarks
       FROM bait_stations 
       WHERE report_id = ?
-      ORDER BY location, station_number`,
+      ORDER BY location, CAST(station_number AS UNSIGNED)`,
       [reportId]
     );
 

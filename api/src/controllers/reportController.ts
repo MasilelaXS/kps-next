@@ -492,7 +492,7 @@ export const getReportById = async (req: Request, res: Response) => {
       LEFT JOIN chemicals ch ON sc.chemical_id = ch.id
       WHERE bs.report_id = ?
       GROUP BY bs.id
-      ORDER BY bs.location, bs.station_number
+      ORDER BY bs.location, CAST(bs.station_number AS UNSIGNED)
     `;
 
     const baitStations = await executeQuery<RowDataPacket[]>(baitStationsQuery, [reportId]);
@@ -1889,7 +1889,7 @@ export const getPreFillData = async (req: Request, res: Response) => {
 
     // Get bait stations (without chemicals - PCO will add fresh)
     const baitStations = await executeQuery<RowDataPacket[]>(
-      `SELECT station_number, location FROM bait_stations WHERE report_id = ? ORDER BY location, station_number`,
+      `SELECT station_number, location FROM bait_stations WHERE report_id = ? ORDER BY location, CAST(station_number AS UNSIGNED)`,
       [reportId]
     );
 
@@ -2614,7 +2614,7 @@ export const exportReportAsJSON = async (req: Request, res: Response) => {
        LEFT JOIN chemicals ch ON sc.chemical_id = ch.id
        WHERE bs.report_id = ?
        GROUP BY bs.id
-       ORDER BY bs.station_number, bs.location`,
+       ORDER BY CAST(bs.station_number AS UNSIGNED), bs.location`,
       [reportId]
     );
 
