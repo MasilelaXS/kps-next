@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.selfAssignClient = exports.getAvailableClients = exports.getLastReportForClient = exports.updateClientCounts = exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
+exports.selfAssignClient = exports.getAvailableClients = exports.updateClientCounts = exports.exportData = exports.uploadReports = exports.syncRecentReports = exports.syncChemicals = exports.syncClients = exports.getFullSync = void 0;
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
 const env_1 = require("../config/env");
@@ -582,94 +582,6 @@ const updateClientCounts = async (req, res) => {
     }
 };
 exports.updateClientCounts = updateClientCounts;
-const getLastReportForClient = async (req, res) => {
-    try {
-        const pcoId = req.user.id;
-        const clientId = parseInt(req.params.clientId);
-        const assignments = await (0, database_1.executeQuery)('SELECT id FROM client_pco_assignments WHERE client_id = ? AND pco_id = ? AND status = "active"', [clientId, pcoId]);
-        if (assignments.length === 0) {
-            return res.status(403).json({
-                success: false,
-                message: 'You are not assigned to this client'
-            });
-        }
-        const lastReportQuery = `
-      SELECT id, service_date 
-      FROM reports 
-      WHERE client_id = ? AND status = 'approved'
-      ORDER BY service_date DESC, id DESC
-      LIMIT 1
-    `;
-        const lastReports = await (0, database_1.executeQuery)(lastReportQuery, [clientId]);
-        if (lastReports.length === 0) {
-            return res.json({
-                success: true,
-                message: 'No previous reports found',
-                data: null
-            });
-        }
-        const reportId = lastReports[0].id;
-        const baitStations = await (0, database_1.executeQuery)(`SELECT 
-        id,
-        station_number,
-        location,
-        is_accessible,
-        inaccessible_reason,
-        activity_detected,
-        activity_droppings,
-        activity_gnawing,
-        activity_tracks,
-        activity_other,
-        activity_other_description,
-        bait_status,
-        station_condition,
-        action_taken,
-        warning_sign_condition,
-        rodent_box_replaced,
-        station_remarks
-      FROM bait_stations 
-      WHERE report_id = ?
-      ORDER BY location, CAST(station_number AS UNSIGNED)`, [reportId]);
-        const stationChemicals = await (0, database_1.executeQuery)(`SELECT 
-        sc.station_id as bait_station_id,
-        sc.chemical_id,
-        c.name as chemical_name,
-        sc.quantity,
-        sc.batch_number
-      FROM bait_stations bs
-      JOIN station_chemicals sc ON bs.id = sc.station_id
-      JOIN chemicals c ON sc.chemical_id = c.id
-      WHERE bs.report_id = ?`, [reportId]);
-        const stationsWithChemicals = baitStations.map((station) => ({
-            ...station,
-            chemicals: stationChemicals.filter((chem) => chem.bait_station_id === station.id).map((chem) => ({
-                chemicalId: chem.chemical_id,
-                chemicalName: chem.chemical_name,
-                quantity: chem.quantity,
-                batchNumber: chem.batch_number
-            }))
-        }));
-        logger_1.logger.info(`Last report data retrieved for client ${clientId} by PCO ${pcoId}`);
-        return res.json({
-            success: true,
-            message: 'Previous report data retrieved successfully',
-            data: {
-                report_id: reportId,
-                service_date: lastReports[0].service_date,
-                bait_stations: stationsWithChemicals
-            }
-        });
-    }
-    catch (error) {
-        logger_1.logger.error('Error in getLastReportForClient:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to retrieve previous report data',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
-exports.getLastReportForClient = getLastReportForClient;
 const getAvailableClients = async (req, res) => {
     try {
         const pcoId = req.user.id;

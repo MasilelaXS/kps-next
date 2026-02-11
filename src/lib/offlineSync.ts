@@ -4,6 +4,8 @@
  */
 
 import { buildApiUrl } from './api';
+import { storageQuotaManager } from './storageQuotaManager';
+import { imageCompression } from './imageCompression';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -34,6 +36,7 @@ export interface SyncStatus {
 }
 
 // Exponential backoff intervals (ms): 5s, 15s, 30s, 1m, 5m, 15m, 30m, 1h, 2h (cap)
+// Then continues at 2h intervals indefinitely (never gives up on user data)
 const RETRY_INTERVALS = [
   5 * 1000,      // 5 seconds
   15 * 1000,     // 15 seconds
@@ -43,7 +46,7 @@ const RETRY_INTERVALS = [
   15 * 60 * 1000,  // 15 minutes
   30 * 60 * 1000,  // 30 minutes
   60 * 60 * 1000,  // 1 hour
-  2 * 60 * 60 * 1000  // 2 hours (cap)
+  2 * 60 * 60 * 1000  // 2 hours (cap) - continues at this interval forever
 ];
 
 function getRetryDelay(attemptCount: number): number {
@@ -186,12 +189,34 @@ class OfflineQueueManager {
   ): Promise<string> {
     await this.ensureDB();
 
+    // Check and compress images in payload before storing
+    let processedPayload = payload;
+    try {
+      if (this.containsBase64Images(payload)) {
+        console.log('[OfflineQueue] Compressing images in payload...');
+        processedPayload = await this.compressPayloadImages(payload);
+      }
+    } catch (error) {
+      console.warn('[OfflineQueue] Image compression failed, using original:', error);
+    }
+
+    // Estimate payload size
+    const payloadSize = this.estimateSize(JSON.stringify(processedPayload));
+    console.log(`[OfflineQueue] Payload size: ${storageQuotaManager.formatBytes(payloadSize)}`);
+
+    // Check if we have enough storage space
+    const hasSpace = await storageQuotaManager.ensureSpace(payloadSize);
+    if (!hasSpace) {
+      console.error('[OfflineQueue] Insufficient storage space');
+      throw new Error('Insufficient storage space. Please free up space and try again.');
+    }
+
     const item: QueuedItem = {
       id: `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type,
       endpoint,
       method,
-      payload,
+      payload: processedPayload,
       timestamp: Date.now(),
       lastAttemptTime: null,
       attemptCount: 0,
@@ -416,14 +441,14 @@ class OfflineQueueManager {
         results.success++;
         console.log(`[OfflineQueue] ✓ Successfully synced ${item.type} ${item.id} (attempt ${item.attemptCount})`);
       } else if (result.blocked) {
-        // Report blocked due to assignment conflict
+        // Report blocked due to assignment conflict - wait for assignment to be restored
         item.status = 'blocked';
         item.blockReason = result.blockReason;
         await this.updateItem(item);
         results.blocked++;
         console.warn(`[OfflineQueue] ⚠ ${item.type} ${item.id} blocked: ${result.blockReason}`);
       } else {
-        // Failed - will retry with exponential backoff
+        // Failed - will retry with exponential backoff (indefinitely until success)
         item.status = 'failed';
         item.error = result.error || 'Submission failed';
         await this.updateItem(item);
@@ -488,6 +513,11 @@ class OfflineQueueManager {
           };
         }
         return { success: false, error: error.message || 'Forbidden' };
+      } else if (response.status === 409) {
+        // Duplicate detected (report already exists) - treat as success
+        const error = await response.json().catch(() => ({ message: 'Duplicate' }));
+        console.log(`[OfflineQueue] ${item.type} already exists (409), treating as success`, error.existing_report_id || error.existing_assignment_id || '');
+        return { success: true };
       } else if (response.status === 400) {
         const error = await response.json().catch(() => ({ message: 'Bad request' }));
         
@@ -727,6 +757,69 @@ class OfflineQueueManager {
         setTimeout(() => this.syncAll(), 1000);
       }
     }
+  }
+
+  /**
+   * Check if object contains base64 images
+   */
+  private containsBase64Images(obj: any): boolean {
+    if (typeof obj === 'string') {
+      return obj.startsWith('data:image/');
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.some(item => this.containsBase64Images(item));
+    }
+    
+    if (obj && typeof obj === 'object') {
+      return Object.values(obj).some(value => this.containsBase64Images(value));
+    }
+    
+    return false;
+  }
+
+  /**
+   * Recursively compress base64 images in payload
+   */
+  private async compressPayloadImages(obj: any): Promise<any> {
+    if (typeof obj === 'string' && obj.startsWith('data:image/')) {
+      try {
+        if (imageCompression.shouldCompress(obj, 50)) {
+          const result = await imageCompression.compressDataUrl(obj, {
+            maxWidth: 1280,
+            maxHeight: 960,
+            quality: 0.75,
+            fileType: 'image/jpeg'
+          });
+          console.log(`[OfflineQueue] Compressed image: ${imageCompression.formatBytes(result.originalSize)} → ${imageCompression.formatBytes(result.compressedSize)}`);
+          return result.dataUrl;
+        }
+      } catch (error) {
+        console.warn('[OfflineQueue] Failed to compress image:', error);
+      }
+      return obj;
+    }
+    
+    if (Array.isArray(obj)) {
+      return Promise.all(obj.map(item => this.compressPayloadImages(item)));
+    }
+    
+    if (obj && typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = await this.compressPayloadImages(value);
+      }
+      return result;
+    }
+    
+    return obj;
+  }
+
+  /**
+   * Estimate size of an object in bytes
+   */
+  private estimateSize(str: string): number {
+    return str.length * 2; // UTF-16 encoding
   }
 
   /**

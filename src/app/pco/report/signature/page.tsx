@@ -7,6 +7,7 @@ import TextBox from '@/components/TextBox';
 import Loading from '@/components/Loading';
 import AlertModal from '@/components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
+import { imageCompression } from '@/lib/imageCompression';
 import { RotateCcw, AlertCircle, User, PenTool, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -115,21 +116,33 @@ export default function ClientSignature() {
       return;
     }
 
-    // Save client signature and name
-    const signatureDataURL = signatureRef.current.toDataURL('image/png');
-    
-    const updatedReport = {
-      ...report,
-      clientSignature: signatureDataURL,
-      clientName: clientName.trim(),
-      step: 'review',
-      lastSaved: new Date().toISOString()
-    };
-    
-    localStorage.setItem('current_report', JSON.stringify(updatedReport));
-    
-    // Navigate to final review/submit
-    router.push('/pco/report/submit');
+    try {
+      // Get signature canvas and compress it
+      const canvas = signatureRef.current.getTrimmedCanvas();
+      const compressionResult = imageCompression.compressSignature(canvas);
+      
+      console.log('[Signature] Compression:', {
+        original: imageCompression.formatBytes(compressionResult.originalSize),
+        compressed: imageCompression.formatBytes(compressionResult.compressedSize),
+        ratio: `${(compressionResult.compressionRatio * 100).toFixed(1)}%`
+      });
+
+      const updatedReport = {
+        ...report,
+        clientSignature: compressionResult.dataUrl,
+        clientName: clientName.trim(),
+        step: 'review',
+        lastSaved: new Date().toISOString()
+      };
+      
+      localStorage.setItem('current_report', JSON.stringify(updatedReport));
+      
+      // Navigate to final review/submit
+      router.push('/pco/report/submit');
+    } catch (error) {
+      console.error('[Signature] Compression failed:', error);
+      alert.showError('Failed to process signature. Please try again.', 'Error');
+    }
   };
 
   if (loading) {

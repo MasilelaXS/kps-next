@@ -1,6 +1,6 @@
 {
   "name": "kps-api",
-  "version": "1.0.22",
+  "version": "1.0.28",
   "description": "KPS Pest Control Management System - Backend API",
   "main": "app.js",
   "scripts": {
@@ -12,7 +12,7 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "clean": "rimraf dist",
-    "prebuild": "npm run clean",
+    "prebuild": "node ../scripts/sync-version.js && npm run clean",
     "deploy": "npm run build",
     "cpanel:deploy": "npm run build && echo 'Built successfully for cPanel deployment. Upload files to your cPanel hosting.'",
     "cpanel:restart": "mkdir -p tmp && touch tmp/restart.txt && echo 'Created restart.txt to restart Passenger application'"

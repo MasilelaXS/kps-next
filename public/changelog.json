@@ -1,6 +1,59 @@
 {
   "changelog": [
     {
+      "version": "1.0.26",
+      "date": "2026-02-11",
+      "releaseDate": "February 11, 2026",
+      "changes": {
+        "added": [
+          "Lucide Bug icon for notification badge - perfect branding for pest control notifications"
+        ],
+        "changed": [],
+        "fixed": [
+          "Push notifications on Android now display client name correctly (was showing 'undefined')",
+          "Push notifications now use proper monochrome badge for Android status bar (fixes white square issue)"
+        ],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Critical bug fixes for push notifications on Android devices - proper status bar icon implementation"
+    },
+    {
+      "version": "1.0.25",
+      "date": "2026-02-11",
+      "releaseDate": "February 11, 2026",
+      "changes": {
+        "added": [],
+        "changed": [],
+        "fixed": [
+          "Offline sync now retries indefinitely until successful (never deletes unsynced reports)",
+          "Duplicate report detection now handles HTTP 409 responses correctly",
+          "Added 30-second timeout to API calls to prevent infinite loading states",
+          "Network connectivity verification before sync attempts"
+        ],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Enhanced offline reliability and data safety - reports are never deleted if unsynced"
+    },
+    {
+      "version": "1.0.24",
+      "date": "2026-02-11",
+      "releaseDate": "February 11, 2026",
+      "changes": {
+        "added": [],
+        "changed": [],
+        "fixed": [
+          "Version control infinite loop issue - update modal now properly refreshes to new version"
+        ],
+        "removed": [
+          "Automatic report data prefill from previous report (will be re-enabled via settings panel in future update)"
+        ],
+        "security": []
+      },
+      "notes": "Bug fixes and configuration improvements"
+    },
+    {
       "version": "1.0.23",
       "date": "2026-02-10",
       "releaseDate": "February 10, 2026",
@@ -48,5 +101,5 @@
       "notes": "Initial production release - Full system deployment with all core features"
     }
   ],
-  "latest": "1.0.23"
+  "latest": "1.0.26"
 }

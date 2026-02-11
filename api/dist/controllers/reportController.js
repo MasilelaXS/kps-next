@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupOldDrafts = exports.adminMarkReportEmailed = exports.adminEmailReportPDF = exports.adminGetReportHTML = exports.adminDownloadReportPDF = exports.updateCompleteReport = exports.createCompleteReport = exports.markNewEquipmentBeforeUpdate = exports.importReportFromJSON = exports.exportReportAsJSON = exports.adminUpdateReport = exports.archiveReport = exports.getPreFillData = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.forceDeclineReport = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
+exports.cleanupOldDrafts = exports.adminMarkReportEmailed = exports.adminEmailReportPDF = exports.adminGetReportHTML = exports.adminDownloadReportPDF = exports.updateCompleteReport = exports.createCompleteReport = exports.markNewEquipmentBeforeUpdate = exports.importReportFromJSON = exports.exportReportAsJSON = exports.adminUpdateReport = exports.archiveReport = exports.deleteInsectMonitor = exports.updateInsectMonitor = exports.addInsectMonitor = exports.updateFumigation = exports.deleteBaitStation = exports.updateBaitStation = exports.addBaitStation = exports.forceDeclineReport = exports.declineReport = exports.approveReport = exports.submitReport = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReportById = exports.getPendingReports = exports.getAdminReports = exports.getPCOReports = void 0;
 const auth_1 = require("../middleware/auth");
 const database_1 = require("../config/database");
 const logger_1 = require("../config/logger");
@@ -1248,66 +1248,6 @@ const deleteInsectMonitor = async (req, res) => {
     }
 };
 exports.deleteInsectMonitor = deleteInsectMonitor;
-const getPreFillData = async (req, res) => {
-    try {
-        const clientId = parseInt(req.params.clientId);
-        const pcoId = req.user.id;
-        const assignmentCheck = await (0, database_1.executeQuery)(`SELECT id FROM client_pco_assignments 
-       WHERE client_id = ? AND pco_id = ? AND status = 'active'`, [clientId, pcoId]);
-        if (assignmentCheck.length === 0) {
-            return res.status(403).json({
-                success: false,
-                message: 'You are not assigned to this client'
-            });
-        }
-        const lastReportQuery = `
-      SELECT id FROM reports 
-      WHERE client_id = ? AND status = 'approved'
-      ORDER BY service_date DESC, id DESC
-      LIMIT 1
-    `;
-        const lastReport = await (0, database_1.executeQuery)(lastReportQuery, [clientId]);
-        if (lastReport.length === 0) {
-            return res.json({
-                success: true,
-                message: 'No previous reports found',
-                data: null
-            });
-        }
-        const reportId = lastReport[0].id;
-        const baitStations = await (0, database_1.executeQuery)(`SELECT station_number, location FROM bait_stations WHERE report_id = ? ORDER BY location, CAST(station_number AS UNSIGNED)`, [reportId]);
-        const areas = await (0, database_1.executeQuery)(`SELECT area_name, is_other, other_description FROM fumigation_areas WHERE report_id = ?`, [reportId]);
-        const pests = await (0, database_1.executeQuery)(`SELECT pest_name, is_other, other_description FROM fumigation_target_pests WHERE report_id = ?`, [reportId]);
-        const chemicals = await (0, database_1.executeQuery)(`SELECT fc.chemical_id, c.name as chemical_name 
-       FROM fumigation_chemicals fc
-       JOIN chemicals c ON fc.chemical_id = c.id
-       WHERE fc.report_id = ?`, [reportId]);
-        const monitors = await (0, database_1.executeQuery)(`SELECT monitor_type FROM insect_monitors WHERE report_id = ? GROUP BY monitor_type`, [reportId]);
-        logger_1.logger.info(`Pre-fill data retrieved for client ${clientId} by PCO ${pcoId}`);
-        return res.json({
-            success: true,
-            message: 'Pre-fill data retrieved successfully',
-            data: {
-                bait_stations: baitStations,
-                fumigation: {
-                    areas,
-                    target_pests: pests,
-                    chemicals
-                },
-                insect_monitors: monitors
-            }
-        });
-    }
-    catch (error) {
-        logger_1.logger.error('Error in getPreFillData:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to retrieve pre-fill data',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-};
-exports.getPreFillData = getPreFillData;
 const archiveReport = async (req, res) => {
     try {
         if (!(0, auth_1.hasRole)(req.user, 'admin')) {
@@ -2129,7 +2069,8 @@ const createCompleteReport = async (req, res) => {
         const { client_id, report_type, service_date, next_service_date, pco_signature_data, client_signature_data, client_signature_name, general_remarks, bait_stations, fumigation } = req.body;
         await connection.beginTransaction();
         const [clientRows] = await connection.query(`SELECT total_bait_stations_inside, total_bait_stations_outside,
-              total_insect_monitors_light, total_insect_monitors_box
+              total_insect_monitors_light, total_insect_monitors_box,
+              company_name
        FROM clients WHERE id = ?`, [client_id]);
         if (clientRows.length === 0) {
             throw new Error('Client not found');
@@ -2274,7 +2215,7 @@ const createCompleteReport = async (req, res) => {
         logger_1.logger.info(`PCO ${pcoId} auto-unassigned (marked inactive) from client ${client_id} after report submission`);
         const [admins] = await connection.query(`SELECT id FROM users WHERE role = 'admin' OR role = 'both'`);
         for (const admin of admins) {
-            await (0, notificationController_1.createNotification)(admin.id, 'report_submitted', 'New Report Submitted', `A new report has been submitted by PCO for client ${client.client_name}`);
+            await (0, notificationController_1.createNotification)(admin.id, 'report_submitted', 'New Report Submitted', `A new report has been submitted by PCO for client ${client.company_name}`);
         }
         await connection.commit();
         logger_1.logger.info(`Report ${reportId} created and submitted by PCO ${pcoId}`);

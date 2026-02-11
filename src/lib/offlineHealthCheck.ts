@@ -5,6 +5,7 @@
 
 import { offlineCache } from './offlineCache';
 import { getOfflineQueueManager } from './offlineSync';
+import { storageQuotaManager } from './storageQuotaManager';
 
 const CLEANUP_AGE_DAYS = 30; // Remove successfully synced items older than 30 days
 const HEALTH_CHECK_INTERVAL = 60 * 60 * 1000; // Run every hour
@@ -56,29 +57,8 @@ class OfflineHealthManager {
    */
   private async checkStorageQuota(): Promise<void> {
     try {
-      if ('storage' in navigator && 'estimate' in navigator.storage) {
-        const estimate = await navigator.storage.estimate();
-        const usage = estimate.usage || 0;
-        const quota = estimate.quota || 0;
-        const percentUsed = quota > 0 ? (usage / quota) * 100 : 0;
-
-        console.log('[HealthCheck] Storage usage:', {
-          used: this.formatBytes(usage),
-          total: this.formatBytes(quota),
-          percentUsed: `${percentUsed.toFixed(2)}%`
-        });
-
-        // Warn if storage is getting full
-        if (percentUsed > 80) {
-          console.warn('[HealthCheck] Storage usage above 80%!');
-          
-          // Trigger aggressive cleanup
-          await this.aggressiveCleanup();
-        }
-      } else {
-        // Fallback for browsers that don't support storage.estimate()
-        console.log('[HealthCheck] Storage estimation not supported');
-      }
+      // Use storage quota manager for monitoring
+      await storageQuotaManager.monitorStorage();
     } catch (error) {
       console.error('[HealthCheck] Error checking storage quota:', error);
     }
@@ -129,27 +109,6 @@ class OfflineHealthManager {
   }
 
   /**
-   * Aggressive cleanup when storage is critically low
-   */
-  private async aggressiveCleanup(): Promise<void> {
-    console.warn('[HealthCheck] Running aggressive cleanup...');
-    
-    try {
-      // Clear all expired and old cache entries
-      offlineCache.clearExpired();
-      
-      // Could add more cleanup strategies here:
-      // - Remove old completed items from queue
-      // - Compress cached data
-      // - Remove oldest cached clients
-      
-      console.log('[HealthCheck] Aggressive cleanup completed');
-    } catch (error) {
-      console.error('[HealthCheck] Error during aggressive cleanup:', error);
-    }
-  }
-
-  /**
    * Get count of localStorage cache entries
    */
   private getCacheCount(): number {
@@ -158,19 +117,6 @@ class OfflineHealthManager {
     } catch {
       return 0;
     }
-  }
-
-  /**
-   * Format bytes for display
-   */
-  private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   }
 
   /**
@@ -216,20 +162,13 @@ class OfflineHealthManager {
     lastCheck: Date | null;
   }> {
     try {
-      // Storage info
-      let storage = null;
-      if ('storage' in navigator && 'estimate' in navigator.storage) {
-        const estimate = await navigator.storage.estimate();
-        const usage = estimate.usage || 0;
-        const quota = estimate.quota || 0;
-        const percentUsed = quota > 0 ? (usage / quota) * 100 : 0;
-        
-        storage = {
-          used: this.formatBytes(usage),
-          total: this.formatBytes(quota),
-          percentUsed: parseFloat(percentUsed.toFixed(2))
-        };
-      }
+      // Storage info from storageQuotaManager
+      const storageInfo = await storageQuotaManager.getStorageInfo();
+      const storage = {
+        used: storageQuotaManager.formatBytes(storageInfo.usage),
+        total: storageQuotaManager.formatBytes(storageInfo.quota),
+        percentUsed: parseFloat((storageInfo.percentUsed * 100).toFixed(2))
+      };
 
       // Cache info
       const cacheEntries = this.getCacheCount();

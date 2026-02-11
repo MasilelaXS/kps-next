@@ -7,7 +7,6 @@ const reportController_1 = require("../controllers/reportController");
 const reportValidation_1 = require("../validation/reportValidation");
 const router = (0, express_1.Router)();
 router.get('/pco/reports', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.reportListQuerySchema, 'query'), reportController_1.getPCOReports);
-router.get('/pco/reports/pre-fill/:clientId', auth_1.authenticateToken, reportController_1.getPreFillData);
 router.get('/pco/reports/:id', auth_1.authenticateToken, reportController_1.getReportById);
 router.post('/pco/reports', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.createReportSchema), reportController_1.createReport);
 router.post('/pco/reports/complete', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.createCompleteReportSchema), reportController_1.createCompleteReport);

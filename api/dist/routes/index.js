@@ -29,17 +29,17 @@ router.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || 'development',
-        version: env_1.config.server.version
+        version: (0, env_1.getVersionFromPackageJson)()
     });
 });
 router.get('/version', (req, res) => {
-    res.json({ version: env_1.config.server.version });
+    res.json({ version: (0, env_1.getVersionFromPackageJson)() });
 });
 router.get('/', (req, res) => {
     res.json({
         success: true,
         message: 'Welcome to KPS Pest Control Management API',
-        version: env_1.config.server.version,
+        version: (0, env_1.getVersionFromPackageJson)(),
         timestamp: new Date().toISOString(),
         endpoints: {
             authentication: '/api/auth',

@@ -78,12 +78,16 @@ function NewReportContent() {
           setPcoSignature(report.pco_signature_data);
         }
         
-        // Fetch client data - try sync first, then fallback to direct API
+        // Fetch client data - try sync first with offline fallback
         let foundClient = null;
-        const clientResponse = await apiCall(`/api/pco/sync/clients?include_contacts=true`);
-        
-        if (clientResponse.success && Array.isArray(clientResponse.data)) {
-          foundClient = clientResponse.data.find((c: any) => c.id === report.client_id);
+        try {
+          const clientResponse = await apiCall(`/api/pco/sync/clients?include_contacts=true`);
+          
+          if (clientResponse.success && Array.isArray(clientResponse.data)) {
+            foundClient = clientResponse.data.find((c: any) => c.id === report.client_id);
+          }
+        } catch (clientError) {
+          console.log('Client API call failed, using report data:', clientError);
         }
         
         // If client not found in sync (not assigned), use client data from report
@@ -127,7 +131,30 @@ function NewReportContent() {
             total_insect_monitors_box: foundClient.total_insect_monitors_box || 0
           });
         } else {
-          setError('Client information not available for this report');
+          // Use report data as fallback if no client found
+          if (report.company_name) {
+            const clientAddress = [
+              report.address_line1,
+              report.address_line2,
+              report.city,
+              report.state,
+              report.postal_code
+            ].filter(Boolean).join(', ');
+            
+            setClient({
+              id: report.client_id,
+              company_name: report.company_name,
+              address: clientAddress || 'N/A',
+              is_active: true,
+              contacts: [],
+              total_bait_stations_inside: report.total_bait_stations_inside || 0,
+              total_bait_stations_outside: report.total_bait_stations_outside || 0,
+              total_insect_monitors_light: report.total_insect_monitors_light || 0,
+              total_insect_monitors_box: report.total_insect_monitors_box || 0
+            });
+          } else {
+            console.warn('No client information available');
+          }
         }
         
         // Note: Bait stations, fumigation areas, and monitors will be pre-populated
@@ -138,7 +165,7 @@ function NewReportContent() {
       }
     } catch (error) {
       console.error('Error fetching report:', error);
-      setError('Failed to load report information');
+      setError('Failed to load report information. Please try again or sync data while online.');
     } finally {
       setLoading(false);
     }
@@ -148,52 +175,70 @@ function NewReportContent() {
     try {
       setLoading(true);
       
-      // Check if offline
-      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      let foundClient = null;
       
-      // Fetch assigned clients from sync endpoint
-      const response = await apiCall('/api/pco/sync/clients?include_contacts=true');
-      
-      if (response.success && Array.isArray(response.data)) {
-        // Find the specific client by ID
-        const foundClient = response.data.find((c: any) => c.id === parseInt(clientId!));
+      // Try API first, then fallback to cache
+      try {
+        const response = await apiCall('/api/pco/sync/clients?include_contacts=true');
         
-        if (foundClient) {
-          setClient({
-            id: foundClient.id,
-            company_name: foundClient.company_name,
-            address: [
-              foundClient.address_line1,
-              foundClient.address_line2,
-              foundClient.city,
-              foundClient.state,
-              foundClient.postal_code
-            ].filter(Boolean).join(', '),
-            is_active: foundClient.status === 'active',
-            contacts: foundClient.contacts ? JSON.parse(foundClient.contacts) : [],
-            total_bait_stations_inside: foundClient.total_bait_stations_inside || 0,
-            total_bait_stations_outside: foundClient.total_bait_stations_outside || 0,
-            total_insect_monitors_light: foundClient.total_insect_monitors_light || 0,
-            total_insect_monitors_box: foundClient.total_insect_monitors_box || 0
-          });
+        if (response.success && Array.isArray(response.data)) {
+          foundClient = response.data.find((c: any) => c.id === parseInt(clientId!));
+        }
+      } catch (apiError: any) {
+        console.log('[NewReport] API call failed, using cache:', apiError.message);
+      }
+      
+      // If API failed or client not found, try cache
+      if (!foundClient) {
+        try {
+          const { clientCache } = await import('@/lib/clientCache');
+          const cachedClients = clientCache.getAssignedClients();
           
-          // Check if client is active
-          if (foundClient.status !== 'active') {
-            setError('This client is currently inactive. Cannot create report.');
+          if (cachedClients && cachedClients.length > 0) {
+            foundClient = cachedClients.find((c: any) => c.id === parseInt(clientId!));
+            console.log('[NewReport] Using cached client data');
           }
-        } else {
-          setError('Client not found or not assigned to you');
+        } catch (cacheError) {
+          console.error('[NewReport] Cache lookup failed:', cacheError);
+        }
+      }
+      
+      if (foundClient) {
+        setClient({
+          id: foundClient.id,
+          company_name: foundClient.company_name,
+          address: [
+            foundClient.address_line1,
+            foundClient.address_line2,
+            foundClient.city,
+            foundClient.state,
+            foundClient.postal_code
+          ].filter(Boolean).join(', '),
+          is_active: foundClient.status === 'active',
+          contacts: foundClient.contacts ? (typeof foundClient.contacts === 'string' ? JSON.parse(foundClient.contacts) : foundClient.contacts) : [],
+          total_bait_stations_inside: foundClient.total_bait_stations_inside || 0,
+          total_bait_stations_outside: foundClient.total_bait_stations_outside || 0,
+          total_insect_monitors_light: foundClient.total_insect_monitors_light || 0,
+          total_insect_monitors_box: foundClient.total_insect_monitors_box || 0
+        });
+        
+        // Check if client is active
+        if (foundClient.status !== 'active') {
+          setError('This client is currently inactive. Cannot create report.');
         }
       } else {
-        setError('Failed to load client data');
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        if (!isOnline) {
+          setError('You are offline and this client is not cached. Please connect to the internet or sync data while online.');
+        } else {
+          setError('Client not found. Please ensure you have been assigned to this client.');
+        }
       }
     } catch (error: any) {
-      console.error('Error fetching client:', error);
-      
-      // Check if it's an offline error
+      console.error('[NewReport] Error fetching client:', error);
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-      if (!isOnline || error.message?.includes('cached data')) {
-        setError('You are currently offline. Please connect to the internet to create a new report, or continue with an existing draft from your schedule.');
+      if (!isOnline) {
+        setError('You are offline. Please connect to the internet or ensure you have synced data while online.');
       } else {
         setError('Failed to load client information. Please try again.');
       }

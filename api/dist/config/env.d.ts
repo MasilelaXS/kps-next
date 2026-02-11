@@ -1,3 +1,4 @@
+export declare const getVersionFromPackageJson: () => string;
 export declare const config: {
     server: {
         env: string;

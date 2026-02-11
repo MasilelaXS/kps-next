@@ -16,8 +16,8 @@ import { productionConfig } from './production.config';
 // Load environment variables - use process.cwd() which is the api folder
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-// Read version from package.json
-const getVersionFromPackageJson = (): string => {
+// Read version from package.json (exported for dynamic version checks)
+export const getVersionFromPackageJson = (): string => {
   try {
     const packagePath = path.resolve(process.cwd(), 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));

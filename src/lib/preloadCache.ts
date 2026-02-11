@@ -102,7 +102,8 @@ class PreloadCacheManager {
         await clientCache.downloadAllClients();
         
         // Also preload last reports for all assigned clients (for autopopulate)
-        await this.preloadLastReportsForClients();
+        // DISABLED: Will re-enable via settings panel later
+        // await this.preloadLastReportsForClients();
       }
 
       // Update last preload time
@@ -139,7 +140,9 @@ class PreloadCacheManager {
   /**
    * Preload last reports for all assigned clients (for bait station autopopulation)
    * This is called after clients are cached to enable offline autopopulate
+   * TEMPORARILY DISABLED - Will add settings toggle later
    */
+  /* DISABLED FOR NOW
   private async preloadLastReportsForClients(): Promise<void> {
     try {
       console.log('[Preload] Fetching last reports for assigned clients...');
@@ -191,6 +194,7 @@ class PreloadCacheManager {
       console.error('[Preload] Failed to preload last reports:', error);
     }
   }
+  */
 
   /**
    * Force preload regardless of time

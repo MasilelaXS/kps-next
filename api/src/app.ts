@@ -14,7 +14,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 
-import { config } from './config/env';
+import { config, getVersionFromPackageJson } from './config/env';
 import { logger, logRequest } from './config/logger';
 import { swaggerSpec } from './config/swagger';
 
@@ -110,7 +110,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    version: config.server.version,
+    version: getVersionFromPackageJson(), // Always read fresh from package.json
     environment: config.server.env,
     database: 'connected' // Will be updated after DB check
   });
@@ -123,7 +123,7 @@ app.get('/api/status', (req, res) => {
     message: 'KPS Pest Control API is running',
     data: {
       name: config.server.name,
-      version: config.server.version,
+      version: getVersionFromPackageJson(), // Always read fresh from package.json
       environment: config.server.env,
       timestamp: new Date().toISOString(),
     }
@@ -134,7 +134,7 @@ app.get('/api/status', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to KPS Pest Control Management API',
-    version: config.server.version,
+    version: getVersionFromPackageJson(), // Always read fresh from package.json
     documentation: '/api-docs',
     health: '/health',
     status: '/api/status'

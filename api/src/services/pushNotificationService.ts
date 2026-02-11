@@ -175,8 +175,8 @@ export const sendPushNotification = async (
     const notificationPayload = JSON.stringify({
       title: payload.title,
       body: payload.body,
-      icon: payload.icon || '/icons/192.png',
-      badge: payload.badge || '/icons/192.png',
+      icon: payload.icon || '/icons/192.png', // Large notification icon (full color)
+      badge: payload.badge || '/notification-badge.svg', // Status bar icon (monochrome)
       data: payload.data || {},
       timestamp: Date.now()
     });

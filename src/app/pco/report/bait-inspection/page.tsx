@@ -170,7 +170,9 @@ function BaitInspectionContent() {
         }
       }
 
-      // Fetch previous report data for pre-filling (only if not in edit mode)
+      // DISABLED: Fetch previous report data for pre-filling (only if not in edit mode)
+      // Will re-enable this via settings panel later
+      /*
       if (reportData.clientId && !reportData.isEditMode) {
         try {
           const previousReportResponse = await apiCall(`/api/pco/reports/last-for-client/${reportData.clientId}`);
@@ -181,6 +183,7 @@ function BaitInspectionContent() {
           // Previous report data not available
         }
       }
+      */
 
       setLoading(false);
     } catch (error: any) {
@@ -250,6 +253,9 @@ function BaitInspectionContent() {
       return;
     }
 
+    // DISABLED: Check if this matches a previous report station
+    // Will re-enable via settings panel later
+    /*
     // Check if this matches a previous report station and it wasn't already pre-filled
     const matchingPrevious = previousStations.find(
       (prev: any) => String(prev.location) === String(station.location) && String(prev.station_number) === String(station.stationNumber)
@@ -273,6 +279,7 @@ function BaitInspectionContent() {
       );
       return;
     }
+    */
 
     // No previous data or user already made a choice, save normally
     saveStationToList(station);

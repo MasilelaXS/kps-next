@@ -113,10 +113,18 @@ export const apiCall = async (
   }
 
   try {
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
     const response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     });
+
+    // Clear timeout if request completes
+    clearTimeout(timeoutId);
 
     // Handle authentication errors
     if (response.status === 401 || response.status === 403) {
@@ -162,8 +170,13 @@ export const apiCall = async (
     // Enhanced error logging
     console.error(`API call failed: ${url}`, error);
     
-    // Check if it's a network error (no response from server)
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    // Check if it's a network error (no response from server) or timeout
+    const isNetworkError = error instanceof TypeError ||
+      error.name === 'AbortError' ||
+      error.message?.includes('fetch') ||
+      error.message?.includes('aborted');
+    
+    if (isNetworkError) {
       // Try cache as fallback for GET requests
       if (isGet && !options.skipCache && typeof window !== 'undefined') {
         const { offlineCache } = await import('./offlineCache');

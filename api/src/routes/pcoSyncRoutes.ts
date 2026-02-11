@@ -111,12 +111,15 @@ router.patch('/pco/clients/:id/update-counts', authenticateToken, validateReques
  * GET /api/pco/reports/last-for-client/:clientId
  * Get the last approved report for a client with full station details for pre-filling
  * Returns complete bait station data to pre-populate form fields
+ * TEMPORARILY DISABLED - Will add settings toggle later
  */
+/* DISABLED FOR NOW
 router.get('/pco/reports/last-for-client/:clientId', authenticateToken, async (req, res, next) => {
   // This route is handled inline for simplicity - imports getLastReportForClient from controller
   const { getLastReportForClient } = require('../controllers/pcoSyncController');
   return getLastReportForClient(req, res, next);
 });
+*/
 
 /**
  * GET /api/pco/clients/available

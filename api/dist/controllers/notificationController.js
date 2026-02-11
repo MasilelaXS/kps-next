@@ -14,6 +14,7 @@ const createNotification = async (userId, type, title, message) => {
             title,
             body: message,
             icon: '/icons/192.png',
+            badge: '/notification-badge.svg',
             data: {
                 type,
                 notificationId,

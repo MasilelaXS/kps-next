@@ -117,8 +117,9 @@ class ClientCacheManager {
       console.log(`[ClientCache] Downloaded and cached ${assignedCount} assigned clients`);
       console.log(`[ClientCache] Downloaded and cached ${chemicalsCount} chemicals`);
 
-      // Preload previous report data for assigned clients (used for pre-fill)
-      await this.preloadLastReportsForClients(clients);
+      // DISABLED: Preload previous report data for assigned clients (used for pre-fill)
+      // Will re-enable this via settings panel later
+      // await this.preloadLastReportsForClients(clients);
       
       // Also download available (unassigned) clients for browsing
       const availableResult = await this.downloadAvailableClients();
@@ -158,7 +159,9 @@ class ClientCacheManager {
 
   /**
    * Preload last report data for assigned clients to enable offline pre-fill
+   * TEMPORARILY DISABLED - Will add settings toggle later
    */
+  /* DISABLED FOR NOW
   private async preloadLastReportsForClients(
     clients: Array<{ id: number; company_name?: string }>
   ): Promise<void> {
@@ -191,6 +194,7 @@ class ClientCacheManager {
       }
     }
   }
+  */
 
   /**
    * Download available clients for self-assignment browsing

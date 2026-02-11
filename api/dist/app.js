@@ -81,7 +81,7 @@ app.get('/health', (req, res) => {
         status: 'ok',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        version: env_1.config.server.version,
+        version: (0, env_1.getVersionFromPackageJson)(),
         environment: env_1.config.server.env,
         database: 'connected'
     });
@@ -92,7 +92,7 @@ app.get('/api/status', (req, res) => {
         message: 'KPS Pest Control API is running',
         data: {
             name: env_1.config.server.name,
-            version: env_1.config.server.version,
+            version: (0, env_1.getVersionFromPackageJson)(),
             environment: env_1.config.server.env,
             timestamp: new Date().toISOString(),
         }
@@ -101,7 +101,7 @@ app.get('/api/status', (req, res) => {
 app.get('/', (req, res) => {
     res.json({
         message: 'Welcome to KPS Pest Control Management API',
-        version: env_1.config.server.version,
+        version: (0, env_1.getVersionFromPackageJson)(),
         documentation: '/api-docs',
         health: '/health',
         status: '/api/status'

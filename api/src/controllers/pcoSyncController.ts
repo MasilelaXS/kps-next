@@ -844,7 +844,10 @@ export const updateClientCounts = async (req: Request, res: Response) => {
  * - Only returns approved reports (not drafts or pending)
  * - PCO must be assigned to the client
  * - Returns complete station data for exact pre-fill matching
+ * 
+ * TEMPORARILY DISABLED - Will add settings toggle later
  */
+/* DISABLED FOR NOW
 export const getLastReportForClient = async (req: Request, res: Response) => {
   try {
     const pcoId = req.user!.id;
@@ -959,6 +962,7 @@ export const getLastReportForClient = async (req: Request, res: Response) => {
     });
   }
 };
+*/
 
 /**
  * GET /api/pco/clients/available

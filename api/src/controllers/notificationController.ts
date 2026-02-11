@@ -34,7 +34,8 @@ export const createNotification = async (
     sendPushNotification(userId, {
       title,
       body: message,
-      icon: '/icons/192.png',
+      icon: '/icons/192.png', // Large notification icon (full color)
+      badge: '/notification-badge.svg', // Status bar icon (monochrome)
       data: {
         type,
         notificationId,

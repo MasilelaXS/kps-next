@@ -17,10 +17,6 @@ router.post('/pco/sync/upload', auth_1.authenticateToken, (0, validation_1.valid
 router.get('/pco/data/export', auth_1.authenticateToken, pcoSyncController_1.exportData);
 router.get('/pco/chemicals/:usage_type', auth_1.authenticateToken, chemicalController_1.ChemicalController.getChemicalsForPco);
 router.patch('/pco/clients/:id/update-counts', auth_1.authenticateToken, (0, validation_1.validateRequest)(syncValidation_1.updateClientCountsSchema), pcoSyncController_1.updateClientCounts);
-router.get('/pco/reports/last-for-client/:clientId', auth_1.authenticateToken, async (req, res, next) => {
-    const { getLastReportForClient } = require('../controllers/pcoSyncController');
-    return getLastReportForClient(req, res, next);
-});
 router.get('/pco/clients/available', auth_1.authenticateToken, pcoSyncController_1.getAvailableClients);
 router.post('/pco/clients', auth_1.authenticateToken, clientValidation_1.validateClientInput, clientController_1.ClientController.createClient);
 router.post('/pco/assignments/self-assign', auth_1.authenticateToken, pcoSyncController_1.selfAssignClient);

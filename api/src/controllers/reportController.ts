@@ -1843,11 +1843,14 @@ export const deleteInsectMonitor = async (req: Request, res: Response) => {
 // ============================================================================
 // PRE-FILL DATA
 // ============================================================================
+// DISABLED: Will be re-enabled in settings panel later
 
 /**
  * GET /api/pco/reports/pre-fill/:clientId
  * Get pre-fill data from last APPROVED report
+ * TEMPORARILY DISABLED - Will add settings toggle later
  */
+/* DISABLED FOR NOW
 export const getPreFillData = async (req: Request, res: Response) => {
   try {
     const clientId = parseInt(req.params.clientId);
@@ -1945,6 +1948,7 @@ export const getPreFillData = async (req: Request, res: Response) => {
     });
   }
 };
+*/
 
 /**
  * POST /api/admin/reports/:id/archive
@@ -3236,7 +3240,8 @@ export const createCompleteReport = async (req: Request, res: Response) => {
     // Step 1: Get client's current equipment baseline
     const [clientRows] = await connection.query<RowDataPacket[]>(
       `SELECT total_bait_stations_inside, total_bait_stations_outside,
-              total_insect_monitors_light, total_insect_monitors_box
+              total_insect_monitors_light, total_insect_monitors_box,
+              company_name
        FROM clients WHERE id = ?`,
       [client_id]
     );
@@ -3474,7 +3479,7 @@ export const createCompleteReport = async (req: Request, res: Response) => {
         admin.id,
         'report_submitted',
         'New Report Submitted',
-        `A new report has been submitted by PCO for client ${client.client_name}`
+        `A new report has been submitted by PCO for client ${client.company_name}`
       );
     }
 

@@ -17,7 +17,6 @@ export declare const updateFumigation: (req: Request, res: Response) => Promise<
 export declare const addInsectMonitor: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const updateInsectMonitor: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const deleteInsectMonitor: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
-export declare const getPreFillData: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const archiveReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const adminUpdateReport: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const exportReportAsJSON: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;

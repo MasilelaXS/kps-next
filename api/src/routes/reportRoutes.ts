@@ -44,8 +44,8 @@ import {
   updateInsectMonitor,
   deleteInsectMonitor,
   
-  // Pre-fill Data
-  getPreFillData,
+  // Pre-fill Data - DISABLED FOR NOW
+  // getPreFillData,
   
   // Equipment Tracking
   markNewEquipmentBeforeUpdate,
@@ -96,12 +96,15 @@ router.get(
 /**
  * GET /api/pco/reports/pre-fill/:clientId
  * Get pre-fill data from last approved report for client
+ * TEMPORARILY DISABLED - Will add settings toggle later
  */
+/* DISABLED FOR NOW
 router.get(
   '/pco/reports/pre-fill/:clientId',
   authenticateToken,
   getPreFillData
 );
+*/
 
 /**
  * GET /api/pco/reports/:id
