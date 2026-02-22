@@ -85,13 +85,18 @@ export class PDFService {
       const pdfPath = path.join(this.tempDir, filename);
       const htmlPath = path.join(this.tempDir, `Report_${reportId}_${Date.now()}.html`);
 
-      const html = await this.buildReportHtml(data, reportType);
-      await fs.writeFile(htmlPath, html, 'utf8');
+      try {
+        const html = await this.buildReportHtml(data, reportType);
+        await fs.writeFile(htmlPath, html, 'utf8');
 
-      await this.generatePdfFromHtml(htmlPath, pdfPath);
+        await this.generatePdfFromHtml(htmlPath, pdfPath);
 
-      logger.info('PDF generated successfully', { reportId, filename });
-      return pdfPath;
+        logger.info('PDF generated successfully', { reportId, filename });
+        return pdfPath;
+      } finally {
+        // Always clean up the temp HTML file regardless of success or failure
+        fs.unlink(htmlPath).catch(() => {});
+      }
     } catch (error) {
       logger.error('PDF generation error', {
         reportId,
@@ -113,9 +118,11 @@ export class PDFService {
   private async generatePdfFromHtml(htmlPath: string, pdfPath: string) {
     await fs.access(this.pdfScriptPath);
 
+    const TIMEOUT_MS = 60000; // 60 seconds
+
     try {
       const { stdout, stderr } = await execFileAsync(this.phpBinary, [this.pdfScriptPath, htmlPath, pdfPath], {
-        timeout: 120000
+        timeout: TIMEOUT_MS
       });
 
       if (stdout) {
@@ -124,7 +131,16 @@ export class PDFService {
       if (stderr) {
         logger.warn('Dompdf warnings', { stderr: stderr.toString() });
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Clean up incomplete PDF file if it was partially written
+      fs.unlink(pdfPath).catch(() => {});
+
+      const isTimeout = error?.killed === true || error?.signal === 'SIGTERM' || (error?.message || '').includes('timed out');
+      if (isTimeout) {
+        logger.error('Dompdf timed out', { timeout: TIMEOUT_MS, htmlPath });
+        throw new Error(`PDF generation timed out after ${TIMEOUT_MS / 1000}s. The report may be too large.`);
+      }
+
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Dompdf execution failed', { error: message });
       throw new Error(`Dompdf failed: ${message}`);
@@ -592,24 +608,52 @@ ${noTreatmentNote}
   }
 
   private renderInsectMonitoring(monitors: any[]) {
+    if (!monitors.length) return '';
+
     const lightMonitors = monitors.filter(m => m.monitor_type?.toLowerCase() === 'light');
+    const boxMonitors = monitors.filter(m => m.monitor_type?.toLowerCase() === 'box');
 
-    if (!lightMonitors.length) return '';
+    if (!lightMonitors.length && !boxMonitors.length) return '';
 
-    const rows = lightMonitors.map((monitor: any) => `
+    const lightRows = lightMonitors.map((monitor: any) => {
+      const lightStatus = (monitor.light_condition || 'na').toLowerCase();
+      const lightDisplay = lightStatus === 'good'
+        ? 'Good'
+        : lightStatus === 'faulty'
+          ? `Faulty${monitor.light_faulty_type && monitor.light_faulty_type !== 'na' ? ` (${this.escapeHtml(monitor.light_faulty_type)})` : ''}`
+          : 'N/A';
+
+      return `
 <tr>
   <td>${this.escapeHtml(monitor.monitor_number || '-')}</td>
   <td>${this.escapeHtml(monitor.location || '-')}</td>
   <td>${this.escapeHtml(monitor.monitor_condition || '-')}</td>
-  <td>${this.escapeHtml(monitor.light_condition || '-')}</td>
+  <td>${lightDisplay}</td>
+  <td>${monitor.tubes_replaced ? 'Replaced' : 'Good'}</td>
+  <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
+  <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
+  <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
+  <td>${monitor.is_new ? 'Yes' : 'No'}</td>
+</tr>`;
+    }).join('');
+
+    const boxRows = boxMonitors.map((monitor: any) => `
+<tr>
+  <td>${this.escapeHtml(monitor.monitor_number || '-')}</td>
+  <td>${this.escapeHtml(monitor.location || '-')}</td>
+  <td>${this.escapeHtml(monitor.monitor_condition || '-')}</td>
   <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
   <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
   <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
   <td>${monitor.is_new ? 'Yes' : 'No'}</td>
 </tr>`).join('');
 
-    return `
-<div class="section-title-red">INSECT MONITORING</div>
+    // Glue board summary calculations
+    const lightGlueBoardsReplaced = lightMonitors.filter(m => m.glue_board_replaced).length * 2;
+    const boxGlueBoardsReplaced = boxMonitors.filter(m => m.glue_board_replaced).length * 1;
+    const totalGlueBoardsReplaced = lightGlueBoardsReplaced + boxGlueBoardsReplaced;
+
+    const lightSection = lightMonitors.length ? `
 <div style="margin-top:6px;" class="fumigation-label">LIGHT TRAPS (${lightMonitors.length})</div>
 <table class="data-table fumigation-table">
   <tr>
@@ -617,13 +661,68 @@ ${noTreatmentNote}
     <th>Location</th>
     <th>Condition</th>
     <th>Light Status</th>
+    <th>Tubes</th>
     <th>Glue Board</th>
     <th>Warning Sign</th>
     <th>Serviced</th>
     <th>New</th>
   </tr>
-  ${rows}
-</table>
+  ${lightRows}
+</table>` : '';
+
+    const boxSection = boxMonitors.length ? `
+<div style="margin-top:6px;" class="fumigation-label">BOX MONITORS (${boxMonitors.length})</div>
+<table class="data-table fumigation-table">
+  <tr>
+    <th>No</th>
+    <th>Location</th>
+    <th>Condition</th>
+    <th>Glue Board</th>
+    <th>Warning Sign</th>
+    <th>Serviced</th>
+    <th>New</th>
+  </tr>
+  ${boxRows}
+</table>` : '';
+
+    const summaryRows = [
+      lightMonitors.length ? `
+<tr>
+  <td>Light Traps</td>
+  <td>${lightMonitors.length}</td>
+  <td style="font-size:6.5pt;color:#555;">× 2 per monitor</td>
+  <td><strong>${lightGlueBoardsReplaced}</strong></td>
+</tr>` : '',
+      boxMonitors.length ? `
+<tr>
+  <td>Box Monitors</td>
+  <td>${boxMonitors.length}</td>
+  <td style="font-size:6.5pt;color:#555;">× 1 per monitor</td>
+  <td><strong>${boxGlueBoardsReplaced}</strong></td>
+</tr>` : '',
+    ].join('');
+
+    const summarySection = `
+<div style="margin-top:8px;" class="fumigation-label">GLUE BOARD SUMMARY</div>
+<table class="data-table fumigation-table">
+  <tr>
+    <th style="width:35%">Monitor Type</th>
+    <th style="width:20%">Monitors Replaced</th>
+    <th style="width:25%">Rate</th>
+    <th style="width:20%">Glue Boards</th>
+  </tr>
+  ${summaryRows}
+  <tr style="background:#3a0f16;">
+    <td colspan="3"><strong style="color:#fff;">Total Glue Boards Replaced</strong></td>
+    <td><strong style="color:#fff;">${totalGlueBoardsReplaced}</strong></td>
+  </tr>
+</table>`;
+
+    return `
+<div class="section-title-red">INSECT MONITORING</div>
+${lightSection}
+${boxSection}
+${summarySection}
 `;
   }
 

@@ -1,6 +1,31 @@
 {
   "changelog": [
     {
+      "version": "1.0.29",
+      "date": "2026-02-22",
+      "releaseDate": "February 22, 2026",
+      "changes": {
+        "added": [
+          "PDF report: Insect monitoring section now renders both Light Traps and Box Monitors as separate subsections with type-appropriate columns",
+          "PDF report: Glue board summary table at bottom of insect monitoring section (light traps × 2, box monitors × 1)",
+          "PDF report: Light trap status now displays human-readable values (Good / Faulty with type / N/A) instead of raw DB values",
+          "PDF report: Tubes replaced column added to light traps table"
+        ],
+        "changed": [
+          "PDF generation timeout reduced from 120s to 60s with proper timeout error detection and partial file cleanup"
+        ],
+        "fixed": [
+          "Update modal no longer appears on every app load in development mode or when version is not yet embedded",
+          "Service worker no longer force-reloads all clients on activation, preventing interference with the update flow",
+          "PDF temp HTML file is now always cleaned up after generation (previously leaked on PHP failure)",
+          "PDF insect monitoring: box monitors were previously silently dropped and never rendered"
+        ],
+        "removed": [],
+        "security": []
+      },
+      "notes": "PDF report improvements for insect monitoring section, versioning stability fixes, and PDF service reliability improvements"
+    },
+    {
       "version": "1.0.26",
       "date": "2026-02-11",
       "releaseDate": "February 11, 2026",
@@ -101,5 +126,5 @@
       "notes": "Initial production release - Full system deployment with all core features"
     }
   ],
-  "latest": "1.0.26"
+  "latest": "1.0.29"
 }

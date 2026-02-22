@@ -1,6 +1,6 @@
 {
   "name": "kps-api",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "description": "KPS Pest Control Management System - Backend API",
   "main": "app.js",
   "scripts": {

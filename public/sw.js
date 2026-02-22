@@ -103,13 +103,8 @@ self.addEventListener('activate', (event) => {
       }
     }));
     
-    // Force reload all clients to get fresh pages
-    const clients = await self.clients.matchAll({ type: 'window' });
-    clients.forEach(client => {
-      console.log('[SW] Reloading client:', client.url);
-      client.navigate(client.url);
-    });
-    
+    // Don't force reload clients - let the app's version check handle updates
+    // This prevents interference with the controlled update flow
     console.log('[SW] Service worker activated and claiming clients');
     return self.clients.claim();
   })());

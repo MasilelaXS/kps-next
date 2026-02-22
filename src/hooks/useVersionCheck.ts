@@ -28,8 +28,18 @@ const getEmbeddedVersion = (): string => {
 
 // Compare semantic versions (returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2)
 const compareVersions = (version1: string, version2: string): number => {
+  // Handle invalid versions
+  if (!version1 || !version2 || version1 === 'dev' || version2 === 'dev') {
+    return 0; // Treat invalid versions as equal (no update needed)
+  }
+  
   const v1parts = version1.split('.').map(Number);
   const v2parts = version2.split('.').map(Number);
+  
+  // Check if parsing resulted in valid numbers
+  if (v1parts.some(isNaN) || v2parts.some(isNaN)) {
+    return 0; // Invalid version format, treat as equal
+  }
   
   for (let i = 0; i < 3; i++) {
     const v1part = v1parts[i] || 0;
@@ -84,6 +94,13 @@ export function useVersionCheck(): UseVersionCheckReturn {
 
   const checkVersion = async () => {
     try {
+      // Skip version check in development mode
+      if (currentVersion === 'dev' || currentVersion === DEFAULT_APP_VERSION) {
+        console.log('[Version] Skipping check - running in dev mode');
+        setNeedsUpdate(false);
+        return;
+      }
+
       // Check if we just performed an update (prevent infinite loop)
       const updateTimestamp = localStorage.getItem(STORAGE_KEY_UPDATE_TIMESTAMP);
       if (updateTimestamp) {
@@ -142,6 +159,12 @@ export function useVersionCheck(): UseVersionCheckReturn {
       }
 
       const latestVer = serverVersion.version;
+      
+      console.log('[Version] Check complete:', {
+        current: currentVersion,
+        latest: latestVer,
+        dismissed: dismissedVersion
+      });
       
       // Compare versions
       const comparison = compareVersions(latestVer, currentVersion);
