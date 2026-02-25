@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import {
   Activity, Server, Database, Users, FileText, Shield, RefreshCw,
   AlertTriangle, CheckCircle, XCircle, Clock, Cpu, MemoryStick,
-  Table, LogIn, TrendingUp, Layers, Bug, Terminal, ChevronDown, ChevronUp
+  Table, LogIn, TrendingUp, Layers, Bug, Terminal, ChevronDown, ChevronUp,
+  BookOpen, Tag, Plus, Wrench, Trash2, Lock
 } from 'lucide-react';
 
 const MONITOR_KEY = 'dannel_monitor_kps_2026';
@@ -140,6 +141,8 @@ function MonitorContent() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState(30);
   const [refreshing, setRefreshing] = useState(false);
+  const [changelog, setChangelog] = useState<any[]>([]);
+  const [changelogExpanded, setChangelogExpanded] = useState(false);
 
   const fetchData = useCallback(async () => {
     setRefreshing(true);
@@ -162,6 +165,10 @@ function MonitorContent() {
   useEffect(() => {
     if (key !== MONITOR_KEY) return;
     fetchData();
+    fetch('/changelog.json')
+      .then(r => r.json())
+      .then(d => setChangelog(d.changelog || []))
+      .catch(() => {});
   }, [fetchData, key]);
 
   useEffect(() => {
@@ -511,6 +518,74 @@ function MonitorContent() {
         {/* ── Logs ── */}
         <LogPanel logs={errorLogs} title="Error Log" icon={Bug} />
         <LogPanel logs={combinedLogs} title="Combined Log" icon={Terminal} />
+
+        {/* ── Changelog ── */}
+        {changelog.length > 0 && (
+          <div className="bg-gray-800 rounded-xl border border-gray-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Changelog</span>
+                <span className="text-xs text-gray-500">{changelog.length} versions</span>
+              </div>
+              {changelog.length > 3 && (
+                <button onClick={() => setChangelogExpanded(e => !e)}
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                  {changelogExpanded
+                    ? <><ChevronUp className="w-3 h-3" />Show fewer</>
+                    : <><ChevronDown className="w-3 h-3" />Show all {changelog.length} versions</>}
+                </button>
+              )}
+            </div>
+            <div className="divide-y divide-gray-700/50">
+              {(changelogExpanded ? changelog : changelog.slice(0, 3)).map((entry: any, i: number) => {
+                const cats = [
+                  { key: 'added',    icon: Plus,   color: 'text-green-400',  bg: 'bg-green-900/30',  label: 'Added' },
+                  { key: 'changed',  icon: Wrench, color: 'text-blue-400',   bg: 'bg-blue-900/30',   label: 'Changed' },
+                  { key: 'fixed',    icon: Tag,    color: 'text-yellow-400', bg: 'bg-yellow-900/30', label: 'Fixed' },
+                  { key: 'removed',  icon: Trash2, color: 'text-red-400',    bg: 'bg-red-900/30',    label: 'Removed' },
+                  { key: 'security', icon: Lock,   color: 'text-purple-400', bg: 'bg-purple-900/30', label: 'Security' },
+                ];
+                const hasChanges = cats.some(c => (entry.changes?.[c.key]?.length ?? 0) > 0);
+                return (
+                  <div key={i} className="px-4 py-4">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <span className="font-mono text-sm font-bold text-white">v{entry.version}</span>
+                      <span className="text-xs text-gray-500">{entry.releaseDate || entry.date}</span>
+                      {i === 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-900/50 text-green-300 font-semibold">LATEST</span>
+                      )}
+                      {entry.notes && (
+                        <span className="text-xs text-gray-400 italic ml-auto">{entry.notes}</span>
+                      )}
+                    </div>
+                    {hasChanges && (
+                      <div className="space-y-2 mt-2">
+                        {cats.map(cat => {
+                          const items: string[] = entry.changes?.[cat.key] || [];
+                          if (items.length === 0) return null;
+                          const CatIcon = cat.icon;
+                          return (
+                            <div key={cat.key}>
+                              <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded ${cat.bg} ${cat.color} mb-1`}>
+                                <CatIcon className="w-3 h-3" />{cat.label}
+                              </div>
+                              <ul className="space-y-0.5">
+                                {items.map((item: string, j: number) => (
+                                  <li key={j} className="text-xs text-gray-300 pl-3 before:content-['–'] before:mr-2 before:text-gray-600">{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="text-center text-xs text-gray-600 pt-2">

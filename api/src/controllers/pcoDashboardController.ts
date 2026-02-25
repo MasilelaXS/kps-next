@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { hasRole } from '../middleware/auth';
 import { pool } from '../config/database';
 import { RowDataPacket } from 'mysql2';
+import { logger } from '../config/logger';
 
 // ========================================
 // PHASE 4.1: PCO DASHBOARD ENDPOINTS
@@ -88,6 +89,7 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
       ? parseFloat(parseFloat(performance.reports_per_week_avg).toFixed(1)) 
       : 0;
 
+    logger.info(`PCO ${pcoId} fetched dashboard summary`);
     res.json({
       success: true,
       data: {
@@ -109,7 +111,7 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
     });
 
   } catch (error) {
-    console.error('Error fetching dashboard summary:', error);
+    logger.error('Error in getDashboardSummary', { error: error instanceof Error ? error.message : error, pcoId: (req as any).user?.id });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch dashboard summary',
@@ -199,6 +201,7 @@ export const getUpcomingAssignments = async (req: Request, res: Response): Promi
         AND r_last.next_service_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
     `, [pcoId, pcoId, daysAhead]);
 
+    logger.info(`PCO ${pcoId} fetched upcoming assignments`);
     res.json({
       success: true,
       data: {
@@ -218,7 +221,7 @@ export const getUpcomingAssignments = async (req: Request, res: Response): Promi
     });
 
   } catch (error) {
-    console.error('Error fetching upcoming assignments:', error);
+    logger.error('Error in getUpcomingAssignments', { error: error instanceof Error ? error.message : error, pcoId: (req as any).user?.id });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch upcoming assignments',
@@ -308,6 +311,7 @@ export const getRecentReports = async (req: Request, res: Response): Promise<any
         ${statusCondition}
     `.replace('LIMIT ?', ''), countParams);
 
+    logger.info(`PCO ${pcoId} fetched ${reports.length} recent reports`);
     res.json({
       success: true,
       data: {
@@ -329,7 +333,7 @@ export const getRecentReports = async (req: Request, res: Response): Promise<any
     });
 
   } catch (error) {
-    console.error('Error fetching recent reports:', error);
+    logger.error('Error in getRecentReports', { error: error instanceof Error ? error.message : error, pcoId: (req as any).user?.id });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch recent reports',
@@ -371,6 +375,7 @@ export const getDeclinedReports = async (req: Request, res: Response): Promise<a
       ORDER BY r.reviewed_at ASC
     `, [pcoId]);
 
+    logger.info(`PCO ${pcoId} fetched ${reports.length} declined reports`);
     res.json({
       success: true,
       data: {
@@ -390,7 +395,7 @@ export const getDeclinedReports = async (req: Request, res: Response): Promise<a
     });
 
   } catch (error) {
-    console.error('Error fetching declined reports:', error);
+    logger.error('Error in getDeclinedReports', { error: error instanceof Error ? error.message : error, pcoId: (req as any).user?.id });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch declined reports',
@@ -470,6 +475,7 @@ export const getStatistics = async (req: Request, res: Response): Promise<any> =
       LIMIT 6
     `, [pcoId]);
 
+    logger.info(`PCO ${pcoId} fetched dashboard statistics for period: ${period} days`);
     res.json({
       success: true,
       data: {
@@ -498,7 +504,7 @@ export const getStatistics = async (req: Request, res: Response): Promise<any> =
     });
 
   } catch (error) {
-    console.error('Error fetching dashboard statistics:', error);
+    logger.error('Error in getStatistics', { error: error instanceof Error ? error.message : error, pcoId: (req as any).user?.id });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch dashboard statistics',

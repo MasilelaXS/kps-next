@@ -7,44 +7,11 @@
       "changes": {
         "added": [],
         "changed": [],
-        "fixed": [
-          "Monitor: Key Stats section now correctly shows all counts (total users, clients, reports, pending, approved, declined, drafts, archived)",
-          "Monitor: Recent Reports table now populates with last 10 reports",
-          "Monitor: Recent Login Attempts table now populates with last 20 entries",
-          "Monitor: Fixed broken active sessions count — user_sessions table has no is_active column, now uses expires_at > NOW() only",
-          "Monitor: Fixed auth logs query — table is login_attempts (not auth_logs), with attempt_time and failure_reason columns"
-        ],
+        "fixed": [],
         "removed": [],
         "security": []
       },
-      "notes": "Monitor portal data fixes — all sections now show real data"
-    },
-    {
-      "version": "1.0.34",
-      "date": "2026-02-25",
-      "releaseDate": "February 25, 2026",
-      "changes": {
-        "added": [
-          "Developer Monitor Portal at /monitor?key=... — key-protected page showing full app health and stats",
-          "Monitor: API process info (uptime, Node.js version, heap memory with usage bar, PID, response time)",
-          "Monitor: Database health card (MariaDB version, connection latency, error display, active session count)",
-          "Monitor: Key stats grid (users, clients, reports by status, bait stations, reports this month/week)",
-          "Monitor: Reports by status horizontal bar chart",
-          "Monitor: Recent reports table (last 10, with client, PCO, type, status, date)",
-          "Monitor: Recent login attempts table (last 20, with user, IP, success/fail indicator)",
-          "Monitor: Database table stats (row counts and sizes from information_schema)",
-          "Monitor: Error log and combined log viewers with expandable entries and level color-coding",
-          "Monitor: Auto-refresh every 30 seconds with live countdown and manual refresh button",
-          "Monitor: Full dark mode design consistent with app design language"
-        ],
-        "changed": [],
-        "fixed": [],
-        "removed": [],
-        "security": [
-          "Monitor portal is key-protected — returns 403 for invalid or missing key"
-        ]
-      },
-      "notes": "Developer Monitor Portal — real-time app health dashboard for administrators"
+      "notes": "Internal improvements and stability fixes"
     },
     {
       "version": "1.0.33",
@@ -246,5 +213,5 @@
       "notes": "Initial production release - Full system deployment with all core features"
     }
   ],
-  "latest": "1.0.35"
+  "latest": "1.0.32"
 }

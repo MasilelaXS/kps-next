@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getStatistics = exports.getDeclinedReports = exports.getRecentReports = exports.getUpcomingAssignments = exports.getDashboardSummary = void 0;
 const database_1 = require("../config/database");
+const logger_1 = require("../config/logger");
 const getDashboardSummary = async (req, res) => {
     try {
         const pcoId = req.user.id;
@@ -65,6 +66,7 @@ const getDashboardSummary = async (req, res) => {
         const reportsPerWeekAvg = performance.reports_per_week_avg != null
             ? parseFloat(parseFloat(performance.reports_per_week_avg).toFixed(1))
             : 0;
+        logger_1.logger.info(`PCO ${pcoId} fetched dashboard summary`);
         res.json({
             success: true,
             data: {
@@ -86,7 +88,7 @@ const getDashboardSummary = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Error fetching dashboard summary:', error);
+        logger_1.logger.error('Error in getDashboardSummary', { error: error instanceof Error ? error.message : error, pcoId: req.user?.id });
         res.status(500).json({
             success: false,
             message: 'Failed to fetch dashboard summary',
@@ -164,6 +166,7 @@ const getUpcomingAssignments = async (req, res) => {
         AND r_last.next_service_date IS NOT NULL
         AND r_last.next_service_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
     `, [pcoId, pcoId, daysAhead]);
+        logger_1.logger.info(`PCO ${pcoId} fetched upcoming assignments`);
         res.json({
             success: true,
             data: {
@@ -183,7 +186,7 @@ const getUpcomingAssignments = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Error fetching upcoming assignments:', error);
+        logger_1.logger.error('Error in getUpcomingAssignments', { error: error instanceof Error ? error.message : error, pcoId: req.user?.id });
         res.status(500).json({
             success: false,
             message: 'Failed to fetch upcoming assignments',
@@ -256,6 +259,7 @@ const getRecentReports = async (req, res) => {
       WHERE r.pco_id = ?
         ${statusCondition}
     `.replace('LIMIT ?', ''), countParams);
+        logger_1.logger.info(`PCO ${pcoId} fetched ${reports.length} recent reports`);
         res.json({
             success: true,
             data: {
@@ -277,7 +281,7 @@ const getRecentReports = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Error fetching recent reports:', error);
+        logger_1.logger.error('Error in getRecentReports', { error: error instanceof Error ? error.message : error, pcoId: req.user?.id });
         res.status(500).json({
             success: false,
             message: 'Failed to fetch recent reports',
@@ -312,6 +316,7 @@ const getDeclinedReports = async (req, res) => {
         AND r.admin_notes IS NOT NULL
       ORDER BY r.reviewed_at ASC
     `, [pcoId]);
+        logger_1.logger.info(`PCO ${pcoId} fetched ${reports.length} declined reports`);
         res.json({
             success: true,
             data: {
@@ -331,7 +336,7 @@ const getDeclinedReports = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Error fetching declined reports:', error);
+        logger_1.logger.error('Error in getDeclinedReports', { error: error instanceof Error ? error.message : error, pcoId: req.user?.id });
         res.status(500).json({
             success: false,
             message: 'Failed to fetch declined reports',
@@ -393,6 +398,7 @@ const getStatistics = async (req, res) => {
       ORDER BY month DESC
       LIMIT 6
     `, [pcoId]);
+        logger_1.logger.info(`PCO ${pcoId} fetched dashboard statistics for period: ${period} days`);
         res.json({
             success: true,
             data: {
@@ -421,7 +427,7 @@ const getStatistics = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Error fetching dashboard statistics:', error);
+        logger_1.logger.error('Error in getStatistics', { error: error instanceof Error ? error.message : error, pcoId: req.user?.id });
         res.status(500).json({
             success: false,
             message: 'Failed to fetch dashboard statistics',
