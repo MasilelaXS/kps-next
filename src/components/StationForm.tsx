@@ -29,7 +29,7 @@ interface BaitStation {
   activityDetected: boolean;
   activityTypes?: string[];
   activityOtherDesc?: string;
-  baitStatus: 'clean' | 'eaten' | 'wet' | 'old';
+  baitStatus: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   stationCondition: 'good' | 'needs_repair' | 'damaged' | 'missing';
   actionTaken?: 'repaired' | 'replaced';
   warningSignCondition: 'good' | 'replaced' | 'repaired' | 'remounted';
@@ -291,13 +291,13 @@ export default function StationForm({ station, chemicals, previousStations = [],
               Bait Status *
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {['clean', 'eaten', 'wet', 'old'].map(status => (
+              {['clean', 'eaten', 'wet', 'old', 'none'].map(status => (
                 <button
                   key={status}
                   onClick={() => {
                     const newFormData = { ...formData, baitStatus: status as any };
-                    // If bait is clean, clear all chemicals
-                    if (status === 'clean') {
+                    // If bait is clean or none, clear all chemicals
+                    if (status === 'clean' || status === 'none') {
                       newFormData.chemicalsUsed = [];
                     }
                     setFormData(newFormData);
@@ -308,7 +308,7 @@ export default function StationForm({ station, chemicals, previousStations = [],
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status === 'none' ? 'N/A' : status.charAt(0).toUpperCase() + status.slice(1)}
                 </button>
               ))}
             </div>
@@ -328,7 +328,15 @@ export default function StationForm({ station, chemicals, previousStations = [],
               ].map(option => (
                 <button
                   key={option.value}
-                  onClick={() => setFormData({ ...formData, stationCondition: option.value as any })}
+                  onClick={() => {
+                    const updates: any = { stationCondition: option.value };
+                    // Auto-set bait status to 'none' when station is missing
+                    if (option.value === 'missing') {
+                      updates.baitStatus = 'none';
+                      updates.chemicalsUsed = [];
+                    }
+                    setFormData({ ...formData, ...updates });
+                  }}
                   className={`py-3 rounded-xl font-medium transition-all ${
                     formData.stationCondition === option.value
                       ? 'bg-blue-600 text-white'
@@ -399,11 +407,14 @@ export default function StationForm({ station, chemicals, previousStations = [],
           </div>
 
           {/* Chemicals Used */}
-          <div className={formData.baitStatus === 'clean' ? 'opacity-50 pointer-events-none' : ''}>
+          <div className={(formData.baitStatus === 'clean' || formData.baitStatus === 'none') ? 'opacity-50 pointer-events-none' : ''}>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Chemicals Used
               {formData.baitStatus === 'clean' && (
                 <span className="ml-2 text-xs text-gray-500">(Not available for clean bait)</span>
+              )}
+              {formData.baitStatus === 'none' && (
+                <span className="ml-2 text-xs text-gray-500">(Not applicable — station replaced)</span>
               )}
             </label>
             
@@ -414,7 +425,7 @@ export default function StationForm({ station, chemicals, previousStations = [],
                   <button
                     onClick={() => handleRemoveChemical(index)}
                     className="p-1 hover:bg-red-100 rounded-lg transition-colors"
-                    disabled={formData.baitStatus === 'clean'}
+                    disabled={formData.baitStatus === 'clean' || formData.baitStatus === 'none'}
                   >
                     <Trash2 className="w-4 h-4 text-red-600" />
                   </button>
@@ -426,14 +437,14 @@ export default function StationForm({ station, chemicals, previousStations = [],
                     onChange={(e) => handleUpdateChemical(index, 'quantity', parseFloat(e.target.value))}
                     placeholder="Quantity"
                     step="0.01"
-                    disabled={formData.baitStatus === 'clean'}
+                    disabled={formData.baitStatus === 'clean' || formData.baitStatus === 'none'}
                   />
                   <TextBox
                     type="text"
                     value={chem.batchNumber}
                     onChange={(e) => handleUpdateChemical(index, 'batchNumber', e.target.value)}
                     placeholder="Batch #"
-                    disabled={formData.baitStatus === 'clean'}
+                    disabled={formData.baitStatus === 'clean' || formData.baitStatus === 'none'}
                   />
                 </div>
               </div>
@@ -441,7 +452,7 @@ export default function StationForm({ station, chemicals, previousStations = [],
 
             <button
               onClick={() => setShowChemicalPicker(true)}
-              disabled={formData.baitStatus === 'clean'}
+              disabled={formData.baitStatus === 'clean' || formData.baitStatus === 'none'}
               className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-blue-600 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />

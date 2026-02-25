@@ -1,6 +1,80 @@
 {
   "changelog": [
     {
+      "version": "1.0.33",
+      "date": "2026-02-25",
+      "releaseDate": "February 25, 2026",
+      "changes": {
+        "added": [],
+        "changed": [
+          "Bait status 'N/A' button label changed from 'None' to 'N/A' for clarity",
+          "Admin reports page: bait status badge now shows 'N/A' instead of 'None' for replaced/missing stations",
+          "Admin edit page: station summary now shows 'N/A' instead of raw 'none' for bait status",
+          "PDF bait status summary table now includes a 'None (N/A)' row when any stations were replaced/missing",
+          "Chemicals section in station form now greys out and disables for N/A bait status (not just Clean)"
+        ],
+        "fixed": [],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Refinements to bait status N/A — improved labels, PDF summary row, and chemicals section lockout"
+    },
+    {
+      "version": "1.0.32",
+      "date": "2026-02-25",
+      "releaseDate": "February 25, 2026",
+      "changes": {
+        "added": [],
+        "changed": [],
+        "fixed": [
+          "Backend build sync"
+        ],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Internal build increment"
+    },
+    {
+      "version": "1.0.31",
+      "date": "2026-02-25",
+      "releaseDate": "February 25, 2026",
+      "changes": {
+        "added": [
+          "Bait status now includes 'N/A' (None) option for stations that were replaced or are missing — previously users were forced to select an inapplicable status",
+          "Selecting station condition 'Missing' automatically sets bait status to N/A",
+          "Selecting N/A bait status automatically clears all chemicals (not applicable for replaced/missing stations)",
+          "PDF report: bait station rows now display 'N/A' instead of raw value for N/A bait status",
+          "Admin edit page: N/A option added to bait status dropdown with contextual info message",
+          "Bait status summary in PDF correctly tracks and counts N/A stations"
+        ],
+        "changed": [],
+        "fixed": [],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Added N/A bait status option for replaced/missing bait stations"
+    },
+    {
+      "version": "1.0.30",
+      "date": "2026-02-25",
+      "releaseDate": "February 25, 2026",
+      "changes": {
+        "added": [],
+        "changed": [],
+        "fixed": [
+          "PCO dashboard: declined_reports_count now correctly counts reports with status 'declined' (was incorrectly counting draft reports with admin notes)",
+          "PCO dashboard: draft_reports_count now correctly counts all reports with status 'draft' (was excluding drafts that had admin notes)",
+          "Bait station condition 'needs_repair' is now normalized to 'needs repair' before DB insert/update to match MySQL ENUM definition, preventing silent empty-string storage",
+          "PDF insect monitoring: new monitor indicator column now correctly reads is_new_addition field from DB (was reading undefined is_new field)"
+        ],
+        "removed": [
+          "Removed leftover test marker console.log and test_marker response field from PCO dashboard controller"
+        ],
+        "security": []
+      },
+      "notes": "Bug fix release — PCO dashboard stat corrections, bait station condition ENUM normalization, PDF new monitor indicator fix"
+    },
+    {
       "version": "1.0.29",
       "date": "2026-02-22",
       "releaseDate": "February 22, 2026",
@@ -126,5 +200,5 @@
       "notes": "Initial production release - Full system deployment with all core features"
     }
   ],
-  "latest": "1.0.29"
+  "latest": "1.0.33"
 }

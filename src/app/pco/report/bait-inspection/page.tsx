@@ -20,7 +20,7 @@ interface BaitStation {
   activityDetected: boolean;
   activityTypes?: string[];
   activityOtherDesc?: string;
-  baitStatus: 'clean' | 'eaten' | 'wet' | 'old';
+  baitStatus: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   stationCondition: 'good' | 'needs_repair' | 'damaged' | 'missing';
   actionTaken?: 'repaired' | 'replaced';
   warningSignCondition: 'good' | 'replaced' | 'repaired' | 'remounted';

@@ -333,6 +333,7 @@ ${bodyHtml}
   ${this.renderStatusRow('Clean', statusSummary.clean)}
   ${this.renderStatusRow('Wet', statusSummary.wet)}
   ${this.renderStatusRow('Old', statusSummary.old)}
+  ${statusSummary.none.total > 0 ? this.renderStatusRow('None (N/A — Replaced/Missing)', statusSummary.none) : ''}
   <tr>
     <td><strong>Total Accessible Stations</strong></td>
     <td><strong>${this.formatNumber0(statusSummary.totalAccessible)}</strong></td>
@@ -466,7 +467,7 @@ ${this.renderStationTable(outside)}
     return `
 <tr>
   <td>${this.escapeHtml(station.station_number || '-')}</td>
-  <td>${this.escapeHtml(station.bait_status || '-')}</td>
+  <td>${station.bait_status === 'none' ? 'N/A' : this.escapeHtml(station.bait_status || '-')}</td>
   <td>${this.escapeHtml(activityText)}</td>
   <td>${chemicalText}</td>
   <td>${this.escapeHtml(qtyText)}</td>
@@ -633,7 +634,7 @@ ${noTreatmentNote}
   <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
   <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
   <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
-  <td>${monitor.is_new ? 'Yes' : 'No'}</td>
+  <td>${monitor.is_new_addition ? 'Yes' : 'No'}</td>
 </tr>`;
     }).join('');
 
@@ -645,13 +646,20 @@ ${noTreatmentNote}
   <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
   <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
   <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
-  <td>${monitor.is_new ? 'Yes' : 'No'}</td>
+  <td>${monitor.is_new_addition ? 'Yes' : 'No'}</td>
 </tr>`).join('');
 
-    // Glue board summary calculations
+    // Equipment totals summary calculations
+    const newMonitors = monitors.filter(m => m.is_new_addition).length;
+    const faultyLights = lightMonitors.filter(m => (m.light_condition || '').toLowerCase() === 'faulty').length;
+    const tubesReplaced = lightMonitors.filter(m => m.tubes_replaced).length;
     const lightGlueBoardsReplaced = lightMonitors.filter(m => m.glue_board_replaced).length * 2;
-    const boxGlueBoardsReplaced = boxMonitors.filter(m => m.glue_board_replaced).length * 1;
+    const boxGlueBoardsReplaced = boxMonitors.filter(m => m.glue_board_replaced).length;
     const totalGlueBoardsReplaced = lightGlueBoardsReplaced + boxGlueBoardsReplaced;
+    const warningSignsServiced = monitors.filter(m => {
+      const wsc = (m.warning_sign_condition || 'good').toLowerCase();
+      return wsc !== 'good';
+    }).length;
 
     const lightSection = lightMonitors.length ? `
 <div style="margin-top:6px;" class="fumigation-label">LIGHT TRAPS (${lightMonitors.length})</div>
@@ -685,36 +693,42 @@ ${noTreatmentNote}
   ${boxRows}
 </table>` : '';
 
-    const summaryRows = [
-      lightMonitors.length ? `
-<tr>
-  <td>Light Traps</td>
-  <td>${lightMonitors.length}</td>
-  <td style="font-size:6.5pt;color:#555;">× 2 per monitor</td>
-  <td><strong>${lightGlueBoardsReplaced}</strong></td>
-</tr>` : '',
-      boxMonitors.length ? `
-<tr>
-  <td>Box Monitors</td>
-  <td>${boxMonitors.length}</td>
-  <td style="font-size:6.5pt;color:#555;">× 1 per monitor</td>
-  <td><strong>${boxGlueBoardsReplaced}</strong></td>
-</tr>` : '',
-    ].join('');
-
     const summarySection = `
-<div style="margin-top:8px;" class="fumigation-label">GLUE BOARD SUMMARY</div>
+<div style="margin-top:8px;" class="fumigation-label">EQUIPMENT SUMMARY</div>
 <table class="data-table fumigation-table">
   <tr>
-    <th style="width:35%">Monitor Type</th>
-    <th style="width:20%">Monitors Replaced</th>
-    <th style="width:25%">Rate</th>
-    <th style="width:20%">Glue Boards</th>
+    <th style="width:55%">Equipment</th>
+    <th style="width:25%">Notes</th>
+    <th style="width:20%">Total</th>
   </tr>
-  ${summaryRows}
+  <tr>
+    <td>New Monitors Installed</td>
+    <td style="font-size:6.5pt;color:#555;">Light &amp; Box</td>
+    <td><strong>${newMonitors}</strong></td>
+  </tr>
+  ${lightMonitors.length ? `<tr>
+    <td>Faulty Lights</td>
+    <td style="font-size:6.5pt;color:#555;">Light traps only</td>
+    <td><strong>${faultyLights}</strong></td>
+  </tr>` : ''}
+  ${lightMonitors.length ? `<tr>
+    <td>Tubes Replaced</td>
+    <td style="font-size:6.5pt;color:#555;">Light traps only</td>
+    <td><strong>${tubesReplaced}</strong></td>
+  </tr>` : ''}
+  <tr>
+    <td>Glue Boards Replaced</td>
+    <td style="font-size:6.5pt;color:#555;">${lightMonitors.length && boxMonitors.length ? `Light ×2 (${lightGlueBoardsReplaced}) + Box ×1 (${boxGlueBoardsReplaced})` : lightMonitors.length ? `Light ×2` : `Box ×1`}</td>
+    <td><strong>${totalGlueBoardsReplaced}</strong></td>
+  </tr>
+  <tr>
+    <td>Warning Signs Serviced</td>
+    <td style="font-size:6.5pt;color:#555;">Replaced / Repaired / Remounted</td>
+    <td><strong>${warningSignsServiced}</strong></td>
+  </tr>
   <tr style="background:#3a0f16;">
-    <td colspan="3"><strong style="color:#fff;">Total Glue Boards Replaced</strong></td>
-    <td><strong style="color:#fff;">${totalGlueBoardsReplaced}</strong></td>
+    <td colspan="2"><strong style="color:#fff;">Total Monitors Serviced</strong></td>
+    <td><strong style="color:#fff;">${monitors.filter(m => m.monitor_serviced).length} / ${monitors.length}</strong></td>
   </tr>
 </table>`;
 
@@ -984,6 +998,7 @@ ${summarySection}
       clean: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
       wet: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
       old: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
+      none: { total: 0, inside: 0, outside: 0, totalPercent: 0, insidePercent: 0, outsidePercent: 0 },
       insideTotal: 0,
       outsideTotal: 0,
       totalAccessible: 0,

@@ -44,7 +44,7 @@ interface BaitStation {
   activity_tracks?: boolean;
   activity_other?: boolean;
   activity_other_description?: string;
-  bait_status: 'clean' | 'eaten' | 'wet' | 'old';
+  bait_status: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   station_condition: 'good' | 'needs_repair' | 'damaged' | 'missing';
   action_taken?: 'repaired' | 'replaced' | '';
   warning_sign_condition: 'good' | 'replaced' | 'repaired' | 'remounted';
@@ -653,7 +653,7 @@ export default function EditReportPage() {
                               </h4>
                               <span className="text-sm text-gray-500">
                                 {station.activity_detected === 'yes' && '⚠️ Activity • '}
-                                {station.bait_status} • {station.station_condition}
+                                {station.bait_status === 'none' ? 'N/A' : station.bait_status} • {station.station_condition}
                               </span>
                             </div>
                             <button
@@ -870,6 +870,7 @@ export default function EditReportPage() {
                                         <option value="eaten">Eaten</option>
                                         <option value="wet">Wet</option>
                                         <option value="old">Old</option>
+                                        <option value="none">None (N/A)</option>
                                       </select>
                                     </div>
                                     <div>
@@ -973,6 +974,14 @@ export default function EditReportPage() {
                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                                       <p className="text-sm text-blue-700">
                                         ℹ️ Bait status is "Clean" (no poison). Chemicals are typically not needed unless bait was replenished.
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {station.bait_status === 'none' && (
+                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                                      <p className="text-sm text-gray-600">
+                                        ℹ️ Bait status is "N/A" — station was replaced or is missing. No chemicals applicable.
                                       </p>
                                     </div>
                                   )}

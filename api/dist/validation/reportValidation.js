@@ -113,7 +113,7 @@ exports.addBaitStationSchema = joi_1.default.object({
             'any.required': 'Description is required when "other activity" is selected'
         })
     }),
-    bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old').required()
+    bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old', 'none').required()
         .messages({
         'any.required': 'Bait status is required',
         'any.only': 'Bait status must be one of: clean, eaten, wet, old'
@@ -154,7 +154,7 @@ exports.updateBaitStationSchema = joi_1.default.object({
     activity_tracks: joi_1.default.boolean().optional(),
     activity_other: joi_1.default.boolean().optional(),
     activity_other_description: joi_1.default.string().max(255).optional().allow(null, ''),
-    bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old').optional(),
+    bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old', 'none').optional(),
     station_condition: joi_1.default.string().valid('good', 'needs_repair', 'damaged', 'missing').optional(),
     action_taken: joi_1.default.string().valid('repaired', 'replaced', 'none').optional(),
     warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted').optional(),
@@ -318,7 +318,7 @@ exports.createCompleteReportSchema = joi_1.default.object({
     bait_stations: joi_1.default.array().items(joi_1.default.object({
         station_number: joi_1.default.string().max(20).required(),
         location: joi_1.default.string().valid('inside', 'outside').required(),
-        bait_status: joi_1.default.string().valid('eaten', 'clean', 'wet', 'old').required(),
+        bait_status: joi_1.default.string().valid('eaten', 'clean', 'wet', 'old', 'none').required(),
         is_accessible: joi_1.default.boolean().required(),
         inaccessible_reason: joi_1.default.string().max(255).optional().allow(null, ''),
         activity_detected: joi_1.default.boolean().required(),

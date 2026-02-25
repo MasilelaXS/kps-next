@@ -45,7 +45,7 @@ interface BaitStation {
   activity_gnawing?: boolean;
   activity_tracks?: boolean;
   activity_other?: string;
-  bait_status: 'clean' | 'eaten' | 'wet' | 'old';
+  bait_status: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   station_condition: 'good' | 'needs_repair' | 'damaged' | 'missing';
   action_taken?: 'repaired' | 'replaced';
   warning_sign_condition: 'good' | 'replaced' | 'repaired' | 'remounted';
@@ -1481,9 +1481,10 @@ export default function ReportsPage() {
                                     station.bait_status === 'clean' ? 'bg-blue-100 text-blue-700' :
                                     station.bait_status === 'eaten' ? 'bg-red-100 text-red-700' :
                                     station.bait_status === 'wet' ? 'bg-yellow-100 text-yellow-700' :
+                                    station.bait_status === 'none' ? 'bg-gray-100 text-gray-500' :
                                     'bg-gray-100 text-gray-700'
                                   }`}>
-                                    {station.bait_status.charAt(0).toUpperCase() + station.bait_status.slice(1)}
+                                    {station.bait_status === 'none' ? 'N/A' : station.bait_status.charAt(0).toUpperCase() + station.bait_status.slice(1)}
                                   </span>
                                 </div>
                               </div>

@@ -147,7 +147,7 @@ export const addBaitStationSchema = Joi.object({
       })
     }),
   
-  bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old').required()
+  bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old', 'none').required()
     .messages({
       'any.required': 'Bait status is required',
       'any.only': 'Bait status must be one of: clean, eaten, wet, old'
@@ -194,7 +194,7 @@ export const updateBaitStationSchema = Joi.object({
   activity_tracks: Joi.boolean().optional(),
   activity_other: Joi.boolean().optional(),
   activity_other_description: Joi.string().max(255).optional().allow(null, ''),
-  bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old').optional(),
+  bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old', 'none').optional(),
   station_condition: Joi.string().valid('good', 'needs_repair', 'damaged', 'missing').optional(),
   action_taken: Joi.string().valid('repaired', 'replaced', 'none').optional(),
   warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').optional(),
@@ -397,7 +397,7 @@ export const createCompleteReportSchema = Joi.object({
   bait_stations: Joi.array().items(Joi.object({
     station_number: Joi.string().max(20).required(),
     location: Joi.string().valid('inside', 'outside').required(),
-    bait_status: Joi.string().valid('eaten', 'clean', 'wet', 'old').required(),
+    bait_status: Joi.string().valid('eaten', 'clean', 'wet', 'old', 'none').required(),
     is_accessible: Joi.boolean().required(),
     inaccessible_reason: Joi.string().max(255).optional().allow(null, ''),
     activity_detected: Joi.boolean().required(),

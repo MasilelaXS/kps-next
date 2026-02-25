@@ -37,7 +37,7 @@ interface BaitStation {
   activity_gnawing?: boolean;
   activity_tracks?: boolean;
   activity_other?: string;
-  bait_status: 'clean' | 'eaten' | 'wet' | 'old';
+  bait_status: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   station_condition: 'good' | 'needs_repair' | 'damaged' | 'missing';
   action_taken?: 'repaired' | 'replaced';
   warning_sign_condition: 'good' | 'replaced' | 'repaired' | 'remounted';

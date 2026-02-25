@@ -18,9 +18,6 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
   try {
     const pcoId = req.user!.id;
 
-    // 🔥 TEST MARKER - If you see this message, NEW CODE IS RUNNING! 🔥
-    console.log('🔥🔥🔥 NEW CODE LOADED - TEST MARKER 2024 🔥🔥🔥');
-    
     // Get all metrics in parallel for performance
     const [metricsResult, performanceResult] = await Promise.all([
       // Basic counts query
@@ -33,10 +30,10 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
            WHERE pco_id = ? AND status = 'pending') as pending_reports_count,
           
           (SELECT COUNT(*) FROM reports 
-           WHERE pco_id = ? AND status = 'draft' AND admin_notes IS NOT NULL) as declined_reports_count,
+           WHERE pco_id = ? AND status = 'declined') as declined_reports_count,
           
           (SELECT COUNT(*) FROM reports 
-           WHERE pco_id = ? AND status = 'draft' AND admin_notes IS NULL) as draft_reports_count,
+           WHERE pco_id = ? AND status = 'draft') as draft_reports_count,
           
           (SELECT COUNT(*) FROM reports 
            WHERE pco_id = ? AND status = 'approved') as total_reports_completed,
@@ -93,7 +90,6 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
 
     res.json({
       success: true,
-      test_marker: '🔥 NEW CODE ACTIVE - Build 2024-10-14 🔥',
       data: {
         assigned_clients_count: metrics.assigned_clients_count,
         pending_reports_count: metrics.pending_reports_count,

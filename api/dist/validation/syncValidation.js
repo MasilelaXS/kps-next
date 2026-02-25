@@ -44,7 +44,7 @@ exports.uploadReportsSchema = joi_1.default.object({
             activity_tracks: joi_1.default.number().integer().valid(0, 1).default(0),
             activity_other: joi_1.default.number().integer().valid(0, 1).default(0),
             activity_other_description: joi_1.default.string().max(255).optional().allow(null),
-            bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old').default('clean'),
+            bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old', 'none').default('clean'),
             station_condition: joi_1.default.string().valid('good', 'needs_repair', 'damaged', 'missing').default('good'),
             action_taken: joi_1.default.string().valid('repaired', 'replaced', 'none').default('none'),
             warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted').default('good'),

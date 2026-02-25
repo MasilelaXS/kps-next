@@ -929,7 +929,7 @@ const addBaitStation = async (req, res) => {
         const result = await (0, database_1.executeQuery)(stationQuery, [
             reportId, station_number, location, is_accessible, inaccessible_reason || null,
             activity_detected, activity_droppings || 0, activity_gnawing || 0, activity_tracks || 0,
-            activity_other || 0, activity_other_description || null, bait_status, station_condition,
+            activity_other || 0, activity_other_description || null, bait_status, (station_condition || 'good').replace(/_/g, ' '),
             action_taken || 'none', warning_sign_condition || 'good', rodent_box_replaced || 0, station_remarks || null,
             is_new_addition || 0
         ]);
@@ -1408,7 +1408,7 @@ const adminUpdateReport = async (req, res) => {
                         station.activity_other ? 1 : 0,
                         station.activity_other_description || null,
                         station.bait_status,
-                        station.station_condition,
+                        (station.station_condition || 'good').replace(/_/g, ' '),
                         station.action_taken === '' ? 'none' : (station.action_taken || 'none'),
                         station.warning_sign_condition,
                         station.station_remarks || null,
@@ -1443,7 +1443,7 @@ const adminUpdateReport = async (req, res) => {
                         station.activity_other ? 1 : 0,
                         station.activity_other_description || null,
                         station.bait_status,
-                        station.station_condition,
+                        (station.station_condition || 'good').replace(/_/g, ' '),
                         station.action_taken === '' ? 'none' : (station.action_taken || 'none'),
                         station.warning_sign_condition,
                         station.station_remarks || null
@@ -1864,7 +1864,7 @@ const importReportFromJSON = async (req, res) => {
                     station.activity_other ?? 0,
                     station.activity_other_description || null,
                     station.bait_status || 'clean',
-                    station.station_condition || 'good',
+                    (station.station_condition || 'good').replace(/_/g, ' '),
                     station.rodent_box_replaced ?? 0,
                     station.station_remarks || null,
                     station.is_new_addition ?? 0
@@ -2122,7 +2122,7 @@ const createCompleteReport = async (req, res) => {
                     reportId, station.station_number, station.location, station.is_accessible,
                     station.inaccessible_reason, station.activity_detected, station.activity_droppings,
                     station.activity_gnawing, station.activity_tracks, station.activity_other,
-                    station.activity_other_description, station.bait_status, station.station_condition,
+                    station.activity_other_description, station.bait_status, (station.station_condition || 'good').replace(/_/g, ' '),
                     station.action_taken, station.warning_sign_condition, station.rodent_box_replaced,
                     station.station_remarks, isNew
                 ]);
@@ -2315,7 +2315,7 @@ const updateCompleteReport = async (req, res) => {
                     reportId, station.station_number, station.location, station.is_accessible,
                     station.inaccessible_reason, station.activity_detected, station.activity_droppings,
                     station.activity_gnawing, station.activity_tracks, station.activity_other,
-                    station.activity_other_description, station.bait_status, station.station_condition,
+                    station.activity_other_description, station.bait_status, (station.station_condition || 'good').replace(/_/g, ' '),
                     station.action_taken, station.warning_sign_condition, station.rodent_box_replaced,
                     station.station_remarks, isNew
                 ]);

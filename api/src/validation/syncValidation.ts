@@ -67,7 +67,7 @@ export const uploadReportsSchema = Joi.object({
           activity_tracks: Joi.number().integer().valid(0, 1).default(0),
           activity_other: Joi.number().integer().valid(0, 1).default(0),
           activity_other_description: Joi.string().max(255).optional().allow(null),
-          bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old').default('clean'),
+          bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old', 'none').default('clean'),
           station_condition: Joi.string().valid('good', 'needs_repair', 'damaged', 'missing').default('good'),
           action_taken: Joi.string().valid('repaired', 'replaced', 'none').default('none'),
           warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').default('good'),
