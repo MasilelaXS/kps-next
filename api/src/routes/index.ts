@@ -24,6 +24,7 @@ import notificationRoutes from './notificationRoutes';
 import cleanupRoutes from './cleanupRoutes';
 import pushRoutes from './pushRoutes';
 import calendarRoutes from './calendar';
+import monitorRoutes from './monitorRoutes';
 
 const router = Router();
 
@@ -122,6 +123,9 @@ router.use('/push', pushRoutes);
 
 // PCO Calendar routes
 router.use('/calendar', calendarRoutes);
+
+// Developer monitor portal (key-protected, no auth middleware)
+router.use('/monitor', monitorRoutes);
 
 // Future route groups will be added here:
 // router.use('/schedules', scheduleRoutes);

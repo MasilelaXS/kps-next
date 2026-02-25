@@ -20,6 +20,7 @@ const notificationRoutes_1 = __importDefault(require("./notificationRoutes"));
 const cleanupRoutes_1 = __importDefault(require("./cleanupRoutes"));
 const pushRoutes_1 = __importDefault(require("./pushRoutes"));
 const calendar_1 = __importDefault(require("./calendar"));
+const monitorRoutes_1 = __importDefault(require("./monitorRoutes"));
 const router = (0, express_1.Router)();
 router.get('/health', (req, res) => {
     res.json({
@@ -79,5 +80,6 @@ router.use('/notifications', notificationRoutes_1.default);
 router.use('/cleanup', cleanupRoutes_1.default);
 router.use('/push', pushRoutes_1.default);
 router.use('/calendar', calendar_1.default);
+router.use('/monitor', monitorRoutes_1.default);
 exports.default = router;
 //# sourceMappingURL=index.js.map
