@@ -344,6 +344,13 @@ export default function ReportSummary() {
                 </p>
               </div>
 
+              {Array.isArray(report.fumigation.aerosolUnits) && report.fumigation.aerosolUnits.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-2">Aerosol Units Serviced</p>
+                  <p className="font-medium text-gray-900">{report.fumigation.aerosolUnits.length} units</p>
+                </div>
+              )}
+
               {report.fumigation.remarks && (
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-2">Remarks</p>

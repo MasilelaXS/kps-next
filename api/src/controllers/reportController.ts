@@ -447,6 +447,7 @@ export const getReportById = async (req: Request, res: Response) => {
         c.total_bait_stations_outside,
         c.total_insect_monitors_light,
         c.total_insect_monitors_box,
+        c.total_aerosol_units,
         u.name as pco_name,
         u.pco_number,
         u.email as pco_email,
@@ -532,6 +533,16 @@ export const getReportById = async (req: Request, res: Response) => {
     const monitorsQuery = `SELECT * FROM insect_monitors WHERE report_id = ? ORDER BY monitor_type`;
     const monitors = await executeQuery<RowDataPacket[]>(monitorsQuery, [reportId]);
 
+    // Get aerosol units with chemical name
+    const aerosolUnitsQuery = `
+      SELECT au.*, ch.name as chemical_name
+      FROM aerosol_units au
+      LEFT JOIN chemicals ch ON au.chemical_id = ch.id
+      WHERE au.report_id = ?
+      ORDER BY au.id
+    `;
+    const aerosolUnits = await executeQuery<RowDataPacket[]>(aerosolUnitsQuery, [reportId]);
+
     // Assemble complete report
     const completeReport = {
       ...report,
@@ -541,7 +552,8 @@ export const getReportById = async (req: Request, res: Response) => {
         target_pests: pests,
         chemicals: fumigationChemicals
       },
-      insect_monitors: monitors
+      insect_monitors: monitors,
+      aerosol_units: aerosolUnits
     };
 
     logger.info(`Report ${reportId} retrieved by user ${userId}`);
@@ -1841,6 +1853,183 @@ export const deleteInsectMonitor = async (req: Request, res: Response) => {
 };
 
 // ============================================================================
+// AEROSOL UNITS
+// ============================================================================
+
+/**
+ * POST /api/pco/reports/:id/aerosol-units
+ * Add aerosol unit
+ */
+export const addAerosolUnit = async (req: Request, res: Response) => {
+  try {
+    const reportId = parseInt(req.params.id);
+    const pcoId = req.user!.id;
+    const {
+      unit_number,
+      action_taken,
+      chemical_id,
+      chemical_quantity,
+      chemical_batch_number,
+      is_new_addition
+    } = req.body;
+
+    const reportCheck = await executeQuery<RowDataPacket[]>(
+      `SELECT id FROM reports WHERE id = ? AND pco_id = ? AND status IN ('draft', 'declined')`,
+      [reportId, pcoId]
+    );
+
+    if (reportCheck.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Report not found, not owned by you, or not editable'
+      });
+    }
+
+    const result = await executeQuery<ResultSetHeader>(
+      `INSERT INTO aerosol_units 
+       (report_id, unit_number, action_taken, chemical_id, chemical_quantity, chemical_batch_number, is_new_addition) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        reportId,
+        unit_number,
+        action_taken,
+        chemical_id || null,
+        chemical_quantity || null,
+        chemical_batch_number || null,
+        is_new_addition || 0
+      ]
+    ) as any;
+
+    logger.info(`Aerosol unit ${result.insertId} added to report ${reportId} by PCO ${pcoId}`);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Aerosol unit added successfully',
+      unit_id: result.insertId
+    });
+
+  } catch (error) {
+    logger.error('Error in addAerosolUnit:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to add aerosol unit',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
+ * PUT /api/pco/reports/:id/aerosol-units/:unitId
+ * Update aerosol unit
+ */
+export const updateAerosolUnit = async (req: Request, res: Response) => {
+  try {
+    const reportId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+    const pcoId = req.user!.id;
+    const updateData = req.body;
+
+    const checkQuery = `
+      SELECT au.id 
+      FROM aerosol_units au
+      JOIN reports r ON au.report_id = r.id
+      WHERE au.id = ? AND au.report_id = ? AND r.pco_id = ? AND r.status IN ('draft', 'declined')
+    `;
+
+    const check = await executeQuery<RowDataPacket[]>(checkQuery, [unitId, reportId, pcoId]);
+
+    if (check.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Aerosol unit not found or report not editable'
+      });
+    }
+
+    const fields = [];
+    const values = [];
+
+    const allowedFields = ['unit_number', 'action_taken', 'chemical_id', 'chemical_quantity', 'chemical_batch_number'];
+
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(updateData[field]);
+      }
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields to update'
+      });
+    }
+
+    values.push(unitId);
+    await executeQuery(`UPDATE aerosol_units SET ${fields.join(', ')} WHERE id = ?`, values);
+
+    logger.info(`Aerosol unit ${unitId} updated by PCO ${pcoId}`);
+
+    return res.json({
+      success: true,
+      message: 'Aerosol unit updated successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error in updateAerosolUnit:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update aerosol unit',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+/**
+ * DELETE /api/pco/reports/:id/aerosol-units/:unitId
+ * Delete aerosol unit
+ */
+export const deleteAerosolUnit = async (req: Request, res: Response) => {
+  try {
+    const reportId = parseInt(req.params.id);
+    const unitId = parseInt(req.params.unitId);
+    const pcoId = req.user!.id;
+
+    const checkQuery = `
+      SELECT au.id 
+      FROM aerosol_units au
+      JOIN reports r ON au.report_id = r.id
+      WHERE au.id = ? AND au.report_id = ? AND r.pco_id = ? AND r.status IN ('draft', 'declined')
+    `;
+
+    const check = await executeQuery<RowDataPacket[]>(checkQuery, [unitId, reportId, pcoId]);
+
+    if (check.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Aerosol unit not found or report not editable'
+      });
+    }
+
+    await executeQuery(`DELETE FROM aerosol_units WHERE id = ?`, [unitId]);
+
+    logger.info(`Aerosol unit ${unitId} deleted by PCO ${pcoId}`);
+
+    return res.json({
+      success: true,
+      message: 'Aerosol unit deleted successfully'
+    });
+
+  } catch (error) {
+    logger.error('Error in deleteAerosolUnit:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete aerosol unit',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+    });
+  }
+};
+
+// ============================================================================
 // PRE-FILL DATA
 // ============================================================================
 // DISABLED: Will be re-enabled in settings panel later
@@ -2078,7 +2267,8 @@ export const adminUpdateReport = async (req: Request, res: Response) => {
     const reportCheck = await executeQuery<RowDataPacket[]>(
       `SELECT r.id, r.status, r.report_type, r.client_id,
               c.total_bait_stations_inside, c.total_bait_stations_outside,
-              c.total_insect_monitors_light, c.total_insect_monitors_box
+              c.total_insect_monitors_light, c.total_insect_monitors_box,
+              c.total_aerosol_units
        FROM reports r
        JOIN clients c ON r.client_id = c.id
        WHERE r.id = ?`,
@@ -2099,6 +2289,7 @@ export const adminUpdateReport = async (req: Request, res: Response) => {
     const expectedBaitOutside = report.total_bait_stations_outside || 0;
     const expectedMonitorLight = report.total_insect_monitors_light || 0;
     const expectedMonitorBox = report.total_insect_monitors_box || 0;
+    const expectedAerosolUnits = report.total_aerosol_units || 0;
 
     // ========================================================================
     // STEP 1: Update main report fields
@@ -2425,6 +2616,7 @@ export const adminUpdateReport = async (req: Request, res: Response) => {
     let actualBaitOutside = 0;
     let actualMonitorLight = 0;
     let actualMonitorBox = 0;
+    let actualAerosolUnits = 0;
 
     // Count actual bait stations from database
     if (updateData.bait_stations !== undefined) {
@@ -2488,15 +2680,47 @@ export const adminUpdateReport = async (req: Request, res: Response) => {
       );
     }
 
+    // Count actual aerosol units from database
+    if (updateData.aerosol_units !== undefined && Array.isArray(updateData.aerosol_units)) {
+      // Delete all existing and reinsert (simple approach, same as fumigation chemicals)
+      await connection.query('DELETE FROM aerosol_units WHERE report_id = ?', [reportId]);
+
+      let aerosolCount = 0;
+      for (const unit of updateData.aerosol_units) {
+        aerosolCount++;
+        const isNew = aerosolCount > expectedAerosolUnits;
+        await connection.query(
+          `INSERT INTO aerosol_units
+           (report_id, unit_number, action_taken, chemical_id, chemical_quantity, chemical_batch_number, is_new_addition)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            reportId, unit.unit_number, unit.action_taken,
+            unit.chemical_id || null,
+            unit.chemical_quantity || null,
+            unit.chemical_batch_number || null,
+            isNew
+          ]
+        );
+      }
+      actualAerosolUnits = aerosolCount;
+    } else if (updateData.aerosol_units === undefined) {
+      // Not being updated — read current count from DB
+      const aerosolCountResult = await connection.query<RowDataPacket[]>(
+        'SELECT COUNT(*) as count FROM aerosol_units WHERE report_id = ?', [reportId]
+      );
+      actualAerosolUnits = aerosolCountResult[0][0]?.count || 0;
+    }
+
     // Calculate total new equipment counts
     const totalNewBait = Math.max(0, (actualBaitInside - expectedBaitInside) + (actualBaitOutside - expectedBaitOutside));
     const totalNewMonitors = Math.max(0, (actualMonitorLight - expectedMonitorLight) + (actualMonitorBox - expectedMonitorBox));
+    const totalNewAerosols = Math.max(0, actualAerosolUnits - expectedAerosolUnits);
 
     // Update report with new equipment counts
     await connection.query(
-      `UPDATE reports SET new_bait_stations_count = ?, new_insect_monitors_count = ?
+      `UPDATE reports SET new_bait_stations_count = ?, new_insect_monitors_count = ?, new_aerosol_units_count = ?
        WHERE id = ?`,
-      [totalNewBait, totalNewMonitors, reportId]
+      [totalNewBait, totalNewMonitors, totalNewAerosols, reportId]
     );
 
     // Update client equipment baseline to match actual counts
@@ -2512,6 +2736,11 @@ export const adminUpdateReport = async (req: Request, res: Response) => {
     if (updateData.insect_monitors !== undefined) {
       updateFields.push('total_insect_monitors_light = ?', 'total_insect_monitors_box = ?');
       updateValues.push(actualMonitorLight, actualMonitorBox);
+    }
+    
+    if (updateData.aerosol_units !== undefined) {
+      updateFields.push('total_aerosol_units = ?');
+      updateValues.push(actualAerosolUnits);
     }
     
     if (updateFields.length > 0) {
@@ -3241,6 +3470,7 @@ export const createCompleteReport = async (req: Request, res: Response) => {
     const [clientRows] = await connection.query<RowDataPacket[]>(
       `SELECT total_bait_stations_inside, total_bait_stations_outside,
               total_insect_monitors_light, total_insect_monitors_box,
+              total_aerosol_units,
               company_name
        FROM clients WHERE id = ?`,
       [client_id]
@@ -3255,6 +3485,7 @@ export const createCompleteReport = async (req: Request, res: Response) => {
     const expectedBaitOutside = client.total_bait_stations_outside || 0;
     const expectedMonitorLight = client.total_insect_monitors_light || 0;
     const expectedMonitorBox = client.total_insect_monitors_box || 0;
+    const expectedAerosolUnits = client.total_aerosol_units || 0;
 
     // Step 2: Delete any existing draft/pending for this client
     await connection.query(
@@ -3414,17 +3645,40 @@ export const createCompleteReport = async (req: Request, res: Response) => {
           );
         }
       }
+
+      // Aerosol units with smart new equipment detection
+      if (fumigation.aerosol_units && Array.isArray(fumigation.aerosol_units)) {
+        let aerosolCount = 0;
+        for (const unit of fumigation.aerosol_units) {
+          aerosolCount++;
+          const isNew = aerosolCount > expectedAerosolUnits;
+          await connection.query(
+            `INSERT INTO aerosol_units
+             (report_id, unit_number, action_taken, chemical_id, chemical_quantity, chemical_batch_number, is_new_addition)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              reportId, unit.unit_number, unit.action_taken,
+              unit.chemical_id || null,
+              unit.chemical_quantity || null,
+              unit.chemical_batch_number || null,
+              isNew
+            ]
+          );
+        }
+      }
     }
 
     // Step 6: Calculate total new equipment counts
     const totalNewBait = (actualBaitInside - expectedBaitInside) + (actualBaitOutside - expectedBaitOutside);
     const totalNewMonitors = (actualMonitorLight - expectedMonitorLight) + (actualMonitorBox - expectedMonitorBox);
+    const actualAerosolUnits = fumigation?.aerosol_units?.length || 0;
+    const totalNewAerosols = actualAerosolUnits - expectedAerosolUnits;
     
     // Update the report with new equipment counts
     await connection.query(
-      `UPDATE reports SET new_bait_stations_count = ?, new_insect_monitors_count = ?
+      `UPDATE reports SET new_bait_stations_count = ?, new_insect_monitors_count = ?, new_aerosol_units_count = ?
        WHERE id = ?`,
-      [Math.max(0, totalNewBait), Math.max(0, totalNewMonitors), reportId]
+      [Math.max(0, totalNewBait), Math.max(0, totalNewMonitors), Math.max(0, totalNewAerosols), reportId]
     );
 
     // Step 7: Update client equipment baseline to match actual counts
@@ -3443,6 +3697,12 @@ export const createCompleteReport = async (req: Request, res: Response) => {
     if (fumigation && fumigation.monitors && Array.isArray(fumigation.monitors) && fumigation.monitors.length > 0) {
       updateFields.push('total_insect_monitors_light = ?', 'total_insect_monitors_box = ?');
       updateValues.push(actualMonitorLight, actualMonitorBox);
+    }
+    
+    // Update aerosol units if data was provided
+    if (fumigation && fumigation.aerosol_units && Array.isArray(fumigation.aerosol_units) && fumigation.aerosol_units.length > 0) {
+      updateFields.push('total_aerosol_units = ?');
+      updateValues.push(actualAerosolUnits);
     }
     
     // Only run update if we have fields to update
@@ -3560,7 +3820,8 @@ export const updateCompleteReport = async (req: Request, res: Response) => {
     // Get client's current equipment baseline
     const [clientRows] = await connection.query<RowDataPacket[]>(
       `SELECT total_bait_stations_inside, total_bait_stations_outside,
-              total_insect_monitors_light, total_insect_monitors_box
+              total_insect_monitors_light, total_insect_monitors_box,
+              total_aerosol_units
        FROM clients WHERE id = ?`,
       [clientId]
     );
@@ -3574,6 +3835,7 @@ export const updateCompleteReport = async (req: Request, res: Response) => {
     const expectedBaitOutside = client.total_bait_stations_outside || 0;
     const expectedMonitorLight = client.total_insect_monitors_light || 0;
     const expectedMonitorBox = client.total_insect_monitors_box || 0;
+    const expectedAerosolUnits = client.total_aerosol_units || 0;
 
     // Delete existing bait stations, fumigation data, and monitors for this report
     await connection.query('DELETE FROM bait_stations WHERE report_id = ?', [reportId]);
@@ -3581,6 +3843,7 @@ export const updateCompleteReport = async (req: Request, res: Response) => {
     await connection.query('DELETE FROM fumigation_target_pests WHERE report_id = ?', [reportId]);
     await connection.query('DELETE FROM fumigation_chemicals WHERE report_id = ?', [reportId]);
     await connection.query('DELETE FROM insect_monitors WHERE report_id = ?', [reportId]);
+    await connection.query('DELETE FROM aerosol_units WHERE report_id = ?', [reportId]);
 
     // Update main report data and reset status to 'draft'
     await connection.query(
@@ -3734,12 +3997,39 @@ export const updateCompleteReport = async (req: Request, res: Response) => {
           );
         }
       }
+
+      // Aerosol units with smart new equipment detection
+      if (fumigation.aerosol_units && Array.isArray(fumigation.aerosol_units)) {
+        let aerosolCount = 0;
+        for (const unit of fumigation.aerosol_units) {
+          aerosolCount++;
+          const isNew = aerosolCount > expectedAerosolUnits;
+          await connection.query(
+            `INSERT INTO aerosol_units
+             (report_id, unit_number, action_taken, chemical_id, chemical_quantity, chemical_batch_number, is_new_addition)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              reportId, unit.unit_number, unit.action_taken,
+              unit.chemical_id || null,
+              unit.chemical_quantity || null,
+              unit.chemical_batch_number || null,
+              isNew
+            ]
+          );
+        }
+      }
     }
 
     // Conditional baseline update for monitors
     if (fumigation && fumigation.monitors && Array.isArray(fumigation.monitors) && fumigation.monitors.length > 0) {
       updateFields.push('total_insect_monitors_light = ?', 'total_insect_monitors_box = ?');
       updateValues.push(actualMonitorLight, actualMonitorBox);
+    }
+
+    // Conditional baseline update for aerosol units
+    if (fumigation && fumigation.aerosol_units && Array.isArray(fumigation.aerosol_units) && fumigation.aerosol_units.length > 0) {
+      updateFields.push('total_aerosol_units = ?');
+      updateValues.push(fumigation.aerosol_units.length);
     }
 
     // Execute conditional baseline update

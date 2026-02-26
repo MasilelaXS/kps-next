@@ -43,6 +43,11 @@ import {
   addInsectMonitor,
   updateInsectMonitor,
   deleteInsectMonitor,
+
+  // Aerosol Unit Management
+  addAerosolUnit,
+  updateAerosolUnit,
+  deleteAerosolUnit,
   
   // Pre-fill Data - DISABLED FOR NOW
   // getPreFillData,
@@ -72,7 +77,9 @@ import {
   addInsectMonitorSchema,
   updateInsectMonitorSchema,
   reportListQuerySchema,
-  createCompleteReportSchema
+  createCompleteReportSchema,
+  addAerosolUnitSchema,
+  updateAerosolUnitSchema
 } from '../validation/reportValidation';
 
 const router = Router();
@@ -281,6 +288,42 @@ router.delete(
   '/pco/reports/:id/insect-monitors/:monitorId',
   authenticateToken,
   deleteInsectMonitor
+);
+
+// ============================================================================
+// AEROSOL UNIT SUB-MODULE ROUTES
+// ============================================================================
+
+/**
+ * POST /api/pco/reports/:id/aerosol-units
+ * Add aerosol unit
+ */
+router.post(
+  '/pco/reports/:id/aerosol-units',
+  authenticateToken,
+  validateRequest(addAerosolUnitSchema),
+  addAerosolUnit
+);
+
+/**
+ * PUT /api/pco/reports/:id/aerosol-units/:unitId
+ * Update aerosol unit
+ */
+router.put(
+  '/pco/reports/:id/aerosol-units/:unitId',
+  authenticateToken,
+  validateRequest(updateAerosolUnitSchema),
+  updateAerosolUnit
+);
+
+/**
+ * DELETE /api/pco/reports/:id/aerosol-units/:unitId
+ * Delete aerosol unit
+ */
+router.delete(
+  '/pco/reports/:id/aerosol-units/:unitId',
+  authenticateToken,
+  deleteAerosolUnit
 );
 
 // ============================================================================

@@ -205,7 +205,7 @@ export default function SubmitReport() {
               monitor_condition: backendCondition,
               monitor_condition_other: monitor.conditionOther || null,
               warning_sign_condition: monitor.warningSignCondition || 'good',
-              glue_board_replaced: isFlyTrap && monitor.glueBoard === 'replaced',
+              glue_board_replaced: monitor.glueBoardQty || 0,
               monitor_serviced: true
             };
 
@@ -224,6 +224,18 @@ export default function SubmitReport() {
 
             return monitorPayload;
           });
+        }
+
+        // Add aerosol units
+        if (Array.isArray(report.fumigation.aerosolUnits) && report.fumigation.aerosolUnits.length > 0) {
+          completeReportPayload.fumigation.aerosol_units = report.fumigation.aerosolUnits.map((unit: any) => ({
+            unit_number: unit.unitNumber,
+            action_taken: unit.actionTaken,
+            chemical_id: unit.chemicalId || null,
+            chemical_quantity: unit.quantity || null,
+            chemical_batch_number: unit.batchNumber || null,
+            is_new_addition: unit.isNewAddition || false,
+          }));
         }
 
         // Add fumigation remarks

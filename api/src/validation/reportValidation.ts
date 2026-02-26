@@ -346,9 +346,11 @@ export const addInsectMonitorSchema = Joi.object({
       })
     }),
   
-  glue_board_replaced: Joi.boolean().required()
+  glue_board_replaced: Joi.number().integer().min(0).max(8).required()
     .messages({
-      'any.required': 'Glue board replacement status is required'
+      'any.required': 'Glue board quantity is required',
+      'number.min': 'Glue board quantity cannot be negative',
+      'number.max': 'Glue board quantity cannot exceed 8'
     }),
   
   tubes_replaced: Joi.boolean().optional().allow(null)
@@ -375,9 +377,55 @@ export const updateInsectMonitorSchema = Joi.object({
   light_condition: Joi.string().valid('good', 'faulty', 'na').optional(),
   light_faulty_type: Joi.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional(),
   light_faulty_other: Joi.string().max(255).optional().allow(null, ''),
-  glue_board_replaced: Joi.boolean().optional(),
+  glue_board_replaced: Joi.number().integer().min(0).max(8).optional(),
   tubes_replaced: Joi.boolean().optional().allow(null),
   monitor_serviced: Joi.boolean().optional()
+});
+
+// ============================================================================
+// AEROSOL UNIT SCHEMAS
+// ============================================================================
+
+export const addAerosolUnitSchema = Joi.object({
+  unit_number: Joi.string().max(20).required()
+    .messages({
+      'any.required': 'Unit number is required'
+    }),
+
+  action_taken: Joi.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').required()
+    .messages({
+      'any.required': 'Action taken is required',
+      'any.only': 'Action must be battery_changed, aerosol_changed, aerosol_changed and battery_changed, or unit_replaced'
+    }),
+
+  chemical_id: Joi.number().integer().positive().optional().allow(null)
+    .when('action_taken', {
+      is: Joi.valid('aerosol_changed', 'aerosol_changed and battery_changed'),
+      then: Joi.required().messages({
+        'any.required': 'Chemical is required when aerosol is changed'
+      })
+    }),
+
+  chemical_quantity: Joi.number().positive().optional().allow(null)
+    .when('action_taken', {
+      is: Joi.valid('aerosol_changed', 'aerosol_changed and battery_changed'),
+      then: Joi.required().messages({
+        'any.required': 'Chemical quantity is required when aerosol is changed'
+      })
+    }),
+
+  chemical_batch_number: Joi.string().max(100).optional().allow(null, ''),
+
+  is_new_addition: Joi.boolean().optional().default(false)
+});
+
+export const updateAerosolUnitSchema = Joi.object({
+  unit_number: Joi.string().max(20).optional(),
+  action_taken: Joi.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').optional(),
+  chemical_id: Joi.number().integer().positive().optional().allow(null),
+  chemical_quantity: Joi.number().positive().optional().allow(null),
+  chemical_batch_number: Joi.string().max(100).optional().allow(null, ''),
+  is_new_addition: Joi.boolean().optional()
 });
 
 // ============================================================================
@@ -455,9 +503,17 @@ export const createCompleteReportSchema = Joi.object({
       light_condition: Joi.string().valid('good', 'faulty', 'na').optional().allow(null, ''),
       light_faulty_type: Joi.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional().allow(null, ''),
       light_faulty_other: Joi.string().max(255).optional().allow(null, ''),
-      glue_board_replaced: Joi.boolean().optional().allow(null),
+      glue_board_replaced: Joi.number().integer().min(0).max(8).optional().allow(null),
       tubes_replaced: Joi.boolean().optional().allow(null),
       monitor_serviced: Joi.boolean().optional().allow(null)
+    })).optional(),
+    aerosol_units: Joi.array().items(Joi.object({
+      unit_number: Joi.string().max(20).required(),
+      action_taken: Joi.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').required(),
+      chemical_id: Joi.number().integer().positive().optional().allow(null),
+      chemical_quantity: Joi.number().positive().optional().allow(null),
+      chemical_batch_number: Joi.string().max(100).optional().allow(null, ''),
+      is_new_addition: Joi.boolean().optional().allow(null)
     })).optional()
   }).optional()
 });

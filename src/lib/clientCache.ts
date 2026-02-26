@@ -18,6 +18,7 @@ export interface CachedClient {
   total_bait_stations_outside: number;
   total_insect_monitors_light: number;
   total_insect_monitors_box: number;
+  total_aerosol_units?: number;
   status: string;
   // Contact information
   contacts?: Array<{

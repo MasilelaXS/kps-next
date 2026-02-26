@@ -80,6 +80,7 @@ interface ClientFormData {
   total_bait_stations_outside: number;
   total_insect_monitors_light: number;
   total_insect_monitors_box: number;
+  total_aerosol_units?: number;
   contacts: NewContact[];
 }
 
@@ -115,6 +116,7 @@ export default function ClientsPage() {
     total_bait_stations_outside: 0,
     total_insect_monitors_light: 0,
     total_insect_monitors_box: 0,
+    total_aerosol_units: 0,
     contacts: [{ name: '', email: '', phone: '', is_primary: true }]
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -292,6 +294,7 @@ export default function ClientsPage() {
           total_bait_stations_outside: 0,
           total_insect_monitors_light: 0,
           total_insect_monitors_box: 0,
+          total_aerosol_units: 0,
           contacts: [{ name: '', email: '', phone: '', is_primary: true }]
         });
         fetchClients(); // Refresh the list
@@ -343,6 +346,7 @@ export default function ClientsPage() {
       total_bait_stations_outside: 0,
       total_insect_monitors_light: 0,
       total_insect_monitors_box: 0,
+      total_aerosol_units: 0,
       contacts: [{ name: '', email: '', phone: '', is_primary: true }]
     });
     setFormErrors({});
@@ -408,6 +412,7 @@ export default function ClientsPage() {
         total_bait_stations_outside: details.total_bait_stations_outside || 0,
         total_insect_monitors_light: details.total_insect_monitors_light || 0,
         total_insect_monitors_box: details.total_insect_monitors_box || 0,
+        total_aerosol_units: details.total_aerosol_units || 0,
         contacts: details.contacts && details.contacts.length > 0 
           ? details.contacts 
           : [{ name: '', email: '', phone: '', is_primary: true }]
@@ -1162,6 +1167,19 @@ export default function ClientsPage() {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Aerosol Units
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.total_aerosol_units}
+                        onChange={(e) => handleInputChange('total_aerosol_units', parseInt(e.target.value) || 0)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
                   </div>
                   
                   {/* Service Notes */}
@@ -1381,7 +1399,8 @@ export default function ClientsPage() {
 
                   {/* Equipment */}
                   {(clientDetails.total_bait_stations_inside || clientDetails.total_bait_stations_outside || 
-                    clientDetails.total_insect_monitors_light || clientDetails.total_insect_monitors_box) && (
+                    clientDetails.total_insect_monitors_light || clientDetails.total_insect_monitors_box ||
+                    clientDetails.total_aerosol_units) && (
                     <div>
                       <h4 className="text-lg font-semibold text-gray-900 mb-3">Equipment</h4>
                       <div className="grid grid-cols-2 gap-4">
@@ -1401,6 +1420,12 @@ export default function ClientsPage() {
                           <p className="text-sm text-gray-500">Insect Monitors (Box)</p>
                           <p className="text-base font-medium text-gray-900">{clientDetails.total_insect_monitors_box || 0}</p>
                         </div>
+                        {(clientDetails.total_aerosol_units > 0) && (
+                          <div>
+                            <p className="text-sm text-gray-500">Aerosol Units</p>
+                            <p className="text-base font-medium text-gray-900">{clientDetails.total_aerosol_units}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1679,6 +1704,19 @@ export default function ClientsPage() {
                         min="0"
                         value={formData.total_insect_monitors_box}
                         onChange={(e) => handleInputChange('total_insect_monitors_box', parseInt(e.target.value) || 0)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Aerosol Units
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.total_aerosol_units}
+                        onChange={(e) => handleInputChange('total_aerosol_units', parseInt(e.target.value) || 0)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>

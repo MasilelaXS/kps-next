@@ -14,6 +14,7 @@ interface ReportData {
   fumigationAreas: any[];
   fumigationPests: any[];
   insectMonitors: any[];
+  aerosolUnits: any[];
   analytics: any;
 }
 
@@ -367,6 +368,7 @@ ${this.renderFooter()}
     return `
 ${this.renderFumigationTreatment(data.fumigationAreas, data.fumigationPests, data.fumigationTreatments)}
 ${this.renderInsectMonitoring(data.insectMonitors)}
+${this.renderAerosolUnits(data.aerosolUnits)}
 ${this.renderRemarks(data.report)}
 ${this.renderClientSignature(data.report)}
 ${this.renderFooter()}
@@ -631,7 +633,7 @@ ${noTreatmentNote}
   <td>${this.escapeHtml(monitor.monitor_condition || '-')}</td>
   <td>${lightDisplay}</td>
   <td>${monitor.tubes_replaced ? 'Replaced' : 'Good'}</td>
-  <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
+  <td>${this.escapeHtml(monitor.glue_board_replaced > 0 ? `${monitor.glue_board_replaced} replaced` : 'None')}</td>
   <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
   <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
   <td>${monitor.is_new_addition ? 'Yes' : 'No'}</td>
@@ -643,7 +645,7 @@ ${noTreatmentNote}
   <td>${this.escapeHtml(monitor.monitor_number || '-')}</td>
   <td>${this.escapeHtml(monitor.location || '-')}</td>
   <td>${this.escapeHtml(monitor.monitor_condition || '-')}</td>
-  <td>${monitor.glue_board_replaced ? 'Replaced' : 'Good'}</td>
+  <td>${this.escapeHtml(monitor.glue_board_replaced > 0 ? `${monitor.glue_board_replaced} replaced` : 'None')}</td>
   <td>${this.escapeHtml(monitor.warning_sign_condition || '-')}</td>
   <td>${monitor.monitor_serviced ? 'Yes' : 'No'}</td>
   <td>${monitor.is_new_addition ? 'Yes' : 'No'}</td>
@@ -653,8 +655,8 @@ ${noTreatmentNote}
     const newMonitors = monitors.filter(m => m.is_new_addition).length;
     const faultyLights = lightMonitors.filter(m => (m.light_condition || '').toLowerCase() === 'faulty').length;
     const tubesReplaced = lightMonitors.filter(m => m.tubes_replaced).length;
-    const lightGlueBoardsReplaced = lightMonitors.filter(m => m.glue_board_replaced).length * 2;
-    const boxGlueBoardsReplaced = boxMonitors.filter(m => m.glue_board_replaced).length;
+    const lightGlueBoardsReplaced = lightMonitors.reduce((sum: number, m: any) => sum + (m.glue_board_replaced || 0), 0);
+    const boxGlueBoardsReplaced = boxMonitors.reduce((sum: number, m: any) => sum + (m.glue_board_replaced || 0), 0);
     const totalGlueBoardsReplaced = lightGlueBoardsReplaced + boxGlueBoardsReplaced;
     const warningSignsServiced = monitors.filter(m => {
       const wsc = (m.warning_sign_condition || 'good').toLowerCase();
@@ -718,7 +720,7 @@ ${noTreatmentNote}
   </tr>` : ''}
   <tr>
     <td>Glue Boards Replaced</td>
-    <td style="font-size:6.5pt;color:#555;">${lightMonitors.length && boxMonitors.length ? `Light ×2 (${lightGlueBoardsReplaced}) + Box ×1 (${boxGlueBoardsReplaced})` : lightMonitors.length ? `Light ×2` : `Box ×1`}</td>
+    <td style="font-size:6.5pt;color:#555;">${lightMonitors.length && boxMonitors.length ? `Light (${lightGlueBoardsReplaced}) + Box (${boxGlueBoardsReplaced})` : lightMonitors.length ? `Light monitors` : `Box monitors`}</td>
     <td><strong>${totalGlueBoardsReplaced}</strong></td>
   </tr>
   <tr>
@@ -737,6 +739,58 @@ ${noTreatmentNote}
 ${lightSection}
 ${boxSection}
 ${summarySection}
+`;
+  }
+
+  private renderAerosolUnits(units: any[]) {
+    if (!units || !units.length) return '';
+
+    const formatAction = (action: string) => {
+      switch (action) {
+        case 'battery_changed': return 'Battery Changed';
+        case 'aerosol_changed': return 'Aerosol Changed';
+        case 'aerosol_changed and battery_changed': return 'Aerosol + Battery Changed';
+        case 'unit_replaced': return 'Unit Replaced';
+        default: return this.escapeHtml(action || '-');
+      }
+    };
+
+    const rows = units.map((unit: any) => `
+<tr>
+  <td>${this.escapeHtml(unit.unit_number || '-')}</td>
+  <td>${formatAction(unit.action_taken)}</td>
+  <td>${this.escapeHtml(unit.chemical_name || (unit.chemical_id ? `Chemical #${unit.chemical_id}` : '-'))}</td>
+  <td>${unit.chemical_quantity ? unit.chemical_quantity : '-'}</td>
+  <td>${this.escapeHtml(unit.chemical_batch_number || '-')}</td>
+  <td>${unit.is_new_addition ? 'Yes' : 'No'}</td>
+</tr>`).join('');
+
+    const newUnits = units.filter(u => u.is_new_addition).length;
+    const aerosolChanged = units.filter(u => u.action_taken === 'aerosol_changed' || u.action_taken === 'aerosol_changed and battery_changed').length;
+    const batteriesChanged = units.filter(u => u.action_taken === 'battery_changed' || u.action_taken === 'aerosol_changed and battery_changed').length;
+    const unitsReplaced = units.filter(u => u.action_taken === 'unit_replaced').length;
+
+    return `
+<div class="section-title-red">AEROSOL UNITS (${units.length})</div>
+<table class="data-table fumigation-table">
+  <tr>
+    <th>Unit No.</th>
+    <th>Action Taken</th>
+    <th>Chemical Used</th>
+    <th>Qty</th>
+    <th>Batch No.</th>
+    <th>New</th>
+  </tr>
+  ${rows}
+</table>
+<div style="margin-top:8px;" class="fumigation-label">AEROSOL SUMMARY</div>
+<table class="data-table fumigation-table">
+  <tr><td>Aerosols Changed</td><td><strong>${aerosolChanged}</strong></td></tr>
+  <tr><td>Batteries Changed</td><td><strong>${batteriesChanged}</strong></td></tr>
+  <tr><td>Units Replaced</td><td><strong>${unitsReplaced}</strong></td></tr>
+  <tr><td>New Units Installed</td><td><strong>${newUnits}</strong></td></tr>
+  <tr style="background:#3a0f16;"><td><strong style="color:#fff;">Total Units Serviced</strong></td><td><strong style="color:#fff;">${units.length}</strong></td></tr>
+</table>
 `;
   }
 
@@ -852,12 +906,13 @@ ${summarySection}
       report.postal_code
     ].filter(Boolean).join(', ') || 'No address';
 
-    const [baitStations, fumigationTreatments, fumigationAreas, fumigationPests, insectMonitors] = await Promise.all([
+    const [baitStations, fumigationTreatments, fumigationAreas, fumigationPests, insectMonitors, aerosolUnits] = await Promise.all([
       this.getBaitStations(reportId),
       this.getFumigationTreatments(reportId),
       this.getFumigationAreas(reportId),
       this.getFumigationPests(reportId),
-      this.getInsectMonitors(reportId)
+      this.getInsectMonitors(reportId),
+      this.getAerosolUnits(reportId)
     ]);
 
     const analytics = this.calculateAnalytics(baitStations);
@@ -869,6 +924,7 @@ ${summarySection}
       fumigationAreas,
       fumigationPests,
       insectMonitors,
+      aerosolUnits,
       analytics
     };
   }
@@ -975,6 +1031,22 @@ ${summarySection}
       return await executeQuery('SELECT * FROM insect_monitors WHERE report_id = ?', [reportId]);
     } catch (error) {
       logger.warn('insect_monitors table query failed', { reportId, error });
+      return [];
+    }
+  }
+
+  private async getAerosolUnits(reportId: number) {
+    try {
+      return await executeQuery(
+        `SELECT au.*, ch.name as chemical_name
+         FROM aerosol_units au
+         LEFT JOIN chemicals ch ON au.chemical_id = ch.id
+         WHERE au.report_id = ?
+         ORDER BY au.id`,
+        [reportId]
+      );
+    } catch (error) {
+      logger.warn('aerosol_units table query failed', { reportId, error });
       return [];
     }
   }

@@ -31,16 +31,27 @@ interface InsectMonitor {
   location: string;
   monitorNumber: string;
   condition: 'good' | 'needs_repair' | 'damaged' | 'missing' | 'other';
-  conditionOther?: string; // Description when condition is 'other'
+  conditionOther?: string;
   actionTaken?: 'repaired' | 'replaced';
   warningSignCondition: 'good' | 'replaced' | 'repaired' | 'remounted';
   // Light trap specific
   lightCondition?: 'good' | 'faulty';
   lightFaultyType?: 'starter' | 'tube' | 'cable' | 'electricity' | 'other';
-  lightFaultyOther?: string; // Description when lightFaultyType is 'other'
-  glueBoard?: 'good' | 'replaced';
+  lightFaultyOther?: string;
+  glueBoardQty?: number; // 0-8 glue boards replaced
   tubesCondition?: 'good' | 'replaced';
   remarks?: string;
+}
+
+interface AerosolUnit {
+  id: string;
+  unitNumber: string;
+  actionTaken: 'battery_changed' | 'aerosol_changed' | 'aerosol_changed and battery_changed' | 'unit_replaced';
+  chemicalId?: number;
+  chemicalName?: string;
+  quantity?: number;
+  batchNumber?: string;
+  isNewAddition?: boolean;
 }
 
 function FumigationContent() {
@@ -54,6 +65,7 @@ function FumigationContent() {
   const [client, setClient] = useState<any>(null);
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
   const [expectedMonitors, setExpectedMonitors] = useState({ light: 0, box: 0 });
+  const [expectedAerosolUnits, setExpectedAerosolUnits] = useState(0);
 
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [selectedPests, setSelectedPests] = useState<string[]>([]);
@@ -61,10 +73,13 @@ function FumigationContent() {
   const [otherPestDescription, setOtherPestDescription] = useState('');
   const [chemicalsUsed, setChemicalsUsed] = useState<ChemicalUsed[]>([]);
   const [monitors, setMonitors] = useState<InsectMonitor[]>([]);
+  const [aerosolUnits, setAerosolUnits] = useState<AerosolUnit[]>([]);
 
   const [showChemicalPicker, setShowChemicalPicker] = useState(false);
   const [showMonitorForm, setShowMonitorForm] = useState(false);
   const [editingMonitor, setEditingMonitor] = useState<InsectMonitor | null>(null);
+  const [showAerosolForm, setShowAerosolForm] = useState(false);
+  const [editingAerosolUnit, setEditingAerosolUnit] = useState<AerosolUnit | null>(null);
 
   const areasOptions = [
     'Kitchen', 'Dining Area', 'Storage', 'Warehouse', 'Office', 
@@ -133,6 +148,7 @@ function FumigationContent() {
         light: report.client.total_insect_monitors_light || 0,
         box: report.client.total_insect_monitors_box || 0
       });
+      setExpectedAerosolUnits(report.client.total_aerosol_units || 0);
 
       // Load any existing fumigation data
       if (report.fumigation) {
@@ -140,6 +156,7 @@ function FumigationContent() {
         setSelectedPests(report.fumigation.pests || []);
         setChemicalsUsed(report.fumigation.chemicals || []);
         setMonitors(report.fumigation.monitors || []);
+        setAerosolUnits(report.fumigation.aerosolUnits || []);
         setOtherAreaDescription(report.fumigation.otherAreaDescription || '');
         setOtherPestDescription(report.fumigation.otherPestDescription || '');
       }
@@ -229,6 +246,35 @@ function FumigationContent() {
     }, 'Delete Monitor');
   };
 
+  const handleAddAerosolUnit = () => {
+    const newUnit: AerosolUnit = {
+      id: `aerosol_${Date.now()}`,
+      unitNumber: `Unit ${aerosolUnits.length + 1}`,
+      actionTaken: 'battery_changed',
+      isNewAddition: false,
+    };
+    setEditingAerosolUnit(newUnit);
+    setShowAerosolForm(true);
+  };
+
+  const handleSaveAerosolUnit = (unit: AerosolUnit) => {
+    setAerosolUnits(prev => {
+      const exists = prev.find(u => u.id === unit.id);
+      if (exists) {
+        return prev.map(u => u.id === unit.id ? unit : u);
+      }
+      return [...prev, unit];
+    });
+    setShowAerosolForm(false);
+    setEditingAerosolUnit(null);
+  };
+
+  const handleDeleteAerosolUnit = (unitId: string) => {
+    alert.showConfirm('Are you sure you want to delete this aerosol unit?', () => {
+      setAerosolUnits(prev => prev.filter(u => u.id !== unitId));
+    }, 'Delete Aerosol Unit');
+  };
+
   const handleSaveDraft = () => {
     const updatedReport = {
       ...reportData,
@@ -239,6 +285,7 @@ function FumigationContent() {
         otherPestDescription,
         chemicals: chemicalsUsed,
         monitors,
+        aerosolUnits,
       },
       lastSaved: new Date().toISOString()
     };
@@ -305,6 +352,19 @@ function FumigationContent() {
       return;
     }
 
+    // Check aerosol units count
+    if (aerosolUnits.length > expectedAerosolUnits) {
+      const message = `You have added more aerosol units than expected:\n` +
+                     `Aerosol Units: ${aerosolUnits.length} (expected ${expectedAerosolUnits})\n\n` +
+                     `Would you like to update the client's aerosol unit count?`;
+      alert.showConfirm(message, () => {
+        updateClientAerosolCounts(aerosolUnits.length);
+      }, 'Update Aerosol Unit Count?', 'info', () => {
+        checkForMissingMonitors();
+      });
+      return;
+    }
+
     // Check for missing monitors
     checkForMissingMonitors();
   };
@@ -354,6 +414,22 @@ function FumigationContent() {
     }
   };
 
+  const updateClientAerosolCounts = async (count: number) => {
+    try {
+      setExpectedAerosolUnits(count);
+      const updatedReport = {
+        ...reportData,
+        client: { ...reportData.client, total_aerosol_units: count }
+      };
+      localStorage.setItem('current_report', JSON.stringify(updatedReport));
+      alert.showSuccess('Client aerosol unit count updated successfully');
+      proceedToSummary();
+    } catch (error) {
+      console.error('Error updating aerosol counts:', error);
+      alert.showError('Failed to update client aerosol counts.');
+    }
+  };
+
   const proceedToSummary = () => {
     // Save to report data
     const updatedReport = {
@@ -365,12 +441,11 @@ function FumigationContent() {
         otherPestDescription: selectedPests.includes('Other') ? otherPestDescription : null,
         chemicals: chemicalsUsed,
         monitors,
+        aerosolUnits,
       },
       step: 'summary'
     };
     localStorage.setItem('current_report', JSON.stringify(updatedReport));
-
-    // Navigate to summary
     router.push(`/pco/report/summary?clientId=${clientId}`);
   };
 
@@ -527,9 +602,14 @@ function FumigationContent() {
                       Action: {String(monitor.actionTaken)}
                     </div>
                   )}
-                  {monitor.type === 'light' && monitor.glueBoard && monitor.tubesCondition && (
+                  {monitor.type === 'light' && monitor.tubesCondition && (
                     <div className="text-xs text-gray-500 mt-1">
-                      Glue Board: {String(monitor.glueBoard)} • Tubes: {String(monitor.tubesCondition)}
+                      Tubes: {String(monitor.tubesCondition)}
+                    </div>
+                  )}
+                  {(monitor.glueBoardQty ?? 0) > 0 && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Glue Boards Replaced: {monitor.glueBoardQty}
                     </div>
                   )}
                   {monitor.remarks && (
@@ -564,6 +644,51 @@ function FumigationContent() {
               Light Trap
             </button>
           </div>
+        </div>
+
+        {/* Aerosol Units */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-gray-900">Aerosol Units</h3>
+            <div className="text-sm text-gray-500">
+              {aerosolUnits.length}{expectedAerosolUnits > 0 ? `/${expectedAerosolUnits}` : ''} serviced
+            </div>
+          </div>
+
+          {aerosolUnits.map((unit) => (
+            <div
+              key={unit.id}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-xl mb-2 border border-gray-200"
+            >
+              <div
+                className="flex-1 cursor-pointer"
+                onClick={() => { setEditingAerosolUnit(unit); setShowAerosolForm(true); }}
+              >
+                <div className="font-medium text-gray-900 text-sm">{unit.unitNumber}</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {unit.actionTaken === 'battery_changed' && 'Battery Changed'}
+                  {unit.actionTaken === 'aerosol_changed' && `Aerosol Changed${unit.chemicalName ? ` (${unit.chemicalName})` : ''}`}
+                  {unit.actionTaken === 'aerosol_changed and battery_changed' && `Aerosol + Battery Changed${unit.chemicalName ? ` (${unit.chemicalName})` : ''}`}
+                  {unit.actionTaken === 'unit_replaced' && 'Unit Replaced'}
+                  {unit.isNewAddition && <span className="ml-2 text-green-600 font-medium">• New Unit</span>}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeleteAerosolUnit(unit.id)}
+                className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 text-red-600" />
+              </button>
+            </div>
+          ))}
+
+          <button
+            onClick={handleAddAerosolUnit}
+            className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-purple-600 hover:text-purple-600 hover:bg-purple-50 transition-all flex items-center justify-center gap-2 font-medium text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Aerosol Unit
+          </button>
         </div>
 
         {/* Action Buttons */}
@@ -629,6 +754,19 @@ function FumigationContent() {
           onCancel={() => {
             setShowMonitorForm(false);
             setEditingMonitor(null);
+          }}
+        />
+      )}
+
+      {/* Aerosol Unit Form Modal */}
+      {showAerosolForm && editingAerosolUnit && (
+        <AerosolUnitForm
+          unit={editingAerosolUnit}
+          chemicals={chemicals}
+          onSave={handleSaveAerosolUnit}
+          onCancel={() => {
+            setShowAerosolForm(false);
+            setEditingAerosolUnit(null);
           }}
         />
       )}
@@ -813,37 +951,41 @@ function MonitorForm({
             </div>
           </div>
 
+          {/* Glue Boards Replaced (all monitor types) */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Glue Boards Replaced
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, glueBoardQty: Math.max(0, (formData.glueBoardQty || 0) - 1) })}
+                className="w-10 h-10 rounded-xl bg-gray-100 text-gray-700 font-bold text-lg hover:bg-gray-200 transition-colors flex items-center justify-center"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min={0}
+                max={8}
+                value={formData.glueBoardQty || 0}
+                onChange={(e) => setFormData({ ...formData, glueBoardQty: Math.min(8, Math.max(0, parseInt(e.target.value) || 0)) })}
+                className="flex-1 text-center py-2 border border-gray-300 rounded-xl font-semibold text-lg"
+              />
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, glueBoardQty: Math.min(8, (formData.glueBoardQty || 0) + 1) })}
+                className="w-10 h-10 rounded-xl bg-gray-100 text-gray-700 font-bold text-lg hover:bg-gray-200 transition-colors flex items-center justify-center"
+              >
+                +
+              </button>
+            </div>
+            <div className="text-xs text-gray-400 mt-1 text-right">Maximum 8</div>
+          </div>
+
           {/* Light Trap Specific Fields */}
           {formData.type === 'light' && (
             <>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Glue Board Condition *
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setFormData({ ...formData, glueBoard: 'good' })}
-                    className={`flex-1 py-3 rounded-xl font-medium transition-all ${
-                      formData.glueBoard === 'good'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    Good
-                  </button>
-                  <button
-                    onClick={() => setFormData({ ...formData, glueBoard: 'replaced' })}
-                    className={`flex-1 py-3 rounded-xl font-medium transition-all ${
-                      formData.glueBoard === 'replaced'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    Replaced
-                  </button>
-                </div>
-              </div>
-
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Tubes Condition *
@@ -982,6 +1124,176 @@ function MonitorForm({
         </div>
       </div>
       
+      <AlertModal
+        isOpen={alert.isOpen}
+        {...alert.config}
+        onClose={alert.hideAlert}
+      />
+    </div>
+  );
+}
+
+// Aerosol Unit Form Component
+function AerosolUnitForm({
+  unit,
+  chemicals,
+  onSave,
+  onCancel,
+}: {
+  unit: AerosolUnit;
+  chemicals: Chemical[];
+  onSave: (u: AerosolUnit) => void;
+  onCancel: () => void;
+}) {
+  const [formData, setFormData] = useState<AerosolUnit>(unit);
+  const alert = useAlert();
+
+  const needsChemical = formData.actionTaken === 'aerosol_changed' || formData.actionTaken === 'aerosol_changed and battery_changed';
+
+  const handleSubmit = () => {
+    if (!formData.unitNumber.trim()) {
+      alert.showWarning('Unit number is required', 'Missing Information');
+      return;
+    }
+    if (needsChemical && !formData.chemicalId) {
+      alert.showWarning('Please select the aerosol chemical used', 'Missing Information');
+      return;
+    }
+    onSave(formData);
+  };
+
+  // chemicals prop already filtered to fumigation type by the parent
+  const displayChemicals = chemicals;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <h3 className="font-bold text-gray-900">Aerosol Unit</h3>
+          <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Unit Number */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Unit Number / Label *</label>
+            <input
+              type="text"
+              value={formData.unitNumber}
+              onChange={(e) => setFormData({ ...formData, unitNumber: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="e.g. Unit 1, Kitchen Unit..."
+            />
+          </div>
+
+          {/* Is New Addition */}
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="isNewAddition"
+              checked={formData.isNewAddition || false}
+              onChange={(e) => setFormData({ ...formData, isNewAddition: e.target.checked })}
+              className="w-5 h-5 rounded"
+            />
+            <label htmlFor="isNewAddition" className="text-sm font-medium text-gray-700">New unit (not previously recorded)</label>
+          </div>
+
+          {/* Action Taken */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Action Taken *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'battery_changed', label: 'Battery Changed' },
+                { value: 'aerosol_changed', label: 'Aerosol Changed' },
+                { value: 'aerosol_changed and battery_changed', label: 'Aerosol + Battery' },
+                { value: 'unit_replaced', label: 'Unit Replaced' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFormData({
+                    ...formData,
+                    actionTaken: opt.value as AerosolUnit['actionTaken'],
+                    chemicalId: opt.value === 'battery_changed' || opt.value === 'unit_replaced' ? undefined : formData.chemicalId,
+                    chemicalName: opt.value === 'battery_changed' || opt.value === 'unit_replaced' ? undefined : formData.chemicalName,
+                  })}
+                  className={`py-3 px-3 rounded-xl font-medium text-sm transition-all ${
+                    formData.actionTaken === opt.value ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Chemical (when aerosol action) */}
+          {needsChemical && (
+            <>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Aerosol Chemical *</label>
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-xl p-2">
+                  {displayChemicals.map((chemical) => (
+                    <button
+                      key={chemical.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, chemicalId: chemical.id, chemicalName: chemical.name })}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors text-sm ${
+                        formData.chemicalId === chemical.id ? 'bg-purple-600 text-white' : 'hover:bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {chemical.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={formData.quantity || ''}
+                  onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) || undefined })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="e.g. 1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Batch Number</label>
+                <input
+                  type="text"
+                  value={formData.batchNumber || ''}
+                  onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Optional batch number"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onCancel}
+              className="flex-1 px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="flex-1 px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-colors"
+            >
+              Save Unit
+            </button>
+          </div>
+        </div>
+      </div>
+
       <AlertModal
         isOpen={alert.isOpen}
         {...alert.config}
