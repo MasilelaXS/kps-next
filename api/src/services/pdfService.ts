@@ -699,38 +699,18 @@ ${noTreatmentNote}
 <div style="margin-top:8px;" class="fumigation-label">EQUIPMENT SUMMARY</div>
 <table class="data-table fumigation-table">
   <tr>
-    <th style="width:55%">Equipment</th>
-    <th style="width:25%">Notes</th>
-    <th style="width:20%">Total</th>
+    <th>New Monitors</th>
+    ${lightMonitors.length ? `<th>Faulty Lights</th><th>Tubes Replaced</th>` : ''}
+    <th>Glue Boards Replaced</th>
+    <th>Warning Signs Replaced</th>
+    <th style="background:#3a0f16;color:#fff;">Total Serviced</th>
   </tr>
   <tr>
-    <td>New Monitors Installed</td>
-    <td style="font-size:6.5pt;color:#555;">Light &amp; Box</td>
     <td><strong>${newMonitors}</strong></td>
-  </tr>
-  ${lightMonitors.length ? `<tr>
-    <td>Faulty Lights</td>
-    <td style="font-size:6.5pt;color:#555;">Light traps only</td>
-    <td><strong>${faultyLights}</strong></td>
-  </tr>` : ''}
-  ${lightMonitors.length ? `<tr>
-    <td>Tubes Replaced</td>
-    <td style="font-size:6.5pt;color:#555;">Light traps only</td>
-    <td><strong>${tubesReplaced}</strong></td>
-  </tr>` : ''}
-  <tr>
-    <td>Glue Boards Replaced</td>
-    <td style="font-size:6.5pt;color:#555;">${lightMonitors.length && boxMonitors.length ? `Light (${lightGlueBoardsReplaced}) + Box (${boxGlueBoardsReplaced})` : lightMonitors.length ? `Light monitors` : `Box monitors`}</td>
+    ${lightMonitors.length ? `<td><strong>${faultyLights}</strong></td><td><strong>${tubesReplaced}</strong></td>` : ''}
     <td><strong>${totalGlueBoardsReplaced}</strong></td>
-  </tr>
-  <tr>
-    <td>Warning Signs Serviced</td>
-    <td style="font-size:6.5pt;color:#555;">Replaced / Repaired / Remounted</td>
     <td><strong>${warningSignsServiced}</strong></td>
-  </tr>
-  <tr style="background:#3a0f16;">
-    <td colspan="2"><strong style="color:#fff;">Total Monitors Serviced</strong></td>
-    <td><strong style="color:#fff;">${monitors.filter(m => m.monitor_serviced).length} / ${monitors.length}</strong></td>
+    <td style="background:#3a0f16;"><strong style="color:#fff;">${monitors.filter(m => m.monitor_serviced).length} / ${monitors.length}</strong></td>
   </tr>
 </table>`;
 

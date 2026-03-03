@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createCompleteReportSchema = exports.updateInsectMonitorSchema = exports.addInsectMonitorSchema = exports.updateFumigationSchema = exports.updateBaitStationSchema = exports.addBaitStationSchema = exports.declineReportSchema = exports.approveReportSchema = exports.submitReportSchema = exports.updateReportSchema = exports.createReportSchema = exports.reportListQuerySchema = void 0;
+exports.createCompleteReportSchema = exports.updateAerosolUnitSchema = exports.addAerosolUnitSchema = exports.updateInsectMonitorSchema = exports.addInsectMonitorSchema = exports.updateFumigationSchema = exports.updateBaitStationSchema = exports.addBaitStationSchema = exports.declineReportSchema = exports.approveReportSchema = exports.submitReportSchema = exports.updateReportSchema = exports.createReportSchema = exports.reportListQuerySchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.reportListQuerySchema = joi_1.default.object({
     page: joi_1.default.number().integer().min(1).default(1),
@@ -123,10 +123,10 @@ exports.addBaitStationSchema = joi_1.default.object({
         'any.required': 'Station condition is required',
         'any.only': 'Station condition must be one of: good, needs_repair, damaged, missing'
     }),
-    action_taken: joi_1.default.string().valid('repaired', 'replaced', 'none').optional().default('none')
+    action_taken: joi_1.default.string().valid('repaired', 'replaced', 'not_replaced', 'none').optional().default('none')
         .when('station_condition', {
         is: joi_1.default.string().valid('needs_repair', 'damaged', 'missing'),
-        then: joi_1.default.valid('repaired', 'replaced').required().messages({
+        then: joi_1.default.valid('repaired', 'replaced', 'not_replaced').required().messages({
             'any.required': 'Action taken is required when station needs repair, is damaged, or missing'
         })
     }),
@@ -156,7 +156,7 @@ exports.updateBaitStationSchema = joi_1.default.object({
     activity_other_description: joi_1.default.string().max(255).optional().allow(null, ''),
     bait_status: joi_1.default.string().valid('clean', 'eaten', 'wet', 'old', 'none').optional(),
     station_condition: joi_1.default.string().valid('good', 'needs_repair', 'damaged', 'missing').optional(),
-    action_taken: joi_1.default.string().valid('repaired', 'replaced', 'none').optional(),
+    action_taken: joi_1.default.string().valid('repaired', 'replaced', 'not_replaced', 'none').optional(),
     warning_sign_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'remounted').optional(),
     rodent_box_replaced: joi_1.default.boolean().optional(),
     station_remarks: joi_1.default.string().max(5000).optional().allow(null, ''),
@@ -276,9 +276,11 @@ exports.addInsectMonitorSchema = joi_1.default.object({
             'any.required': 'Description is required when light faulty type is other'
         })
     }),
-    glue_board_replaced: joi_1.default.boolean().required()
+    glue_board_replaced: joi_1.default.number().integer().min(0).max(8).required()
         .messages({
-        'any.required': 'Glue board replacement status is required'
+        'any.required': 'Glue board quantity is required',
+        'number.min': 'Glue board quantity cannot be negative',
+        'number.max': 'Glue board quantity cannot exceed 8'
     }),
     tubes_replaced: joi_1.default.boolean().optional().allow(null)
         .when('monitor_type', {
@@ -302,9 +304,44 @@ exports.updateInsectMonitorSchema = joi_1.default.object({
     light_condition: joi_1.default.string().valid('good', 'faulty', 'na').optional(),
     light_faulty_type: joi_1.default.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional(),
     light_faulty_other: joi_1.default.string().max(255).optional().allow(null, ''),
-    glue_board_replaced: joi_1.default.boolean().optional(),
+    glue_board_replaced: joi_1.default.number().integer().min(0).max(8).optional(),
     tubes_replaced: joi_1.default.boolean().optional().allow(null),
     monitor_serviced: joi_1.default.boolean().optional()
+});
+exports.addAerosolUnitSchema = joi_1.default.object({
+    unit_number: joi_1.default.string().max(20).required()
+        .messages({
+        'any.required': 'Unit number is required'
+    }),
+    action_taken: joi_1.default.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').required()
+        .messages({
+        'any.required': 'Action taken is required',
+        'any.only': 'Action must be battery_changed, aerosol_changed, aerosol_changed and battery_changed, or unit_replaced'
+    }),
+    chemical_id: joi_1.default.number().integer().positive().optional().allow(null)
+        .when('action_taken', {
+        is: joi_1.default.valid('aerosol_changed', 'aerosol_changed and battery_changed'),
+        then: joi_1.default.required().messages({
+            'any.required': 'Chemical is required when aerosol is changed'
+        })
+    }),
+    chemical_quantity: joi_1.default.number().positive().optional().allow(null)
+        .when('action_taken', {
+        is: joi_1.default.valid('aerosol_changed', 'aerosol_changed and battery_changed'),
+        then: joi_1.default.required().messages({
+            'any.required': 'Chemical quantity is required when aerosol is changed'
+        })
+    }),
+    chemical_batch_number: joi_1.default.string().max(100).optional().allow(null, ''),
+    is_new_addition: joi_1.default.boolean().optional().default(false)
+});
+exports.updateAerosolUnitSchema = joi_1.default.object({
+    unit_number: joi_1.default.string().max(20).optional(),
+    action_taken: joi_1.default.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').optional(),
+    chemical_id: joi_1.default.number().integer().positive().optional().allow(null),
+    chemical_quantity: joi_1.default.number().positive().optional().allow(null),
+    chemical_batch_number: joi_1.default.string().max(100).optional().allow(null, ''),
+    is_new_addition: joi_1.default.boolean().optional()
 });
 exports.createCompleteReportSchema = joi_1.default.object({
     client_id: joi_1.default.number().integer().required(),
@@ -372,9 +409,17 @@ exports.createCompleteReportSchema = joi_1.default.object({
             light_condition: joi_1.default.string().valid('good', 'faulty', 'na').optional().allow(null, ''),
             light_faulty_type: joi_1.default.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').optional().allow(null, ''),
             light_faulty_other: joi_1.default.string().max(255).optional().allow(null, ''),
-            glue_board_replaced: joi_1.default.boolean().optional().allow(null),
+            glue_board_replaced: joi_1.default.number().integer().min(0).max(8).optional().allow(null),
             tubes_replaced: joi_1.default.boolean().optional().allow(null),
             monitor_serviced: joi_1.default.boolean().optional().allow(null)
+        })).optional(),
+        aerosol_units: joi_1.default.array().items(joi_1.default.object({
+            unit_number: joi_1.default.string().max(20).required(),
+            action_taken: joi_1.default.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').required(),
+            chemical_id: joi_1.default.number().integer().positive().optional().allow(null),
+            chemical_quantity: joi_1.default.number().positive().optional().allow(null),
+            chemical_batch_number: joi_1.default.string().max(100).optional().allow(null, ''),
+            is_new_addition: joi_1.default.boolean().optional().allow(null)
         })).optional()
     }).optional()
 });

@@ -159,10 +159,10 @@ export const addBaitStationSchema = Joi.object({
       'any.only': 'Station condition must be one of: good, needs_repair, damaged, missing'
     }),
   
-  action_taken: Joi.string().valid('repaired', 'replaced', 'none').optional().default('none')
+  action_taken: Joi.string().valid('repaired', 'replaced', 'not_replaced', 'none').optional().default('none')
     .when('station_condition', {
       is: Joi.string().valid('needs_repair', 'damaged', 'missing'),
-      then: Joi.valid('repaired', 'replaced').required().messages({
+      then: Joi.valid('repaired', 'replaced', 'not_replaced').required().messages({
         'any.required': 'Action taken is required when station needs repair, is damaged, or missing'
       })
     }),
@@ -196,7 +196,7 @@ export const updateBaitStationSchema = Joi.object({
   activity_other_description: Joi.string().max(255).optional().allow(null, ''),
   bait_status: Joi.string().valid('clean', 'eaten', 'wet', 'old', 'none').optional(),
   station_condition: Joi.string().valid('good', 'needs_repair', 'damaged', 'missing').optional(),
-  action_taken: Joi.string().valid('repaired', 'replaced', 'none').optional(),
+  action_taken: Joi.string().valid('repaired', 'replaced', 'not_replaced', 'none').optional(),
   warning_sign_condition: Joi.string().valid('good', 'replaced', 'repaired', 'remounted').optional(),
   rodent_box_replaced: Joi.boolean().optional(),
   station_remarks: Joi.string().max(5000).optional().allow(null, ''),

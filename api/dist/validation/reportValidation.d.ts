@@ -10,5 +10,7 @@ export declare const updateBaitStationSchema: Joi.ObjectSchema<any>;
 export declare const updateFumigationSchema: Joi.ObjectSchema<any>;
 export declare const addInsectMonitorSchema: Joi.ObjectSchema<any>;
 export declare const updateInsectMonitorSchema: Joi.ObjectSchema<any>;
+export declare const addAerosolUnitSchema: Joi.ObjectSchema<any>;
+export declare const updateAerosolUnitSchema: Joi.ObjectSchema<any>;
 export declare const createCompleteReportSchema: Joi.ObjectSchema<any>;
 //# sourceMappingURL=reportValidation.d.ts.map

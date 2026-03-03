@@ -31,7 +31,7 @@ interface BaitStation {
   activityOtherDesc?: string;
   baitStatus: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   stationCondition: 'good' | 'needs_repair' | 'damaged' | 'missing';
-  actionTaken?: 'repaired' | 'replaced';
+  actionTaken?: 'repaired' | 'replaced' | 'not_replaced';
   warningSignCondition: 'good' | 'replaced' | 'repaired' | 'remounted';
   chemicalsUsed: ChemicalUsed[];
   remarks?: string;
@@ -151,7 +151,7 @@ export default function StationForm({ station, chemicals, previousStations = [],
       return;
     }
 
-    if ((formData.stationCondition === 'needs_repair' || formData.stationCondition === 'damaged') && !formData.actionTaken) {
+    if ((formData.stationCondition === 'needs_repair' || formData.stationCondition === 'damaged' || formData.stationCondition === 'missing') && !formData.actionTaken) {
       alert.showWarning('Please specify action taken for station condition', 'Missing Information');
       return;
     }
@@ -329,7 +329,7 @@ export default function StationForm({ station, chemicals, previousStations = [],
                 <button
                   key={option.value}
                   onClick={() => {
-                    const updates: any = { stationCondition: option.value };
+                    const updates: any = { stationCondition: option.value, actionTaken: undefined };
                     // Auto-set bait status to 'none' when station is missing
                     if (option.value === 'missing') {
                       updates.baitStatus = 'none';
@@ -373,6 +373,36 @@ export default function StationForm({ station, chemicals, previousStations = [],
                     }`}
                   >
                     Replaced
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {formData.stationCondition === 'missing' && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Was it replaced? *
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFormData({ ...formData, actionTaken: 'replaced' })}
+                    className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                      formData.actionTaken === 'replaced'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    Yes, Replaced
+                  </button>
+                  <button
+                    onClick={() => setFormData({ ...formData, actionTaken: 'not_replaced' })}
+                    className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                      formData.actionTaken === 'not_replaced'
+                        ? 'bg-red-500 text-white'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    Not Replaced
                   </button>
                 </div>
               </div>

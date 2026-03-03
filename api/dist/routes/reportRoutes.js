@@ -22,6 +22,9 @@ router.put('/pco/reports/:id/fumigation', auth_1.authenticateToken, (0, validati
 router.post('/pco/reports/:id/insect-monitors', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.addInsectMonitorSchema), reportController_1.addInsectMonitor);
 router.put('/pco/reports/:id/insect-monitors/:monitorId', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.updateInsectMonitorSchema), reportController_1.updateInsectMonitor);
 router.delete('/pco/reports/:id/insect-monitors/:monitorId', auth_1.authenticateToken, reportController_1.deleteInsectMonitor);
+router.post('/pco/reports/:id/aerosol-units', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.addAerosolUnitSchema), reportController_1.addAerosolUnit);
+router.put('/pco/reports/:id/aerosol-units/:unitId', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.updateAerosolUnitSchema), reportController_1.updateAerosolUnit);
+router.delete('/pco/reports/:id/aerosol-units/:unitId', auth_1.authenticateToken, reportController_1.deleteAerosolUnit);
 router.get('/admin/reports', auth_1.authenticateToken, (0, validation_1.validateRequest)(reportValidation_1.reportListQuerySchema, 'query'), reportController_1.getAdminReports);
 router.get('/admin/reports/pending', auth_1.authenticateToken, reportController_1.getPendingReports);
 router.get('/admin/reports/:id', auth_1.authenticateToken, reportController_1.getReportById);

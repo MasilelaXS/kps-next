@@ -32,7 +32,7 @@ interface InsectMonitor {
   monitorNumber: string;
   condition: 'good' | 'needs_repair' | 'damaged' | 'missing' | 'other';
   conditionOther?: string;
-  actionTaken?: 'repaired' | 'replaced';
+  actionTaken?: 'repaired' | 'replaced' | 'not_replaced';
   warningSignCondition: 'good' | 'replaced' | 'repaired' | 'remounted';
   // Light trap specific
   lightCondition?: 'good' | 'faulty';

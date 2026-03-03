@@ -143,6 +143,7 @@ export default function SubmitReport() {
             action_taken: station.actionTaken || 'none',
             warning_sign_condition: station.warningSignCondition,
             rodent_box_replaced: station.actionTaken === 'replaced' || false,
+            // not_replaced means station is still missing, rodent_box_replaced stays false
             station_remarks: station.remarks || null,
             chemicals: station.chemicalsUsed?.map((chem: any) => ({
               chemical_id: chem.chemicalId,

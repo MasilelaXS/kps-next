@@ -22,7 +22,7 @@ interface BaitStation {
   activityOtherDesc?: string;
   baitStatus: 'clean' | 'eaten' | 'wet' | 'old' | 'none';
   stationCondition: 'good' | 'needs_repair' | 'damaged' | 'missing';
-  actionTaken?: 'repaired' | 'replaced';
+  actionTaken?: 'repaired' | 'replaced' | 'not_replaced';
   warningSignCondition: 'good' | 'replaced' | 'repaired' | 'remounted';
   chemicalsUsed: Array<{
     chemicalId: number;

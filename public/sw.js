@@ -195,19 +195,40 @@ self.addEventListener('fetch', (event) => {
         }
         
         console.warn('[SW] ✗ Page not in cache:', request.url);
-        // Fallback to root page from any cache
-        for (const cacheName of pageCaches) {
-          const cache = await caches.open(cacheName);
-          const rootPage = await cache.match('/');
-          if (rootPage) {
-            console.log('[SW] ✓ Serving root page as fallback');
-            return rootPage;
-          }
-        }
-        
-        console.error('[SW] ✗ No pages cached, showing offline message');
-        return new Response('Offline - please visit the app online first', {
-          status: 503,
+        // Don't fall back to the root page — the root page's JS detects auth
+        // and redirects to /pco/dashboard, which is confusing and wrong for
+        // uncached routes like /pco/report/new when the user is offline.
+        // Instead serve a clear offline HTML page with navigation options.
+        console.error('[SW] ✗ Showing offline page for:', request.url);
+        return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KPS - Offline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .card { background: white; border-radius: 16px; padding: 32px 24px; max-width: 360px; width: 100%; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .icon { width: 64px; height: 64px; background: #fff7ed; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 28px; }
+    h1 { font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 8px; }
+    p { font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 24px; }
+    .btn { display: block; width: 100%; padding: 12px 16px; border-radius: 10px; font-size: 15px; font-weight: 600; text-decoration: none; margin-bottom: 10px; }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📶</div>
+    <h1>You're Offline</h1>
+    <p>This page wasn't cached yet. To use the app offline, open it while connected to the internet first so all pages can be saved.</p>
+    <a href="/pco/schedule" class="btn btn-primary">Go to Schedule</a>
+    <a href="/pco/dashboard" class="btn btn-secondary">Go to Dashboard</a>
+  </div>
+</body>
+</html>`, {
+          status: 200,
           headers: { 'Content-Type': 'text/html' }
         });
       }

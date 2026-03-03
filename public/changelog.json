@@ -1,6 +1,30 @@
 {
   "changelog": [
     {
+      "version": "1.0.44",
+      "date": "2026-03-03",
+      "releaseDate": "March 3, 2026",
+      "changes": {
+        "added": [
+          "Missing bait station follow-up: 'Was it replaced?' prompt with Yes / Not Replaced options when station condition is set to Missing",
+          "'not_replaced' action taken value added to bait station validation and report flow"
+        ],
+        "changed": [
+          "PDF fumigation report: insect monitoring equipment summary table now displays horizontally (single row) to save space",
+          "PDF fumigation report: equipment summary label corrected from 'Warning Signs Serviced' to 'Warning Signs Replaced'",
+          "PDF fumigation report: removed Notes column from equipment summary — now shows counts only"
+        ],
+        "fixed": [
+          "Offline report creation: service worker was registered via blob URL which browsers reject — now registers /sw.js directly, enabling page caching for all report routes",
+          "Offline report creation: offlineAwareApiCall now correctly queues submissions when service worker returns a 503 offline response object (previously only caught thrown errors)",
+          "Offline report creation: navigating to an uncached report page while offline now shows a clear 'You're Offline' page instead of silently redirecting to the dashboard"
+        ],
+        "removed": [],
+        "security": []
+      },
+      "notes": "Offline report creation fully fixed (3 root-cause bugs resolved), missing station follow-up added, PDF insect monitoring summary redesigned"
+    },
+    {
       "version": "1.0.35",
       "date": "2026-02-25",
       "releaseDate": "February 25, 2026",
@@ -213,5 +237,5 @@
       "notes": "Initial production release - Full system deployment with all core features"
     }
   ],
-  "latest": "1.0.34"
+  "latest": "1.0.44"
 }

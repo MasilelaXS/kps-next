@@ -246,6 +246,32 @@ export const offlineAwareApiCall = async (
   if (shouldQueue) {
     try {
       const result = await apiCall(endpoint, options);
+
+      // Check if the service worker returned an offline indicator with status 503.
+      // This happens when navigator.onLine is true (device thinks it's connected) but
+      // the actual network is unreachable — the most common field scenario for PCOs.
+      // In this case apiCall returns the error object rather than throwing, so the
+      // catch block below is never reached and the item would NOT be queued without
+      // this explicit check.
+      if (result?.offline === true && typeof window !== 'undefined') {
+        console.log(`[API] Service worker offline response detected - queuing ${options.type}`);
+        const { getOfflineQueueManager } = await import('./offlineSync');
+        const manager = getOfflineQueueManager();
+        const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        let itemId: string;
+        if (options.type === 'assignment') {
+          itemId = await manager.queueAssignment(endpoint, method as 'POST' | 'PUT', body);
+        } else {
+          itemId = await manager.queueReport(endpoint, method as 'POST' | 'PUT', body);
+        }
+        return {
+          success: true,
+          queued: true,
+          message: `${options.type || 'Item'} queued for submission when online`,
+          itemId
+        };
+      }
+
       return result;
     } catch (error: any) {
       // Check if it's a network error

@@ -73,6 +73,14 @@ exports.uploadReportsSchema = joi_1.default.object({
                 batch_number: joi_1.default.string().max(100).optional().allow(null)
             })).optional()
         }).optional(),
+        aerosol_units: joi_1.default.array().items(joi_1.default.object({
+            unit_number: joi_1.default.string().max(20).required(),
+            action_taken: joi_1.default.string().valid('battery_changed', 'aerosol_changed', 'aerosol_changed and battery_changed', 'unit_replaced').required(),
+            chemical_id: joi_1.default.number().integer().positive().optional().allow(null),
+            chemical_quantity: joi_1.default.number().positive().optional().allow(null),
+            chemical_batch_number: joi_1.default.string().max(100).optional().allow(null),
+            is_new_addition: joi_1.default.number().integer().valid(0, 1).default(0)
+        })).optional(),
         insect_monitors: joi_1.default.array().items(joi_1.default.object({
             monitor_type: joi_1.default.string().valid('box', 'light').required(),
             monitor_condition: joi_1.default.string().valid('good', 'replaced', 'repaired', 'other').default('good'),
@@ -81,7 +89,7 @@ exports.uploadReportsSchema = joi_1.default.object({
             light_condition: joi_1.default.string().valid('good', 'faulty', 'na').default('na'),
             light_faulty_type: joi_1.default.string().valid('starter', 'tube', 'cable', 'electricity', 'other', 'na').default('na'),
             light_faulty_other: joi_1.default.string().max(255).optional().allow(null),
-            glue_board_replaced: joi_1.default.number().integer().valid(0, 1).default(0),
+            glue_board_replaced: joi_1.default.number().integer().min(0).max(8).default(0),
             tubes_replaced: joi_1.default.number().integer().valid(0, 1).optional().allow(null),
             monitor_serviced: joi_1.default.number().integer().valid(0, 1).default(0)
         })).optional()
@@ -116,6 +124,12 @@ exports.updateClientCountsSchema = joi_1.default.object({
         'number.base': 'Box monitors must be a number',
         'number.integer': 'Box monitors must be a whole number',
         'number.min': 'Box monitors cannot be negative'
+    }),
+    total_aerosol_units: joi_1.default.number().integer().min(0).optional()
+        .messages({
+        'number.base': 'Aerosol units must be a number',
+        'number.integer': 'Aerosol units must be a whole number',
+        'number.min': 'Aerosol units cannot be negative'
     })
 }).min(1).messages({
     'object.min': 'At least one count field must be provided'

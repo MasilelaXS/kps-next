@@ -24,28 +24,17 @@ class ServiceWorkerManager {
     }
 
     try {
-      // Inject current version into service worker
-      const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
-      
-      // Fetch service worker template and replace version
-      const swResponse = await fetch('/service-worker.js');
-      const swCode = await swResponse.text();
-      const versionedSW = swCode.replace('{{VERSION}}', appVersion);
-      
-      // Create a blob with the versioned service worker
-      const blob = new Blob([versionedSW], { type: 'application/javascript' });
-      const swUrl = URL.createObjectURL(blob);
-      
-      // Register the service worker
-      this.registration = await navigator.serviceWorker.register(swUrl, {
+      // Register sw.js directly — it fetches its own version from /version.json
+      // during install and precaches all app pages including report creation pages.
+      // (service-worker.js used a blob URL workaround that only cached 4 pages,
+      // leaving report pages unavailable when offline.)
+      this.registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/',
         updateViaCache: 'none' // Always check for updates
       });
 
+      const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
       console.log('[SW] Registered successfully with version:', appVersion);
-
-      // Clean up blob URL
-      URL.revokeObjectURL(swUrl);
 
       // Setup update listeners
       this.setupUpdateListeners();
